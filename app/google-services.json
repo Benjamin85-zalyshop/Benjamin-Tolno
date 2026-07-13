@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "906222981497",
+    "project_id": "scolapay-b6289",
+    "storage_bucket": "scolapay-b6289.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:906222981497:android:a45eed22d2b75d5ff0dfa8",
+        "android_client_info": {
+          "package_name": "com.aistudio.scolapay.gnf"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDcVAJyU74j6wx_M4sPTUaUTrpNgijj9X0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

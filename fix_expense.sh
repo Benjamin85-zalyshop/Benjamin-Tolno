@@ -1,0 +1,2 @@
+sed -i 's/fun insertExpense(amount: Long, category: String, description: String, section: String) {/fun insertExpense(amount: Long, reason: String, section: String) {/g' app/src/main/java/com/example/ui/SchoolViewModel.kt
+sed -i 's/repository.insertExpense(Expense(schoolId = schoolId, amount = amount, category = category, description = description, section = section))/repository.insertExpense(Expense(schoolId = schoolId, amount = amount, reason = reason, section = section))/g' app/src/main/java/com/example/ui/SchoolViewModel.kt

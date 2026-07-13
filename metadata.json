@@ -1,0 +1,6 @@
+{
+  "name": "ScolaPay",
+  "description": "Logiciel de gestion financière pour école en Guinée (GNF)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
