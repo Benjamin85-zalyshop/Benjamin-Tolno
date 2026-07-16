@@ -1,6 +1,13 @@
 package com.example.ui.screens
 
 import android.widget.Toast
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import java.io.ByteArrayOutputStream
+import android.util.Base64
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -68,6 +75,7 @@ fun DashboardScreen(
     val students by viewModel.students.collectAsStateWithLifecycle()
     val payments by viewModel.payments.collectAsStateWithLifecycle()
     val schoolName by viewModel.schoolName.collectAsStateWithLifecycle()
+    val schoolLogoBase64 by viewModel.schoolLogoBase64.collectAsStateWithLifecycle()
     val selectedSection by viewModel.selectedSection.collectAsStateWithLifecycle()
     val userRole by viewModel.userRole.collectAsStateWithLifecycle()
     val selectedSchoolYear by viewModel.selectedSchoolYear.collectAsStateWithLifecycle()
@@ -90,6 +98,7 @@ fun DashboardScreen(
     var isNewPasswordVisible by remember { mutableStateOf(false) }
     
     var isBalanceVisible by remember { mutableStateOf(true) }
+    var paymentToDelete by remember { mutableStateOf<com.example.data.models.Payment?>(null) }
     
     // Quick access dialogs
     var showFacturesDialog by remember { mutableStateOf(false) }
@@ -109,6 +118,42 @@ fun DashboardScreen(
             }
         }
     )
+
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.readBytes()
+                if (bytes != null) {
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null) {
+                        val maxLength = 300
+                        val resizedBitmap = if (bitmap.width > maxLength || bitmap.height > maxLength) {
+                            val aspectRatio = bitmap.width.toFloat() / bitmap.height.toFloat()
+                            val targetWidth = if (bitmap.width > bitmap.height) maxLength else (maxLength * aspectRatio).toInt()
+                            val targetHeight = if (bitmap.width > bitmap.height) (maxLength / aspectRatio).toInt() else maxLength
+                            Bitmap.createScaledBitmap(bitmap, targetWidth.coerceAtLeast(1), targetHeight.coerceAtLeast(1), true)
+                        } else {
+                            bitmap
+                        }
+                        val outputStream = ByteArrayOutputStream()
+                        resizedBitmap.compress(Bitmap.CompressFormat.PNG, 90, outputStream)
+                        val compressedBytes = outputStream.toByteArray()
+                        val base64String = Base64.encodeToString(compressedBytes, Base64.DEFAULT)
+                        viewModel.setSchoolLogo(base64String)
+                        Toast.makeText(context, "Logo importé avec succès !", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Impossible de charger l'image.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Erreur lors de l'importation: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // Professional WhatsApp communication center state
     var commsMessageText by remember { mutableStateOf("Bonjour Chers Parents, nous vous rappelons que le solde restant pour les frais de scolarité de {élève} en classe de {classe} est de {solde_dû}. Merci de régulariser au plus vite via ScolaPay. Cordialement, la Direction.") }
@@ -199,6 +244,37 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    // Share icon button
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f))
+                            .clickable {
+                                try {
+                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "ScolaPay")
+                                        putExtra(
+                                            android.content.Intent.EXTRA_TEXT,
+                                            "Découvrez ScolaPay, l'application moderne de gestion financière scolaire ! Elle permet de gérer facilement la scolarité et les inscriptions, d'envoyer des reçus PDF professionnels avec logo, de faire des appels directs aux parents et d'envoyer des relances automatiques par WhatsApp.\n\n👉 Téléchargez et installez l'application immédiatement depuis Google Play Store :\nhttps://play.google.com/store/apps/details?id=com.aistudio.scolapay.gnf"
+                                        )
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Partager ScolaPay via"))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Impossible de lancer le partage", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Partager l'application",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
                     // Notification bell icon
                     Box(
                         modifier = Modifier
@@ -1146,7 +1222,7 @@ fun DashboardScreen(
                                         
                                         if (userRole == "FINANCIER" || userRole == "FOUNDER") {
                                             IconButton(
-                                                onClick = { viewModel.deletePayment(payment.id) },
+                                                onClick = { paymentToDelete = payment },
                                                 modifier = Modifier.size(24.dp)
                                             ) {
                                                 Icon(
@@ -2227,10 +2303,14 @@ fun DashboardScreen(
             val validSections = SECTIONS.filter { it != "Toutes les sections" }
             for (sec in validSections) {
                 val defaults = DEFAULT_CLASSES_BY_SECTION[sec] ?: emptyList()
-                val customActiveInSec = students
-                    .filter { it.section == sec && it.grade.isNotBlank() && !defaults.contains(it.grade) }
-                    .map { it.grade }
-                    .distinct()
+                val customActiveInSec = if (sec == "LA MATERNELLE") {
+                    emptyList()
+                } else {
+                    students
+                        .filter { it.section == sec && it.grade.isNotBlank() && !defaults.contains(it.grade) }
+                        .map { it.grade }
+                        .distinct()
+                }
                 map[sec] = (defaults + customActiveInSec).distinct()
             }
             // Check for other grades with no matching section in defaults
@@ -2415,6 +2495,87 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            item {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF9FAFB)),
+                                    border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        // Logo preview
+                                        Box(
+                                            modifier = Modifier
+                                                .size(64.dp)
+                                                .background(Color(0xFFF3F4F6), shape = RoundedCornerShape(8.dp))
+                                                .border(1.dp, Color(0xFFD1D5DB), shape = RoundedCornerShape(8.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            val logoBase64 = schoolLogoBase64
+                                            if (!logoBase64.isNullOrBlank()) {
+                                                val decodedBytes = remember(logoBase64) {
+                                                    try {
+                                                        Base64.decode(logoBase64, Base64.DEFAULT)
+                                                    } catch (e: Exception) {
+                                                        null
+                                                    }
+                                                }
+                                                val bitmap = remember(decodedBytes) {
+                                                    decodedBytes?.let {
+                                                        BitmapFactory.decodeByteArray(it, 0, it.size)
+                                                    }
+                                                }
+                                                if (bitmap != null) {
+                                                    Image(
+                                                        bitmap = bitmap.asImageBitmap(),
+                                                        contentDescription = "Logo de l'école",
+                                                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
+                                                    )
+                                                } else {
+                                                    Icon(Icons.Default.School, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(32.dp))
+                                                }
+                                            } else {
+                                                Icon(Icons.Default.School, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(32.dp))
+                                            }
+                                        }
+
+                                        // Action buttons
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Logo de l'école", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E3A8A))
+                                            Text("S'affiche sur toutes vos factures et reçus.", fontSize = 11.sp, color = Color.Gray)
+                                            
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                                                Button(
+                                                    onClick = { pickImageLauncher.launch("image/*") },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F56E3)),
+                                                    modifier = Modifier.height(32.dp),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                                ) {
+                                                    Text(if (schoolLogoBase64 != null) "Changer" else "Importer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                                if (schoolLogoBase64 != null) {
+                                                    OutlinedButton(
+                                                        onClick = { viewModel.setSchoolLogo(null) },
+                                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                                                        border = BorderStroke(1.dp, Color.Red),
+                                                        modifier = Modifier.height(32.dp),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                                    ) {
+                                                        Text("Supprimer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             classesBySection.forEach { (section, grades) ->
                                 if (grades.isNotEmpty()) {
                                     item {
@@ -3042,6 +3203,37 @@ fun DashboardScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Discuter sur WhatsApp", fontWeight = FontWeight.Bold, color = Color.White)
                         }
+
+                        // Share Application Button
+                        Button(
+                            onClick = {
+                                try {
+                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "ScolaPay")
+                                        putExtra(
+                                            android.content.Intent.EXTRA_TEXT,
+                                            "Découvrez ScolaPay, l'application moderne de gestion financière scolaire ! Elle permet de gérer facilement la scolarité et les inscriptions, d'envoyer des reçus PDF professionnels avec logo, de faire des appels directs aux parents et d'envoyer des relances automatiques par WhatsApp.\n\n👉 Téléchargez et installez l'application immédiatement depuis Google Play Store :\nhttps://play.google.com/store/apps/details?id=com.aistudio.scolapay.gnf"
+                                        )
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Recommander ScolaPay via"))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Impossible de lancer le partage", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF43F5E)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Partager & Recommander l'application", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 },
                 confirmButton = {
@@ -3051,6 +3243,37 @@ fun DashboardScreen(
                 }
             )
         }
+
+    if (paymentToDelete != null) {
+        val numberFormat = remember { NumberFormat.getNumberInstance(Locale("fr", "GN")) }
+        AlertDialog(
+            onDismissRequest = { paymentToDelete = null },
+            title = { Text("Avertissement : Supprimer le paiement") },
+            text = {
+                val formattedAmount = numberFormat.format(paymentToDelete?.amount ?: 0L)
+                Text("Attention ! Êtes-vous sûr de vouloir supprimer définitivement ce paiement de $formattedAmount GNF (${paymentToDelete?.reason ?: ""}) ? Cette action est irréversible et affectera le solde de l'élève.")
+            },
+            confirmButton = {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    onClick = {
+                        paymentToDelete?.let {
+                            viewModel.deletePayment(it.id)
+                            Toast.makeText(context, "Paiement supprimé", Toast.LENGTH_SHORT).show()
+                        }
+                        paymentToDelete = null
+                    }
+                ) {
+                    Text("Supprimer définitivement")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { paymentToDelete = null }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
 }
 
 @Composable

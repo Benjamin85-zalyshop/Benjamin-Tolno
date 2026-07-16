@@ -52,6 +52,7 @@ fun AddPaymentScreen(
     val student = remember(students, studentId) { students.find { it.id == studentId } }
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale("fr", "GN")) }
     val schoolName by viewModel.schoolName.collectAsStateWithLifecycle()
+    val schoolLogoBase64 by viewModel.schoolLogoBase64.collectAsStateWithLifecycle()
 
     var showSuccessDialog by remember { mutableStateOf(false) }
     var successAmount by remember { mutableStateOf(0L) }
@@ -73,6 +74,7 @@ fun AddPaymentScreen(
                         paymentMethod = successMethod,
                         date = System.currentTimeMillis(),
                         schoolName = schoolName ?: "",
+                        schoolLogoBase64 = schoolLogoBase64,
                         uri = it
                     )
                     Toast.makeText(context, "Reçu PDF généré avec succès", Toast.LENGTH_SHORT).show()
@@ -504,6 +506,7 @@ fun generateReceiptPdf(
     paymentMethod: String,
     date: Long,
     schoolName: String,
+    schoolLogoBase64: String?,
     uri: android.net.Uri
 ) {
     val pdfDocument = android.graphics.pdf.PdfDocument()
@@ -523,6 +526,20 @@ fun generateReceiptPdf(
     
     // Reset paint for text
     paint.style = android.graphics.Paint.Style.FILL
+    
+    // Draw School Logo if present
+    if (!schoolLogoBase64.isNullOrBlank()) {
+        try {
+            val decodedBytes = android.util.Base64.decode(schoolLogoBase64, android.util.Base64.DEFAULT)
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+            if (bitmap != null) {
+                val destRect = android.graphics.RectF(475f, 30f, 555f, 100f)
+                canvas.drawBitmap(bitmap, null, destRect, paint)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
     
     // Header
     paint.textSize = 22f

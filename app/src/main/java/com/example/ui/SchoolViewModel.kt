@@ -25,6 +25,28 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map
 
+fun normalizeGradeName(grade: String): String {
+    val trimmed = grade.trim()
+    return when {
+        trimmed.equals("1ere Année", ignoreCase = true) || trimmed.equals("1ere annee", ignoreCase = true) || trimmed.equals("1ère annee", ignoreCase = true) -> "1ère Année"
+        trimmed.equals("2eme Année", ignoreCase = true) || trimmed.equals("2eme annee", ignoreCase = true) || trimmed.equals("2ème annee", ignoreCase = true) -> "2ème Année"
+        trimmed.equals("3eme Année", ignoreCase = true) || trimmed.equals("3eme annee", ignoreCase = true) || trimmed.equals("3ème annee", ignoreCase = true) -> "3ème Année"
+        trimmed.equals("4eme Année", ignoreCase = true) || trimmed.equals("4eme annee", ignoreCase = true) || trimmed.equals("4ème annee", ignoreCase = true) -> "4ème Année"
+        trimmed.equals("5eme Année", ignoreCase = true) || trimmed.equals("5eme annee", ignoreCase = true) || trimmed.equals("5ème annee", ignoreCase = true) -> "5ème Année"
+        trimmed.equals("6eme Année", ignoreCase = true) || trimmed.equals("6eme annee", ignoreCase = true) || trimmed.equals("6ème annee", ignoreCase = true) -> "6ème Année"
+        trimmed.equals("7eme Année", ignoreCase = true) || trimmed.equals("7eme annee", ignoreCase = true) || trimmed.equals("7ème annee", ignoreCase = true) -> "7ème Année"
+        trimmed.equals("8eme Année", ignoreCase = true) || trimmed.equals("8eme annee", ignoreCase = true) || trimmed.equals("8ème annee", ignoreCase = true) -> "8ème Année"
+        trimmed.equals("9eme Année", ignoreCase = true) || trimmed.equals("9eme annee", ignoreCase = true) || trimmed.equals("9ème annee", ignoreCase = true) -> "9ème Année"
+        trimmed.equals("10eme Année", ignoreCase = true) || trimmed.equals("10eme annee", ignoreCase = true) || trimmed.equals("10ème annee", ignoreCase = true) -> "10ème Année"
+        trimmed.equals("11eme Année", ignoreCase = true) || trimmed.equals("11eme annee", ignoreCase = true) || trimmed.equals("11ème annee", ignoreCase = true) -> "11ème Année"
+        trimmed.equals("12eme Année", ignoreCase = true) || trimmed.equals("12eme annee", ignoreCase = true) || trimmed.equals("12ème annee", ignoreCase = true) -> "12ème Année"
+        trimmed.equals("petite section", ignoreCase = true) -> "Petite Section"
+        trimmed.equals("moyenne section", ignoreCase = true) -> "Moyenne Section"
+        trimmed.equals("grande section", ignoreCase = true) -> "Grande Section"
+        else -> trimmed
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class SchoolViewModel(
     private val repository: SchoolRepository,
@@ -46,6 +68,11 @@ class SchoolViewModel(
     val schoolAccount: StateFlow<com.example.data.models.SchoolAccount?> = _schoolAccount
 
     private val sharedPrefs = context.getSharedPreferences("scolapay_prefs", android.content.Context.MODE_PRIVATE)
+    
+    private val _schoolLogoBase64 = MutableStateFlow<String?>(
+        sharedPrefs.getString("school_logo_base64", null)
+    )
+    val schoolLogoBase64: StateFlow<String?> = _schoolLogoBase64
     
     private val _selectedSchoolYear = MutableStateFlow<String>(
         sharedPrefs.getString("selected_school_year", "2024 - 2025") ?: "2024 - 2025"
@@ -288,13 +315,29 @@ class SchoolViewModel(
     }
 
     fun setClassFee(grade: String, amount: Long) {
+        val normalizedGrade = normalizeGradeName(grade)
         val email = sharedPrefs.getString("last_email", null) ?: return
         viewModelScope.launch {
             val db = FirebaseFirestore.getInstance()
             try {
                 db.collection("schools").document(email)
-                    .collection("classFees").document(grade)
-                    .set(hashMapOf("grade" to grade, "feeAmount" to amount))
+                    .collection("classFees").document(normalizedGrade)
+                    .set(hashMapOf("grade" to normalizedGrade, "feeAmount" to amount))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun setSchoolLogo(base64: String?) {
+        val email = sharedPrefs.getString("last_email", null) ?: return
+        _schoolLogoBase64.value = base64
+        sharedPrefs.edit().putString("school_logo_base64", base64).apply()
+        viewModelScope.launch {
+            val db = FirebaseFirestore.getInstance()
+            try {
+                db.collection("schools").document(email)
+                    .update("logoBase64", base64)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -528,6 +571,10 @@ class SchoolViewModel(
                 val transactionId = snapshot.getString("transactionId")
                 val rejectionReason = snapshot.getString("rejectionReason")
                 val createdAt = snapshot.getLong("createdAt")
+                val logoBase64 = snapshot.getString("logoBase64")
+                
+                _schoolLogoBase64.value = logoBase64
+                sharedPrefs.edit().putString("school_logo_base64", logoBase64).apply()
                 
                 viewModelScope.launch {
                     val currentLocalAcc = repository.getSchoolAccountByName(email)
@@ -568,11 +615,41 @@ class SchoolViewModel(
                                 DocumentChange.Type.MODIFIED -> {
                                     val firstName = doc.getString("firstName") ?: ""
                                     val lastName = doc.getString("lastName") ?: ""
-                                    val grade = doc.getString("grade") ?: ""
-                                    val section = doc.getString("section") ?: "Non défini"
+                                    var grade = doc.getString("grade") ?: ""
+                                    var section = doc.getString("section") ?: "Non défini"
                                     val parentWhatsApp = doc.getString("parentWhatsApp")
                                     val regFee = doc.getLong("registrationFee") ?: 0L
                                     val reenrFee = doc.getLong("reenrollmentFee") ?: 0L
+                                    
+                                    var needsUpdate = false
+                                    val normalizedGrade = normalizeGradeName(grade)
+                                    if (normalizedGrade != grade) {
+                                        grade = normalizedGrade
+                                        needsUpdate = true
+                                    }
+                                    
+                                    val primaryGrades = listOf("1ère Année", "2ème Année", "3ème Année", "4ème Année", "5ème Année", "6ème Année")
+                                    if (section == "LA MATERNELLE" && primaryGrades.contains(grade)) {
+                                        section = "LE PRIMAIRE"
+                                        needsUpdate = true
+                                    }
+                                    
+                                    if (needsUpdate) {
+                                        val finalGrade = grade
+                                        val finalSection = section
+                                        viewModelScope.launch {
+                                            try {
+                                                doc.reference.update(
+                                                    mapOf(
+                                                        "grade" to finalGrade,
+                                                        "section" to finalSection
+                                                    )
+                                                )
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            }
+                                        }
+                                    }
                                     
                                     val existingStudent = repository.getStudentByRemoteId(remoteId)
                                     if (existingStudent == null) {
@@ -783,11 +860,27 @@ class SchoolViewModel(
                 }
                 if (snapshot != null) {
                     val feesList = snapshot.documents.mapNotNull { doc ->
-                        val grade = doc.getString("grade") ?: doc.id
+                        var grade = doc.getString("grade") ?: doc.id
                         val feeAmount = doc.getLong("feeAmount") ?: 0L
+                        
+                        val normalizedGrade = normalizeGradeName(grade)
+                        if (normalizedGrade != grade) {
+                            val finalGrade = normalizedGrade
+                            viewModelScope.launch {
+                                try {
+                                    schoolDocRef.collection("classFees").document(finalGrade)
+                                        .set(hashMapOf("grade" to finalGrade, "feeAmount" to feeAmount))
+                                    doc.reference.delete()
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+                            grade = normalizedGrade
+                        }
+                        
                         ClassFee(grade = grade, feeAmount = feeAmount)
                     }
-                    _classFees.value = feesList
+                    _classFees.value = feesList.distinctBy { it.grade }
                 }
             }
         activeListeners.add(classFeesListener)
@@ -810,6 +903,10 @@ class SchoolViewModel(
                     val transactionId = doc.getString("transactionId")
                     val rejectionReason = doc.getString("rejectionReason")
                     val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                    val logoBase64 = doc.getString("logoBase64")
+                    
+                    _schoolLogoBase64.value = logoBase64
+                    sharedPrefs.edit().putString("school_logo_base64", logoBase64).apply()
  
                     val newAcc = com.example.data.models.SchoolAccount(
                         schoolName = schoolName,
@@ -1105,7 +1202,9 @@ class SchoolViewModel(
         adminListener = null
         _currentSchoolId.value = null
         _schoolName.value = null
+        _schoolLogoBase64.value = null
         _userRole.value = null
+        sharedPrefs.edit().remove("school_logo_base64").apply()
         clearSession()
         try {
             FirebaseAuth.getInstance().signOut()

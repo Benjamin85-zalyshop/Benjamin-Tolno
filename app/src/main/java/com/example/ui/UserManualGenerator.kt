@@ -26,6 +26,8 @@ object UserManualGenerator {
         val textColorLight = 0xFF6B7280.toInt()    // Light Gray
         val white = 0xFFFFFFFF.toInt()
         val greenLight = 0xFFDCF8C6.toInt()       // WhatsApp Green Light
+        val warningColor = 0xFFEF4444.toInt()      // Safety Red
+        val warningLight = 0xFFFEF2F2.toInt()     // Safety Red Light
         
         // --- PAGE 1: COVER & INTRODUCTION ---
         var page = pdfDocument.startPage(pageInfo)
@@ -49,7 +51,7 @@ object UserManualGenerator {
         paint.textSize = 12f
         paint.color = 0xFF93C5FD.toInt() // Soft light blue
         canvas.drawText("La solution moderne pour la gestion financière des écoles", 50f, 180f, paint)
-        canvas.drawText("Version 2.0 • Édition Spéciale ScolaPay", 50f, 200f, paint)
+        canvas.drawText("Version 3.0 • Édition Spéciale ScolaPay", 50f, 200f, paint)
         
         // Draw Introduction block
         paint.color = textColorDark
@@ -82,7 +84,7 @@ object UserManualGenerator {
         // Draw bullets
         drawCheckBullet(canvas, 70f, 495f, "Séparation claire : Frais de Scolarité vs Frais d'Inscription", paint, successColor)
         drawCheckBullet(canvas, 70f, 525f, "Rapports & Statistiques : Suivi précis du recouvrement par classe", paint, successColor)
-        drawCheckBullet(canvas, 70f, 555f, "Zéro Oubli : Relances WhatsApp pré-remplies et personnalisables", paint, successColor)
+        drawCheckBullet(canvas, 70f, 555f, "Zéro Oubli : Relances WhatsApp pré-remplies et appels directs", paint, successColor)
         
         // Bottom Illustration: Flow Diagram
         drawFlowDiagram(canvas, 50f, 630f, primaryColor, accentColor, successColor, paint)
@@ -91,7 +93,7 @@ object UserManualGenerator {
         drawFooter(canvas, 1, paint, textColorLight)
         pdfDocument.finishPage(page)
         
-        // --- PAGE 2: INSCRIPTION & CRÉATION DE COMPTE ÉCOLE ---
+        // --- PAGE 2: INSCRIPTION & SÉCURITÉ DU COMPTE ---
         page = pdfDocument.startPage(pageInfo)
         canvas = page.canvas
         paint = Paint().apply { isAntiAlias = true }
@@ -174,93 +176,95 @@ object UserManualGenerator {
         drawFooter(canvas, 2, paint, textColorLight)
         pdfDocument.finishPage(page)
         
-        // --- PAGE 3: CONFIGURATION DES ELEVES ---
+        // --- PAGE 3: CONFIGURATION DES CLASSES & LOGO DE L'ÉCOLE ---
         page = pdfDocument.startPage(pageInfo)
         canvas = page.canvas
         paint = Paint().apply { isAntiAlias = true }
         
-        drawPageHeader(canvas, "2. CONFIGURATION & INSCRIPTION DES ÉLÈVES", primaryColor, paint)
+        drawPageHeader(canvas, "2. CONFIGURATION & IMPORTATION DU LOGO", primaryColor, paint)
         
         paint.color = textColorDark
         paint.textSize = 14f
         paint.isFakeBoldText = true
-        canvas.drawText("Définir les frais lors de la création d'un élève", 50f, 110f, paint)
+        canvas.drawText("Personnaliser ScolaPay à l'image de votre école", 50f, 110f, paint)
         
         paint.textSize = 12f
         paint.isFakeBoldText = false
         paint.color = textColorLight
-        canvas.drawText("Lorsqu'un élève arrive dans votre établissement, configurez ses frais", 50f, 135f, paint)
-        canvas.drawText("d'inscription ou de réinscription. Ces montants restent optionnels et", 50f, 155f, paint)
-        canvas.drawText("sont rattachés de manière unique à son dossier.", 50f, 175f, paint)
+        canvas.drawText("Pour que vos documents de facturation soient officiels et professionnels,", 50f, 135f, paint)
+        canvas.drawText("vous pouvez importer le logo de votre école directement dans ScolaPay.", 50f, 155f, paint)
+        canvas.drawText("Il sera automatiquement inséré sur toutes les factures générées.", 50f, 175f, paint)
         
-        // Illustrated Phone / Form Screen mockup
-        drawFormScreenMockup(canvas, 310f, 210f, primaryColor, textColorDark, paint)
+        // Draw Logo Upload block mockup on the right side
+        drawLogoUploadMockup(canvas, 310f, 210f, primaryColor, paint)
         
         // Guide steps (Left Column)
         yPos = 220f
         paint.color = primaryColor
         paint.textSize = 13f
         paint.isFakeBoldText = true
-        canvas.drawText("Étapes de configuration :", 50f, yPos, paint)
+        canvas.drawText("Comment importer votre logo :", 50f, yPos, paint)
         yPos += 25f
         
         paint.color = textColorDark
         paint.isFakeBoldText = false
         paint.textSize = 11f
         
-        val steps = listOf(
-            "1. Rendez-vous dans la section \"Élèves\".",
-            "2. Cliquez sur le bouton d'ajout (+).",
-            "3. Renseignez le Nom, Prénom, Classe,",
-            "   Section et le numéro WhatsApp du parent.",
-            "4. Dans les champs optionnels dédiés :",
-            "   • Frais d'inscription (ex: 150 000 GNF)",
-            "   • Frais de réinscription (ex: 100 000 GNF)",
-            "5. Validez l'inscription.",
-            "6. L'élève est désormais prêt à payer."
+        val logoSteps = listOf(
+            "1. Rendez-vous dans l'onglet d'accueil ScolaPay.",
+            "2. Faites défiler vers le bas jusqu'au bloc",
+            "   \"Configuration\" (accessible par le Fondateur).",
+            "3. Dans l'encadré \"Logo de l'école\", cliquez",
+            "   sur le bouton bleu \"Importer\".",
+            "4. Choisissez le fichier d'image (.png ou .jpg)",
+            "   de votre logo dans la galerie de votre appareil.",
+            "5. ScolaPay compresse automatiquement l'image",
+            "   et met à jour la base de données cloud.",
+            "6. Pour remplacer ou effacer le logo,",
+            "   cliquez sur \"Changer\" ou \"Supprimer\"."
         )
-        for (step in steps) {
+        for (step in logoSteps) {
             canvas.drawText(step, 50f, yPos, paint)
-            yPos += 20f
+            yPos += 21f
         }
         
         // Advice note card at the bottom
         paint.color = 0xFFFFFBEB.toInt() // Warning amber light
-        val adviceCard = RectF(50f, 540f, 545f, 650f)
-        canvas.drawRoundRect(adviceCard, 8f, 8f, paint)
+        val logoAdviceCard = RectF(50f, 540f, 545f, 650f)
+        canvas.drawRoundRect(logoAdviceCard, 8f, 8f, paint)
         
         paint.color = 0xFFD97706.toInt() // Amber dark
         paint.textSize = 12f
         paint.isFakeBoldText = true
-        canvas.drawText("💡 CONSEIL DE L'EXPERT :", 70f, 570f, paint)
+        canvas.drawText("💡 FACTURATION PROFESSIONNELLE :", 70f, 570f, paint)
         paint.color = textColorDark
         paint.isFakeBoldText = false
         paint.textSize = 11f
-        canvas.drawText("Configurez toujours les frais d'inscription ou de réinscription dès la", 70f, 595f, paint)
-        canvas.drawText("création de l'élève. ScolaPay les mémorisera automatiquement pour", 70f, 615f, paint)
-        canvas.drawText("les paiements ultérieurs.", 70f, 635f, paint)
+        canvas.drawText("Une fois configuré, le logo de l'école est intégré de manière dynamique", 70f, 595f, paint)
+        canvas.drawText("en haut à droite de l'en-tête de chaque reçu de paiement et de chaque", 70f, 615f, paint)
+        canvas.drawText("facture PDF de scolarité que vous partagez avec les parents.", 70f, 635f, paint)
         
         drawFooter(canvas, 3, paint, textColorLight)
         pdfDocument.finishPage(page)
         
-        // --- PAGE 4: ENCAISSEMENT & DISTINCTION ---
+        // --- PAGE 4: CONFIGURATION ET ENCAISSEMENT DES FRAIS ---
         page = pdfDocument.startPage(pageInfo)
         canvas = page.canvas
         paint = Paint().apply { isAntiAlias = true }
         
-        drawPageHeader(canvas, "3. ENCAISSEMENT DES FRAIS SANS MÉLANGE", primaryColor, paint)
+        drawPageHeader(canvas, "3. INSCRIPTION & ENCAISSEMENT DES FRAIS", primaryColor, paint)
         
         paint.color = textColorDark
         paint.textSize = 14f
         paint.isFakeBoldText = true
-        canvas.drawText("Le bouton \"Inscription\" dans vos Accès Rapides", 50f, 110f, paint)
+        canvas.drawText("Définir les frais et les encaisser sans mélange", 50f, 110f, paint)
         
         paint.textSize = 12f
         paint.isFakeBoldText = false
         paint.color = textColorLight
-        canvas.drawText("Pour que vos frais d'inscription et de réinscription ne soient jamais", 50f, 135f, paint)
-        canvas.drawText("mélangés aux mensualités ou frais de scolarité standards, ScolaPay", 50f, 155f, paint)
-        canvas.drawText("intègre un module dédié, accessible directement depuis le Dashboard.", 50f, 175f, paint)
+        canvas.drawText("Configurez les frais d'inscription ou de réinscription lors de la création", 50f, 135f, paint)
+        canvas.drawText("de l'élève. Encaissez-les via le raccourci dédié pour qu'ils ne soient", 50f, 155f, paint)
+        canvas.drawText("jamais mélangés aux mensualités scolaires ordinaires.", 50f, 175f, paint)
         
         // Draw Accès Rapides & Inscription Mockup on the right
         drawQuickAccessMockup(canvas, 310f, 210f, primaryColor, accentColor, paint)
@@ -270,7 +274,7 @@ object UserManualGenerator {
         paint.color = primaryColor
         paint.textSize = 13f
         paint.isFakeBoldText = true
-        canvas.drawText("Comment encaisser ces frais :", 50f, yPos, paint)
+        canvas.drawText("Procédure étape par étape :", 50f, yPos, paint)
         yPos += 25f
         
         paint.color = textColorDark
@@ -278,21 +282,19 @@ object UserManualGenerator {
         paint.textSize = 11f
         
         val cashSteps = listOf(
-            "1. Allez sur l'Écran d'Accueil.",
-            "2. Dans la grille \"Accès Rapides\", cliquez",
-            "   sur le bouton rose \"Inscription\".",
-            "3. Recherchez l'élève concerné.",
-            "4. Sélectionnez le type de versement :",
-            "   • Inscription",
-            "   • Réinscription",
-            "5. ScolaPay remplit automatiquement le",
-            "   montant configuré à la création !",
-            "6. Sélectionnez le moyen (Espèces, OM, MoMo).",
-            "7. Validez. Le solde est mis à jour séparément !"
+            "1. Créez l'élève et renseignez ses frais",
+            "   optionnels d'inscription ou de réinscription.",
+            "2. Dans la grille \"Accès Rapides\" du Dashboard,",
+            "   cliquez sur le bouton rose \"Inscription\".",
+            "3. Recherchez et sélectionnez l'élève concerné.",
+            "4. Cochez le type de paiement souhaité.",
+            "5. ScolaPay pré-remplit le montant exact configuré !",
+            "6. Sélectionnez le mode (Espèces, OM, MoMo).",
+            "7. Validez. Le reçu PDF avec votre logo est prêt."
         )
         for (step in cashSteps) {
             canvas.drawText(step, 50f, yPos, paint)
-            yPos += 19f
+            yPos += 20f
         }
         
         // Cash-in flow graphics at the bottom
@@ -301,77 +303,158 @@ object UserManualGenerator {
         drawFooter(canvas, 4, paint, textColorLight)
         pdfDocument.finishPage(page)
         
-        // --- PAGE 5: RAPPORTS & WHATSAPP RELANCES ---
+        // --- PAGE 5: SÉCURITÉ DE SUPPRESSION ---
         page = pdfDocument.startPage(pageInfo)
         canvas = page.canvas
         paint = Paint().apply { isAntiAlias = true }
         
-        drawPageHeader(canvas, "4. RAPPORTS & RELANCES WHATSAPP", primaryColor, paint)
+        drawPageHeader(canvas, "4. SÉCURITÉ DES PAIEMENTS & SUPPRESSIONS", primaryColor, paint)
         
         paint.color = textColorDark
         paint.textSize = 14f
         paint.isFakeBoldText = true
-        canvas.drawText("Trésorerie transparente et Communication directe", 50f, 110f, paint)
+        canvas.drawText("Double validation contre les erreurs de comptabilité", 50f, 110f, paint)
         
         paint.textSize = 12f
         paint.isFakeBoldText = false
         paint.color = textColorLight
-        canvas.drawText("ScolaPay automatise le calcul de la trésorerie et la communication.", 50f, 135f, paint)
-        canvas.drawText("Vous pouvez envoyer des relances professionnelles aux parents d'élèves", 50f, 155f, paint)
-        canvas.drawText("et consulter l'état d'avancement global de votre établissement.", 50f, 175f, paint)
+        canvas.drawText("Pour garantir une comptabilité infaillible, ScolaPay sécurise les actions de", 50f, 135f, paint)
+        canvas.drawText("suppression de paiements. Seuls les comptes autorisés (Financier, Fondateur)", 50f, 155f, paint)
+        canvas.drawText("peuvent initier cette action, qui fait l'objet d'un avertissement strict.", 50f, 175f, paint)
         
-        // WhatsApp Phone Mockup on the right
-        drawWhatsAppMockup(canvas, 310f, 210f, greenLight, textColorDark, paint)
+        // Draw Alert Dialog Mockup on the right
+        drawAlertDialogMockup(canvas, 310f, 210f, primaryColor, paint)
         
-        // Detailed Information (Left Column)
+        // Deletion instructions (Left Column)
         yPos = 220f
         paint.color = primaryColor
         paint.textSize = 13f
         paint.isFakeBoldText = true
-        canvas.drawText("Fonctionnalités Clés :", 50f, yPos, paint)
+        canvas.drawText("Comment supprimer un paiement :", 50f, yPos, paint)
         yPos += 25f
         
         paint.color = textColorDark
         paint.isFakeBoldText = false
         paint.textSize = 11f
         
-        val keyFeatures = listOf(
-            "📢 Relances de Scolarité :",
-            "ScolaPay pré-remplit un message WhatsApp",
-            "personnalisé avec le nom de l'élève, sa classe",
-            "et le montant exact restant à payer. Il suffit",
-            "d'un clic pour l'envoyer directement au parent.",
-            "",
-            "📊 Synthèse & Historiques :",
-            "Consultez l'onglet \"Historique & Synthèse\"",
-            "dans le menu Inscription pour voir séparément",
-            "le montant total récolté pour les inscriptions",
-            "et les réinscriptions en temps réel."
+        val deleteSteps = listOf(
+            "1. Rendez-vous dans la fiche de l'élève ou",
+            "   dans l'historique général des paiements.",
+            "2. Cliquez sur l'icône de corbeille rouge (🗑).",
+            "3. Une boîte d'alerte de sécurité apparaît.",
+            "4. L'avertissement affiche les détails du paiement",
+            "   (élève, montant exact, mode, date).",
+            "5. Il rappelle explicitement que cette action",
+            "   est définitive et impactera le solde dû.",
+            "6. Cliquez sur \"Supprimer définitivement\" pour",
+            "   confirmer, ou sur \"Annuler\" pour renoncer."
         )
-        for (feature in keyFeatures) {
+        for (step in deleteSteps) {
+            canvas.drawText(step, 50f, yPos, paint)
+            yPos += 20f
+        }
+        
+        // Warning Banner at the bottom
+        paint.color = warningLight
+        val warnBanner = RectF(50f, 540f, 545f, 650f)
+        canvas.drawRoundRect(warnBanner, 8f, 8f, paint)
+        
+        paint.color = warningColor
+        paint.textSize = 12f
+        paint.isFakeBoldText = true
+        canvas.drawText("⚠️ SÉCURITÉ STRICTE DE TRÉSORERIE :", 70f, 570f, paint)
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        paint.textSize = 11f
+        canvas.drawText("Ne supprimez un versement qu'en cas d'erreur de saisie flagrante.", 70f, 595f, paint)
+        canvas.drawText("Chaque suppression recalculera immédiatement en temps réel le solde", 70f, 615f, paint)
+        canvas.drawText("restant à payer de l'élève ainsi que les totaux des bilans de l'école.", 70f, 635f, paint)
+        
+        drawFooter(canvas, 5, paint, textColorLight)
+        pdfDocument.finishPage(page)
+        
+        // --- PAGE 6: APPELS DIRECTS, RELANCES & SUPPORT ---
+        page = pdfDocument.startPage(pageInfo)
+        canvas = page.canvas
+        paint = Paint().apply { isAntiAlias = true }
+        
+        drawPageHeader(canvas, "5. APPELS PARENTS, RELANCES & SUPPORT", primaryColor, paint)
+        
+        paint.color = textColorDark
+        paint.textSize = 14f
+        paint.isFakeBoldText = true
+        canvas.drawText("Communication instantanée et assistance", 50f, 110f, paint)
+        
+        paint.textSize = 12f
+        paint.isFakeBoldText = false
+        paint.color = textColorLight
+        canvas.drawText("Accélérez le recouvrement des frais scolaires en combinant les", 50f, 135f, paint)
+        canvas.drawText("appels directs téléphoniques et les relances WhatsApp pré-remplies.", 50f, 155f, paint)
+        canvas.drawText("Restez également en contact avec notre support pour toute question.", 50f, 175f, paint)
+        
+        // Draw parent card mockup on the right
+        drawCallParentMockup(canvas, 310f, 210f, primaryColor, paint)
+        
+        // Communication and Support details (Left Column)
+        yPos = 220f
+        paint.color = primaryColor
+        paint.textSize = 13f
+        paint.isFakeBoldText = true
+        canvas.drawText("Outils de communication :", 50f, yPos, paint)
+        yPos += 25f
+        
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        paint.textSize = 11f
+        
+        val commsFeatures = listOf(
+            "📞 APPEL DIRECT DES PARENTS (Nouveauté) :",
+            "Plus besoin de copier ou saisir manuellement",
+            "le numéro de téléphone ! Depuis le dossier de",
+            "l'élève, cliquez sur le bouton d'appel bleu.",
+            "L'application compose directement le numéro",
+            "du parent associé sur votre téléphone.",
+            "",
+            "💬 RELANCE INDIVIDUELLE WHATSAPP :",
+            "ScolaPay génère un message personnalisé",
+            "contenant le nom, la classe et le montant exact",
+            "dû par l'élève, envoyé en un clic via WhatsApp."
+        )
+        for (feature in commsFeatures) {
+            if (feature.startsWith("📞") || feature.startsWith("💬")) {
+                paint.color = primaryColor
+                paint.isFakeBoldText = true
+            } else {
+                paint.color = textColorDark
+                paint.isFakeBoldText = false
+            }
             canvas.drawText(feature, 50f, yPos, paint)
-            yPos += 18f
+            yPos += 19f
         }
         
         // Support Center Card (Accent colors)
         paint.color = accentLight
-        val supportCard = RectF(50f, 510f, 545f, 630f)
+        val supportCard = RectF(50f, 510f, 545f, 640f)
         canvas.drawRoundRect(supportCard, 10f, 10f, paint)
         
         paint.color = accentColor
         paint.textSize = 12f
         paint.isFakeBoldText = true
-        canvas.drawText("📞 SUPPORT TECHNIQUE & DIRECT", 70f, 540f, paint)
+        canvas.drawText("📞 SUPPORT TECHNIQUE & DIRECT SCOLAPAY", 70f, 535f, paint)
         paint.color = textColorDark
         paint.isFakeBoldText = false
         paint.textSize = 11f
-        canvas.drawText("Notre équipe technique est disponible pour toute assistance.", 70f, 565f, paint)
-        canvas.drawText("Conseiller Technique principal : Benjamin Tolno", 70f, 585f, paint)
+        canvas.drawText("Notre équipe technique est disponible pour toute assistance.", 70f, 560f, paint)
+        canvas.drawText("Conseiller Technique principal : Benjamin Tolno", 70f, 580f, paint)
         paint.color = primaryColor
         paint.isFakeBoldText = true
-        canvas.drawText("Numéro d'appel & WhatsApp : +224 628 37 65 66", 70f, 605f, paint)
+        canvas.drawText("Numéro d'appel & WhatsApp : +224 628 37 65 66", 70f, 600f, paint)
+        paint.color = textColorLight
+        paint.textSize = 9.5f
+        paint.isFakeBoldText = false
+        canvas.drawText("Disponible du Lundi au Samedi de 08h00 à 18h00.", 70f, 622f, paint)
         
-        drawFooter(canvas, 5, paint, textColorLight)
+        drawFooter(canvas, 6, paint, textColorLight)
         pdfDocument.finishPage(page)
         
         // Write PDF to output stream
@@ -407,7 +490,7 @@ object UserManualGenerator {
         paint.color = textColor
         paint.textSize = 9f
         paint.isFakeBoldText = false
-        canvas.drawText("Manuel de l'utilisateur ScolaPay - Page $pageNumber sur 5", 50f, 800f, paint)
+        canvas.drawText("Manuel de l'utilisateur ScolaPay - Page $pageNumber sur 6", 50f, 800f, paint)
         canvas.drawText("Propriété Exclusive de ScolaPay • Tous droits réservés", 330f, 800f, paint)
     }
     
@@ -556,7 +639,7 @@ object UserManualGenerator {
         canvas.drawText("Rapports Trésorerie", x + 380f, y + 105f, paint)
     }
     
-    private fun drawFormScreenMockup(canvas: Canvas, x: Float, y: Float, primaryColor: Int, textColorDark: Int, paint: Paint) {
+    private fun drawLogoUploadMockup(canvas: Canvas, x: Float, y: Float, primaryColor: Int, paint: Paint) {
         // Draw Phone Outline
         paint.color = 0xFF374151.toInt()
         val phoneOuter = RectF(x, y, x + 210f, y + 300f)
@@ -574,71 +657,75 @@ object UserManualGenerator {
         paint.color = 0xFFFFFFFF.toInt()
         paint.textSize = 10f
         paint.isFakeBoldText = true
-        canvas.drawText("Ajouter un Élève", x + 15f, y + 32f, paint)
+        canvas.drawText("Configuration Générale", x + 15f, y + 32f, paint)
         
-        // Form Fields
-        paint.color = 0xFFD1D5DB.toInt()
-        paint.isFakeBoldText = false
+        // Configuration Card
+        paint.color = 0xFFF3F4F6.toInt()
+        val configCard = RectF(x + 12f, y + 60f, x + 198f, y + 150f)
+        canvas.drawRoundRect(configCard, 8f, 8f, paint)
         
-        // First Name Input
-        canvas.drawRoundRect(RectF(x + 15f, y + 55f, x + 195f, y + 75f), 4f, 4f, paint)
-        paint.color = textColorDark
-        paint.textSize = 7f
-        canvas.drawText("Prénom", x + 20f, y + 67f, paint)
-        
-        // Last Name Input
-        paint.color = 0xFFD1D5DB.toInt()
-        canvas.drawRoundRect(RectF(x + 15f, y + 85f, x + 195f, y + 105f), 4f, 4f, paint)
-        paint.color = textColorDark
-        canvas.drawText("Nom de famille", x + 20f, y + 97f, paint)
-        
-        // Grade Selection
-        paint.color = 0xFFD1D5DB.toInt()
-        canvas.drawRoundRect(RectF(x + 15f, y + 115f, x + 195f, y + 135f), 4f, 4f, paint)
-        paint.color = textColorDark
-        canvas.drawText("Classe Sélectionnée", x + 20f, y + 127f, paint)
-        
-        // Hotspot for custom Registration Fee
-        paint.color = 0xFFFDF2F8.toInt() // hot pink background mockup
-        canvas.drawRoundRect(RectF(x + 15f, y + 155f, x + 195f, y + 185f), 6f, 6f, paint)
-        
-        paint.color = 0xFFEC4899.toInt() // hot pink borders
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.5f
-        canvas.drawRoundRect(RectF(x + 15f, y + 155f, x + 195f, y + 185f), 6f, 6f, paint)
-        
-        paint.style = Paint.Style.FILL
-        paint.textSize = 7f
-        paint.isFakeBoldText = true
-        canvas.drawText("Frais d'inscription (Optionnel)", x + 20f, y + 167f, paint)
-        paint.color = textColorDark
-        paint.isFakeBoldText = false
-        canvas.drawText("150 000 GNF", x + 20f, y + 178f, paint)
-        
-        // Hotspot for custom Re-enrollment Fee
-        paint.color = 0xFFF3E8FF.toInt() // light purple
-        canvas.drawRoundRect(RectF(x + 15f, y + 195f, x + 195f, y + 225f), 6f, 6f, paint)
-        
-        paint.color = 0xFF8B5CF6.toInt() // purple borders
-        paint.style = Paint.Style.STROKE
-        canvas.drawRoundRect(RectF(x + 15f, y + 195f, x + 195f, y + 225f), 6f, 6f, paint)
-        
-        paint.style = Paint.Style.FILL
-        paint.textSize = 7f
-        paint.isFakeBoldText = true
-        paint.color = 0xFF8B5CF6.toInt()
-        canvas.drawText("Frais de réinscription (Optionnel)", x + 20f, y + 207f, paint)
-        paint.color = textColorDark
-        paint.isFakeBoldText = false
-        canvas.drawText("100 000 GNF", x + 20f, y + 218f, paint)
-        
-        // Save Button Mockup
-        paint.color = primaryColor
-        canvas.drawRoundRect(RectF(x + 15f, y + 245f, x + 195f, y + 275f), 6f, 6f, paint)
+        // Inside Card: Logo block
         paint.color = 0xFFFFFFFF.toInt()
-        paint.textSize = 9f
+        val logoBox = RectF(x + 20f, y + 75f, x + 60f, y + 115f)
+        canvas.drawRoundRect(logoBox, 4f, 4f, paint)
+        
+        // Logo symbol
+        paint.color = primaryColor
+        paint.textSize = 12f
+        canvas.drawText("🏫", x + 30f, y + 100f, paint)
+        
+        // Text inside config card
+        paint.color = textColorDark
+        paint.textSize = 8f
         paint.isFakeBoldText = true
-        canvas.drawText("Enregistrer l'élève", x + 65f, y + 264f, paint)
+        canvas.drawText("Logo de l'école", x + 70f, y + 85f, paint)
+        paint.color = 0xFF6B7280.toInt()
+        paint.isFakeBoldText = false
+        paint.textSize = 6f
+        canvas.drawText("S'affiche sur vos factures PDF", x + 70f, y + 95f, paint)
+        
+        // Buttons: Importer / Supprimer
+        paint.color = primaryColor
+        val importBtn = RectF(x + 70f, y + 105f, x + 120f, y + 122f)
+        canvas.drawRoundRect(importBtn, 4f, 4f, paint)
+        paint.color = 0xFFFFFFFF.toInt()
+        paint.textSize = 6.5f
+        paint.isFakeBoldText = true
+        canvas.drawText("Changer", x + 80f, y + 116f, paint)
+        
+        paint.color = 0xFFEF4444.toInt() // Red delete button
+        val deleteBtn = RectF(x + 125f, y + 105f, x + 175f, y + 122f)
+        canvas.drawRoundRect(deleteBtn, 4f, 4f, paint)
+        paint.color = 0xFFFFFFFF.toInt()
+        canvas.drawText("Supprimer", x + 133f, y + 116f, paint)
+        
+        // Classes List preview below logo section
+        paint.color = 0xFFFFFFFF.toInt()
+        val classesCard = RectF(x + 12f, y + 165f, x + 198f, y + 280f)
+        canvas.drawRoundRect(classesCard, 8f, 8f, paint)
+        
+        paint.color = textColorDark
+        paint.textSize = 8f
+        paint.isFakeBoldText = true
+        canvas.drawText("Classes de l'école", x + 20f, y + 180f, paint)
+        
+        // Fake classes rows
+        paint.color = 0xFFE5E7EB.toInt()
+        canvas.drawRect(x + 20f, y + 192f, x + 190f, y + 193f, paint)
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        paint.textSize = 7f
+        canvas.drawText("7ème Année (Tarif: 400 000 GNF)", x + 20f, y + 207f, paint)
+        
+        paint.color = 0xFFE5E7EB.toInt()
+        canvas.drawRect(x + 20f, y + 217f, x + 190f, y + 218f, paint)
+        paint.color = textColorDark
+        canvas.drawText("8ème Année (Tarif: 450 000 GNF)", x + 20f, y + 232f, paint)
+        
+        paint.color = 0xFFE5E7EB.toInt()
+        canvas.drawRect(x + 20f, y + 242f, x + 190f, y + 243f, paint)
+        paint.color = textColorDark
+        canvas.drawText("9ème Année (Tarif: 500 000 GNF)", x + 20f, y + 257f, paint)
     }
     
     private fun drawQuickAccessMockup(canvas: Canvas, x: Float, y: Float, primaryColor: Int, accentColor: Int, paint: Paint) {
@@ -756,64 +843,140 @@ object UserManualGenerator {
         canvas.drawText("• Les encaissements mensuels ou annuels vont au registre : SCOLARITÉ STANDARD", x + 20f, y + 75f, paint)
     }
     
-    private fun drawWhatsAppMockup(canvas: Canvas, x: Float, y: Float, greenLight: Int, textColorDark: Int, paint: Paint) {
-        // Outer phone
+    private fun drawAlertDialogMockup(canvas: Canvas, x: Float, y: Float, primaryColor: Int, paint: Paint) {
+        // Draw Phone Outline
         paint.color = 0xFF374151.toInt()
         val phoneOuter = RectF(x, y, x + 210f, y + 300f)
         canvas.drawRoundRect(phoneOuter, 16f, 16f, paint)
         
-        // Screen
-        paint.color = 0xFFE5DDD5.toInt() // WhatsApp beige background chat
+        paint.color = 0xFF9CA3AF.toInt() // Grayed-out background during dialog
+        val phoneInner = RectF(x + 6f, y + 12f, x + 204f, y + 294f)
+        canvas.drawRoundRect(phoneInner, 12f, 12f, paint)
+        
+        // Dialog Container
+        paint.color = 0xFFFFFFFF.toInt()
+        val dialogRect = RectF(x + 20f, y + 80f, x + 190f, y + 230f)
+        canvas.drawRoundRect(dialogRect, 12f, 12f, paint)
+        
+        // Warning Icon or indicator
+        paint.color = 0xFFEF4444.toInt() // Red warning color
+        canvas.drawCircle(x + 105f, y + 110f, 16f, paint)
+        paint.color = 0xFFFFFFFF.toInt()
+        paint.textSize = 14f
+        paint.isFakeBoldText = true
+        canvas.drawText("⚠️", x + 97f, y + 115f, paint)
+        
+        // Title
+        paint.color = textColorDark
+        paint.textSize = 8.5f
+        paint.isFakeBoldText = true
+        canvas.drawText("Avertissement de Sécurité", x + 48f, y + 142f, paint)
+        
+        // Body text
+        paint.color = 0xFF4B5563.toInt()
+        paint.textSize = 6.5f
+        paint.isFakeBoldText = false
+        canvas.drawText("Êtes-vous sûr de vouloir supprimer", x + 35f, y + 160f, paint)
+        canvas.drawText("définitivement ce versement de", x + 40f, y + 172f, paint)
+        paint.color = 0xFFEF4444.toInt()
+        paint.isFakeBoldText = true
+        canvas.drawText("300 000 GNF de Divine Grâce ?", x + 37f, y + 184f, paint)
+        
+        // Buttons
+        // Confirm Button
+        paint.color = 0xFFEF4444.toInt()
+        val confirmBtn = RectF(x + 110f, y + 198f, x + 180f, y + 218f)
+        canvas.drawRoundRect(confirmBtn, 4f, 4f, paint)
+        paint.color = 0xFFFFFFFF.toInt()
+        paint.textSize = 6.5f
+        paint.isFakeBoldText = true
+        canvas.drawText("Supprimer", x + 128f, y + 211f, paint)
+        
+        // Cancel Button
+        paint.color = 0xFFE5E7EB.toInt()
+        val cancelBtn = RectF(x + 30f, y + 198f, x + 100f, y + 218f)
+        canvas.drawRoundRect(cancelBtn, 4f, 4f, paint)
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        canvas.drawText("Annuler", x + 53f, y + 211f, paint)
+    }
+
+    private fun drawCallParentMockup(canvas: Canvas, x: Float, y: Float, primaryColor: Int, paint: Paint) {
+        // Draw Phone Outline
+        paint.color = 0xFF374151.toInt()
+        val phoneOuter = RectF(x, y, x + 210f, y + 300f)
+        canvas.drawRoundRect(phoneOuter, 16f, 16f, paint)
+        
+        paint.color = 0xFFF9FAFB.toInt()
         val phoneInner = RectF(x + 6f, y + 12f, x + 204f, y + 294f)
         canvas.drawRoundRect(phoneInner, 12f, 12f, paint)
         
         // Header in Phone
-        paint.color = 0xFF075E54.toInt() // WhatsApp Teal Dark
+        paint.color = primaryColor
         val screenHeader = RectF(x + 6f, y + 12f, x + 204f, y + 45f)
         canvas.drawRect(screenHeader, paint)
         
         paint.color = 0xFFFFFFFF.toInt()
         paint.textSize = 10f
         paint.isFakeBoldText = true
-        canvas.drawText("WhatsApp - Parents d'élèves", x + 15f, y + 32f, paint)
+        canvas.drawText("Fiche Élève : Divine", x + 15f, y + 32f, paint)
         
-        // Draw Message Bubble
-        paint.color = greenLight
-        val bubble = RectF(x + 15f, y + 65f, x + 195f, y + 195f)
-        canvas.drawRoundRect(bubble, 8f, 8f, paint)
+        // Student Info Card
+        paint.color = 0xFFFFFFFF.toInt()
+        val studentCard = RectF(x + 12f, y + 60f, x + 198f, y + 160f)
+        canvas.drawRoundRect(studentCard, 8f, 8f, paint)
         
         paint.color = textColorDark
-        paint.textSize = 7f
-        paint.isFakeBoldText = false
-        
-        val lines = listOf(
-            "📢 Rappel Frais de Scolarité",
-            "Bonjour Chers Parents,",
-            "Nous vous rappelons que le solde",
-            "restant pour les frais de scolarité",
-            "de Divine Grâce en classe de 6ème",
-            "est de 450 000 GNF.",
-            "",
-            "Merci de régulariser au plus vite",
-            "via ScolaPay.",
-            "Cordialement, la Direction."
-        )
-        
-        var messageY = y + 80f
-        for (line in lines) {
-            if (line.startsWith("📢")) {
-                paint.isFakeBoldText = true
-            } else {
-                paint.isFakeBoldText = false
-            }
-            canvas.drawText(line, x + 22f, messageY, paint)
-            messageY += 11f
-        }
-        
-        // Double Checkmarks
-        paint.color = 0xFF34B7F1.toInt() // WhatsApp blue check color
         paint.textSize = 9f
         paint.isFakeBoldText = true
-        canvas.drawText("✔✔", x + 175f, y + 190f, paint)
+        canvas.drawText("Divine Grâce TOLNO", x + 20f, y + 80f, paint)
+        paint.color = 0xFF6B7280.toInt()
+        paint.textSize = 7.5f
+        paint.isFakeBoldText = false
+        canvas.drawText("Classe: 6ème Année  |  Sec: Primaire", x + 20f, y + 95f, paint)
+        canvas.drawText("Solde Dû : 450 000 GNF", x + 20f, y + 110f, paint)
+        canvas.drawText("Parent: +224 628 37 65 66", x + 20f, y + 125f, paint)
+        
+        // Buttons row
+        // Call Parent Button (Primary)
+        paint.color = primaryColor
+        val callBtn = RectF(x + 20f, y + 135f, x + 102f, y + 152f)
+        canvas.drawRoundRect(callBtn, 4f, 4f, paint)
+        paint.color = 0xFFFFFFFF.toInt()
+        paint.textSize = 6.5f
+        paint.isFakeBoldText = true
+        canvas.drawText("📞 Appeler", x + 38f, y + 146f, paint)
+        
+        // WhatsApp Button
+        paint.color = 0xFF25D366.toInt() // WhatsApp Green
+        val waBtn = RectF(x + 108f, y + 135f, x + 190f, y + 152f)
+        canvas.drawRoundRect(waBtn, 4f, 4f, paint)
+        paint.color = 0xFFFFFFFF.toInt()
+        canvas.drawText("💬 Relancer", x + 125f, y + 146f, paint)
+        
+        // Activity/Payments list below
+        paint.color = 0xFFFFFFFF.toInt()
+        val listCard = RectF(x + 12f, y + 170f, x + 198f, y + 280f)
+        canvas.drawRoundRect(listCard, 8f, 8f, paint)
+        
+        paint.color = textColorDark
+        paint.textSize = 8f
+        paint.isFakeBoldText = true
+        canvas.drawText("Derniers Versements", x + 20f, y + 185f, paint)
+        
+        paint.color = 0xFF10B981.toInt() // Success color
+        paint.textSize = 7f
+        paint.isFakeBoldText = true
+        canvas.drawText("+ 300 000 GNF", x + 20f, y + 205f, paint)
+        paint.color = 0xFF6B7280.toInt()
+        paint.isFakeBoldText = false
+        canvas.drawText("15 Juil 2026 - Scolarité", x + 20f, y + 215f, paint)
+        
+        paint.color = 0xFF10B981.toInt()
+        paint.isFakeBoldText = true
+        canvas.drawText("+ 150 000 GNF", x + 20f, y + 240f, paint)
+        paint.color = 0xFF6B7280.toInt()
+        paint.isFakeBoldText = false
+        canvas.drawText("01 Juil 2026 - Inscription", x + 20f, y + 255f, paint)
     }
 }

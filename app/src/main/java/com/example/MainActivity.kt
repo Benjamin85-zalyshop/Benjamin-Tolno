@@ -36,8 +36,44 @@ import com.example.ui.screens.RegisterScreen
 import com.example.ui.screens.StudentDetailScreen
 import com.example.ui.screens.StudentsScreen
 import com.example.ui.theme.MyApplicationTheme
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private var inactivityJob: Job? = null
+    private var onUserInteractionCallback: (() -> Unit)? = null
+    private val inactivityTimeoutMs = 5 * 60 * 1000L // 5 minutes
+    private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    private fun resetInactivityTimer(viewModel: SchoolViewModel, onTimeout: () -> Unit) {
+        val isLoggedIn = viewModel.userRole.value != null
+        if (!isLoggedIn) {
+            inactivityJob?.cancel()
+            return
+        }
+        inactivityJob?.cancel()
+        inactivityJob = mainScope.launch {
+            delay(inactivityTimeoutMs)
+            onTimeout()
+        }
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        onUserInteractionCallback?.invoke()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        inactivityJob?.cancel()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -54,6 +90,41 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val navController = rememberNavController()
                     val viewModel: SchoolViewModel = viewModel(factory = factory)
+
+                    val userRoleState = viewModel.userRole.collectAsStateWithLifecycle()
+
+                    LaunchedEffect(userRoleState.value) {
+                        val role = userRoleState.value
+                        if (role != null) {
+                            resetInactivityTimer(viewModel) {
+                                viewModel.logout()
+                                navController.navigate(LoginRoute) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                                android.widget.Toast.makeText(
+                                    applicationContext,
+                                    "Déconnecté pour inactivité après 5 minutes",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        } else {
+                            inactivityJob?.cancel()
+                        }
+                    }
+
+                    onUserInteractionCallback = {
+                        resetInactivityTimer(viewModel) {
+                            viewModel.logout()
+                            navController.navigate(LoginRoute) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                            android.widget.Toast.makeText(
+                                applicationContext,
+                                "Déconnecté pour inactivité après 5 minutes",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
 
                     NavHost(
                         navController = navController,

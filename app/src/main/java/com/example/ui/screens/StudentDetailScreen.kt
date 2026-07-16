@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material3.*
@@ -45,6 +46,7 @@ fun StudentDetailScreen(
     val allPayments by viewModel.payments.collectAsStateWithLifecycle()
     val userRole by viewModel.userRole.collectAsStateWithLifecycle()
     val schoolName by viewModel.schoolName.collectAsStateWithLifecycle()
+    val schoolLogoBase64 by viewModel.schoolLogoBase64.collectAsStateWithLifecycle()
     val deletionRequests by viewModel.deletionRequests.collectAsStateWithLifecycle()
     val classFees by viewModel.classFees.collectAsStateWithLifecycle()
     
@@ -63,13 +65,15 @@ fun StudentDetailScreen(
     var showDirectDeleteDialog by remember { mutableStateOf(false) }
     var showRequestDeleteDialog by remember { mutableStateOf(false) }
     var deletionReason by remember { mutableStateOf("") }
+    var paymentToDelete by remember { mutableStateOf<com.example.data.models.Payment?>(null) }
 
     val exportPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/pdf"),
         onResult = { uri ->
             uri?.let {
                 if (student != null) {
-                    generatePdf(context, student, studentPayments, schoolName ?: "", it)
+                    val studentClassFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
+                    generatePdf(context, student, studentPayments, schoolName ?: "", studentClassFee, schoolLogoBase64, it)
                     Toast.makeText(context, "PDF généré avec succès", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -308,41 +312,69 @@ fun StudentDetailScreen(
                         """.trimIndent()
                     }
                     
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Button(
-                            onClick = {
-                                try {
-                                    val uri = android.net.Uri.parse("https://api.whatsapp.com/send?phone=$formattedWhatsApp")
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Impossible d'ouvrir WhatsApp", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF25D366))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Contacter", maxLines = 1)
+                            Button(
+                                onClick = {
+                                    try {
+                                        val uri = android.net.Uri.parse("https://api.whatsapp.com/send?phone=$formattedWhatsApp")
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Impossible d'ouvrir WhatsApp", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF25D366))
+                            ) {
+                                Text("Contacter", maxLines = 1)
+                            }
+                            
+                            Button(
+                                onClick = {
+                                    try {
+                                        val encodedText = java.net.URLEncoder.encode(invoiceText, "UTF-8")
+                                        val uri = android.net.Uri.parse("https://api.whatsapp.com/send?phone=$formattedWhatsApp&text=$encodedText")
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Impossible d'ouvrir WhatsApp", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Text("Envoyer facture", maxLines = 1)
+                            }
                         }
                         
                         Button(
                             onClick = {
                                 try {
-                                    val encodedText = java.net.URLEncoder.encode(invoiceText, "UTF-8")
-                                    val uri = android.net.Uri.parse("https://api.whatsapp.com/send?phone=$formattedWhatsApp&text=$encodedText")
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                        data = android.net.Uri.parse("tel:$formattedWhatsApp")
+                                    }
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, "Impossible d'ouvrir WhatsApp", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Impossible d'ouvrir le téléphone", Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
-                            Text("Envoyer facture", maxLines = 1)
+                            Icon(
+                                imageVector = Icons.Filled.Call,
+                                contentDescription = "Appeler",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Appeler directement", fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -364,7 +396,7 @@ fun StudentDetailScreen(
                         date = payment.date,
                         paymentMethod = payment.paymentMethod,
                         showDeleteAction = (userRole == "FINANCIER"),
-                        onDelete = { viewModel.deletePayment(payment.id) }
+                        onDelete = { paymentToDelete = payment }
                     )
                 }
             }
@@ -435,6 +467,36 @@ fun StudentDetailScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showRequestDeleteDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
+
+    if (paymentToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { paymentToDelete = null },
+            title = { Text("Avertissement : Supprimer le paiement") },
+            text = {
+                val formattedAmount = numberFormat.format(paymentToDelete?.amount ?: 0L)
+                Text("Attention ! Êtes-vous sûr de vouloir supprimer définitivement ce paiement de $formattedAmount GNF (${paymentToDelete?.reason ?: ""}) ? Cette action est irréversible et affectera le solde de l'élève.")
+            },
+            confirmButton = {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    onClick = {
+                        paymentToDelete?.let {
+                            viewModel.deletePayment(it.id)
+                            Toast.makeText(context, "Paiement supprimé", Toast.LENGTH_SHORT).show()
+                        }
+                        paymentToDelete = null
+                    }
+                ) {
+                    Text("Supprimer définitivement")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { paymentToDelete = null }) {
                     Text("Annuler")
                 }
             }
@@ -516,6 +578,8 @@ fun generatePdf(
     student: com.example.data.models.Student,
     payments: List<com.example.data.models.Payment>,
     schoolName: String,
+    studentClassFee: Long,
+    schoolLogoBase64: String?,
     uri: android.net.Uri
 ) {
     val pdfDocument = android.graphics.pdf.PdfDocument()
@@ -524,58 +588,263 @@ fun generatePdf(
     var canvas = page.canvas
     val paint = android.graphics.Paint()
     
-    // Draw text
-    paint.textSize = 24f
-    paint.isFakeBoldText = true
-    canvas.drawText(schoolName.ifBlank { "ScolaPay" }, 50f, 75f, paint)
-    
-    paint.textSize = 14f
-    paint.isFakeBoldText = false
-    canvas.drawText("Reçu de paiement officiel - ScolaPay", 50f, 105f, paint)
-    
-    paint.textSize = 18f
-    paint.isFakeBoldText = false
-    canvas.drawText("Élève : ${student.firstName} ${student.lastName}", 50f, 145f, paint)
-    canvas.drawText("Section : ${student.section}", 50f, 175f, paint)
-    canvas.drawText("Classe : ${student.grade}", 50f, 205f, paint)
-    
     val numberFormat = java.text.NumberFormat.getNumberInstance(java.util.Locale("fr", "GN"))
     val sdf = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale("fr", "GN"))
     
-    var yPosition = 265f
-    paint.textSize = 16f
+    // Draw Border on the page
+    paint.style = android.graphics.Paint.Style.STROKE
+    paint.strokeWidth = 2f
+    paint.color = android.graphics.Color.DKGRAY
+    canvas.drawRect(25f, 25f, 570f, 817f, paint)
+    
+    // Reset paint style for filled elements
+    paint.style = android.graphics.Paint.Style.FILL
+    
+    // Draw School Logo if present
+    if (!schoolLogoBase64.isNullOrBlank()) {
+        try {
+            val decodedBytes = android.util.Base64.decode(schoolLogoBase64, android.util.Base64.DEFAULT)
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+            if (bitmap != null) {
+                val destRect = android.graphics.RectF(465f, 40f, 545f, 120f)
+                canvas.drawBitmap(bitmap, null, destRect, paint)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    
+    // School / Application Title
+    paint.textSize = 24f
     paint.isFakeBoldText = true
-    canvas.drawText("Historique des paiements :", 50f, yPosition, paint)
-    yPosition += 30f
+    paint.color = android.graphics.Color.parseColor("#0F56E3") // Primary Blue
+    canvas.drawText(schoolName.ifBlank { "ScolaPay" }, 50f, 65f, paint)
+    
+    // Document Title
+    paint.textSize = 14f
+    paint.isFakeBoldText = true
+    paint.color = android.graphics.Color.BLACK
+    canvas.drawText("FACTURE ET SITUATION DES PAIEMENTS", 50f, 90f, paint)
+    
+    // Subtitle / Date
+    paint.textSize = 10f
+    paint.isFakeBoldText = true
+    paint.color = android.graphics.Color.BLACK
+    canvas.drawText("Généré le : ${sdf.format(java.util.Date())}", 50f, 110f, paint)
+    
+    // Divider line below header
+    paint.strokeWidth = 1f
+    paint.color = android.graphics.Color.LTGRAY
+    canvas.drawLine(50f, 125f, 545f, 125f, paint)
+    
+    // Left Column: Student Information
+    paint.textSize = 12f
+    paint.color = android.graphics.Color.BLACK
+    paint.isFakeBoldText = true
+    canvas.drawText("INFORMATIONS ÉLÈVE", 50f, 155f, paint)
     
     paint.isFakeBoldText = false
-    var total = 0L
+    canvas.drawText("Nom complet : ${student.firstName} ${student.lastName}", 50f, 180f, paint)
+    canvas.drawText("Classe : ${student.grade}", 50f, 205f, paint)
+    canvas.drawText("Section : ${student.section}", 50f, 230f, paint)
+    
+    // Right Column: Financial Details
+    paint.isFakeBoldText = true
+    canvas.drawText("DÉTAILS DES FRAIS", 320f, 155f, paint)
+    
+    paint.isFakeBoldText = false
+    canvas.drawText("Frais de classe : ${numberFormat.format(studentClassFee)} GNF", 320f, 180f, paint)
+    
+    val totalPaid = payments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+    canvas.drawText("Total payé : ${numberFormat.format(totalPaid)} GNF", 320f, 205f, paint)
+    
+    // Remaining balance Box
+    val remaining = studentClassFee - totalPaid
+    val isFullyPaid = remaining <= 0
+    val boxColor = if (isFullyPaid) "#10B981" else "#E11D48" // Green or Red-rose
+    val boxBgColor = if (isFullyPaid) "#ECFDF5" else "#FFF1F2"
+    
+    paint.style = android.graphics.Paint.Style.STROKE
+    paint.strokeWidth = 1.5f
+    paint.color = android.graphics.Color.parseColor(boxColor)
+    canvas.drawRect(320f, 220f, 545f, 275f, paint)
+    
+    paint.style = android.graphics.Paint.Style.FILL
+    paint.color = android.graphics.Color.parseColor(boxBgColor)
+    canvas.drawRect(321f, 221f, 544f, 274f, paint)
+    
+    paint.color = android.graphics.Color.parseColor(boxColor)
+    paint.textSize = 11f
+    paint.isFakeBoldText = true
+    canvas.drawText(if (isFullyPaid) "SITUATION : EN RÈGLE" else "RESTE À PAYER", 335f, 242f, paint)
+    
+    paint.textSize = 14f
+    canvas.drawText("${numberFormat.format(remaining)} GNF", 335f, 263f, paint)
+    
+    // Reset paint properties
+    paint.color = android.graphics.Color.BLACK
+    
+    // Divider before history
+    paint.strokeWidth = 1f
+    paint.color = android.graphics.Color.LTGRAY
+    canvas.drawLine(50f, 295f, 545f, 295f, paint)
+    
+    // Payment History Table Title
+    paint.style = android.graphics.Paint.Style.FILL
+    paint.color = android.graphics.Color.BLACK
+    paint.textSize = 13f
+    paint.isFakeBoldText = true
+    canvas.drawText("HISTORIQUE DES PAIEMENTS ENREGISTRÉS", 50f, 320f, paint)
+    
+    // Table Header setup
+    val tableHeaderY = 335f
+    val rowHeight = 25f
+    
+    // Header background
+    paint.style = android.graphics.Paint.Style.FILL
+    paint.color = android.graphics.Color.parseColor("#F3F4F6")
+    canvas.drawRect(50f, tableHeaderY, 545f, tableHeaderY + rowHeight, paint)
+    
+    // Header borders
+    paint.style = android.graphics.Paint.Style.STROKE
+    paint.strokeWidth = 1f
+    paint.color = android.graphics.Color.LTGRAY
+    canvas.drawRect(50f, tableHeaderY, 545f, tableHeaderY + rowHeight, paint)
+    
+    // Header text
+    paint.style = android.graphics.Paint.Style.FILL
+    paint.color = android.graphics.Color.BLACK
+    paint.textSize = 10f
+    paint.isFakeBoldText = true
+    canvas.drawText("Date", 60f, tableHeaderY + 17f, paint)
+    canvas.drawText("Motif / Description", 180f, tableHeaderY + 17f, paint)
+    canvas.drawText("Mode", 380f, tableHeaderY + 17f, paint)
+    canvas.drawText("Montant", 470f, tableHeaderY + 17f, paint)
+    
+    var currentY = tableHeaderY + rowHeight
+    paint.isFakeBoldText = false
+    
     for (payment in payments) {
-        if (yPosition > 800f) {
+        if (currentY > 730f) {
+            // If running out of space, draw a continuation indicator and open a new page
+            paint.isFakeBoldText = true
+            paint.color = android.graphics.Color.BLACK
+            canvas.drawText("... Suite des paiements sur la page suivante ...", 50f, currentY + 17f, paint)
+            
             pdfDocument.finishPage(page)
             page = pdfDocument.startPage(pageInfo)
             canvas = page.canvas
-            yPosition = 50f
+            
+            // Draw page border on the new page
+            paint.style = android.graphics.Paint.Style.STROKE
+            paint.strokeWidth = 2f
+            paint.color = android.graphics.Color.DKGRAY
+            canvas.drawRect(25f, 25f, 570f, 817f, paint)
+            
+            currentY = 50f
+            
+            // Draw Table Header on new page
+            paint.style = android.graphics.Paint.Style.FILL
+            paint.color = android.graphics.Color.parseColor("#F3F4F6")
+            canvas.drawRect(50f, currentY, 545f, currentY + rowHeight, paint)
+            
+            paint.style = android.graphics.Paint.Style.STROKE
+            paint.strokeWidth = 1f
+            paint.color = android.graphics.Color.LTGRAY
+            canvas.drawRect(50f, currentY, 545f, currentY + rowHeight, paint)
+            
+            paint.style = android.graphics.Paint.Style.FILL
+            paint.color = android.graphics.Color.BLACK
+            paint.textSize = 10f
+            paint.isFakeBoldText = true
+            canvas.drawText("Date", 60f, currentY + 17f, paint)
+            canvas.drawText("Motif / Description", 180f, currentY + 17f, paint)
+            canvas.drawText("Mode", 380f, currentY + 17f, paint)
+            canvas.drawText("Montant", 470f, currentY + 17f, paint)
+            
+            currentY += rowHeight
+            paint.isFakeBoldText = false
         }
+        
+        // Row background and borders
+        paint.style = android.graphics.Paint.Style.STROKE
+        paint.strokeWidth = 0.5f
+        paint.color = android.graphics.Color.LTGRAY
+        canvas.drawRect(50f, currentY, 545f, currentY + rowHeight, paint)
+        
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.color = android.graphics.Color.BLACK
         
         val dateStr = sdf.format(java.util.Date(payment.date))
         val amountStr = "${numberFormat.format(payment.amount)} GNF"
         
-        val line = "- $dateStr : ${payment.reason} [${payment.paymentMethod}] -> $amountStr"
-        canvas.drawText(line, 50f, yPosition, paint)
-        yPosition += 30f
-        total += payment.amount
+        canvas.drawText(dateStr, 60f, currentY + 17f, paint)
+        
+        val reasonStr = if (payment.reason.length > 25) payment.reason.substring(0, 22) + "..." else payment.reason
+        canvas.drawText(reasonStr, 180f, currentY + 17f, paint)
+        
+        val methodColorHex = when (payment.paymentMethod) {
+            "Espèces" -> "#10B981"
+            "Orange Money" -> "#F97316"
+            "Mobile Money" -> "#EAB308"
+            "ScolaPay" -> "#0F56E3"
+            "Virement" -> "#6B7280"
+            "Chèque" -> "#8B5CF6"
+            else -> "#6B7280"
+        }
+        paint.color = android.graphics.Color.parseColor(methodColorHex)
+        paint.isFakeBoldText = true
+        canvas.drawText(payment.paymentMethod, 380f, currentY + 17f, paint)
+        
+        paint.color = android.graphics.Color.BLACK
+        paint.isFakeBoldText = false
+        canvas.drawText(amountStr, 470f, currentY + 17f, paint)
+        
+        currentY += rowHeight
     }
     
-    yPosition += 20f
-    if (yPosition > 800f) {
-        pdfDocument.finishPage(page)
-        page = pdfDocument.startPage(pageInfo)
-        canvas = page.canvas
-        yPosition = 50f
+    if (payments.isEmpty()) {
+        paint.style = android.graphics.Paint.Style.STROKE
+        paint.strokeWidth = 0.5f
+        paint.color = android.graphics.Color.LTGRAY
+        canvas.drawRect(50f, currentY, 545f, currentY + rowHeight * 2, paint)
+        
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.color = android.graphics.Color.BLACK
+        paint.textSize = 10f
+        paint.isFakeBoldText = true
+        canvas.drawText("Aucun paiement enregistré pour le moment.", 180f, currentY + rowHeight + 5f, paint)
+        currentY += rowHeight * 2
+    } else {
+        // Draw total summary row
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.color = android.graphics.Color.parseColor("#F9FAFB")
+        canvas.drawRect(50f, currentY, 545f, currentY + rowHeight, paint)
+        
+        paint.style = android.graphics.Paint.Style.STROKE
+        paint.strokeWidth = 1f
+        paint.color = android.graphics.Color.LTGRAY
+        canvas.drawRect(50f, currentY, 545f, currentY + rowHeight, paint)
+        
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.color = android.graphics.Color.BLACK
+        paint.isFakeBoldText = true
+        canvas.drawText("TOTAL PAYÉ", 60f, currentY + 17f, paint)
+        canvas.drawText("${numberFormat.format(totalPaid)} GNF", 470f, currentY + 17f, paint)
     }
+    
+    // Always draw footer at the very bottom of the page
+    paint.style = android.graphics.Paint.Style.STROKE
+    paint.strokeWidth = 1f
+    paint.color = android.graphics.Color.LTGRAY
+    canvas.drawLine(50f, 755f, 545f, 755f, paint)
+    
+    paint.style = android.graphics.Paint.Style.FILL
+    paint.textSize = 9.5f
+    paint.color = android.graphics.Color.BLACK
     paint.isFakeBoldText = true
-    canvas.drawText("Total payé : ${numberFormat.format(total)} GNF", 50f, yPosition, paint)
+    canvas.drawText("Merci pour votre confiance. Reçu généré électroniquement par ScolaPay.", 50f, 785f, paint)
+    canvas.drawText("Signature & Cachet de l'établissement", 355f, 785f, paint)
     
     pdfDocument.finishPage(page)
     
