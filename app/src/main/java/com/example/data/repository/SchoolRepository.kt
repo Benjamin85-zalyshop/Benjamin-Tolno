@@ -47,8 +47,8 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         schoolDao.deleteExpenseById(expenseId)
     }
 
-    suspend fun registerSchool(name: String, founderPassword: String, financierPassword: String, displayName: String = "") {
-        schoolDao.insertSchoolAccount(com.example.data.models.SchoolAccount(schoolName = name, passwordHash = founderPassword, financierPasswordHash = financierPassword, displayName = displayName))
+    suspend fun registerSchool(name: String, founderPassword: String, financierPassword: String, displayName: String = "", address: String = "", founderPhone: String = "") {
+        schoolDao.insertSchoolAccount(com.example.data.models.SchoolAccount(schoolName = name, passwordHash = founderPassword, financierPasswordHash = financierPassword, displayName = displayName, address = address, founderPhone = founderPhone))
     }
 
     suspend fun getSchoolAccountByName(name: String): com.example.data.models.SchoolAccount? {

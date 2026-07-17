@@ -15,5 +15,7 @@ data class SchoolAccount(
     val transactionId: String? = null,
     val displayName: String = "",
     val rejectionReason: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val address: String = "",
+    val founderPhone: String = ""
 )

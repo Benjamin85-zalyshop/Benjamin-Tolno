@@ -30,6 +30,8 @@ fun RegisterScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var schoolNameInput by remember { mutableStateOf("") }
+    var schoolAddress by remember { mutableStateOf("") }
+    var founderPhone by remember { mutableStateOf("") }
     
     // Founder passwords
     var founderPassword by remember { mutableStateOf("") } 
@@ -106,6 +108,17 @@ fun RegisterScreen(
                 singleLine = true
             )
             
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // School Address Input
+            OutlinedTextField(
+                value = schoolAddress,
+                onValueChange = { schoolAddress = it },
+                label = { Text("Adresse de l'école (Préfecture / Sous-préfecture)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            
             Spacer(modifier = Modifier.height(24.dp))
             
             // Founder Section Header
@@ -119,6 +132,18 @@ fun RegisterScreen(
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(8.dp))
+
+            // Founder Phone Number Input
+            OutlinedTextField(
+                value = founderPhone,
+                onValueChange = { founderPhone = it },
+                label = { Text("Numéro de téléphone du Fondateur") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
             
             // Founder Password Input
             OutlinedTextField(
@@ -234,6 +259,10 @@ fun RegisterScreen(
                         errorMessage = "Veuillez entrer le nom de l'école."
                     } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
                         errorMessage = "Veuillez entrer une adresse e-mail valide."
+                    } else if (schoolAddress.trim().isBlank()) {
+                        errorMessage = "Veuillez entrer l'adresse de l'école (Préfecture ou Sous-préfecture)."
+                    } else if (founderPhone.trim().isBlank()) {
+                        errorMessage = "Veuillez entrer le numéro de téléphone du fondateur."
                     } else if (founderPassword.length < 6) {
                         errorMessage = "Le mot de passe Fondateur doit contenir au moins 6 caractères."
                     } else if (founderPassword != confirmFounderPassword) {
@@ -251,7 +280,9 @@ fun RegisterScreen(
                                 email = email.trim(), 
                                 founderPassword = founderPassword, 
                                 financierPassword = financierPassword,
-                                displayName = schoolNameInput.trim()
+                                displayName = schoolNameInput.trim(),
+                                address = schoolAddress.trim(),
+                                founderPhone = founderPhone.trim()
                             )
                             if(success) {
                                 onRegisterSuccess()
@@ -262,7 +293,7 @@ fun RegisterScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                enabled = schoolNameInput.isNotBlank() && email.isNotBlank() && founderPassword.isNotBlank() && confirmFounderPassword.isNotBlank() && financierPassword.isNotBlank() && confirmFinancierPassword.isNotBlank()
+                enabled = schoolNameInput.isNotBlank() && email.isNotBlank() && schoolAddress.isNotBlank() && founderPhone.isNotBlank() && founderPassword.isNotBlank() && confirmFounderPassword.isNotBlank() && financierPassword.isNotBlank() && confirmFinancierPassword.isNotBlank()
             ) {
                 Text("S'inscrire")
             }

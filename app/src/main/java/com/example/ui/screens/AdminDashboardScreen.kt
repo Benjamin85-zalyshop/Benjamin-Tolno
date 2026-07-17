@@ -2,6 +2,9 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -269,6 +272,7 @@ fun SchoolRequestCard(
     onApprove: () -> Unit,
     onRejectClick: () -> Unit
 ) {
+    val localContext = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -294,6 +298,42 @@ fun SchoolRequestCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
+                    
+                    if (item.address.isNotEmpty()) {
+                        Text(
+                            text = "📍 Adr : ${item.address}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    
+                    if (item.founderPhone.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .clickable {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_DIAL).apply {
+                                            data = Uri.parse("tel:${item.founderPhone}")
+                                        }
+                                        localContext.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                        ) {
+                            Text(
+                                text = "📞 Tél Fondateur : ${item.founderPhone}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF16A34A),
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
+                    }
                     
                     if (!item.hasActiveSubscription) {
                         val elapsed = System.currentTimeMillis() - item.createdAt

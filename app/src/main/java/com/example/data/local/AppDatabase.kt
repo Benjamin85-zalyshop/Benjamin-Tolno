@@ -9,7 +9,7 @@ import com.example.data.models.Payment
 import com.example.data.models.SchoolAccount
 import com.example.data.models.Student
 
-@Database(entities = [Student::class, Payment::class, Expense::class, SchoolAccount::class], version = 14, exportSchema = false)
+@Database(entities = [Student::class, Payment::class, Expense::class, SchoolAccount::class], version = 16, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun schoolDao(): SchoolDao
 

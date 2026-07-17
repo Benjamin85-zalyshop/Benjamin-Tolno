@@ -904,6 +904,8 @@ class SchoolViewModel(
                     val rejectionReason = doc.getString("rejectionReason")
                     val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
                     val logoBase64 = doc.getString("logoBase64")
+                    val address = doc.getString("address") ?: ""
+                    val founderPhone = doc.getString("founderPhone") ?: ""
                     
                     _schoolLogoBase64.value = logoBase64
                     sharedPrefs.edit().putString("school_logo_base64", logoBase64).apply()
@@ -918,7 +920,9 @@ class SchoolViewModel(
                         paymentPhoneNumber = paymentPhoneNumber,
                         transactionId = transactionId,
                         rejectionReason = rejectionReason,
-                        createdAt = createdAt
+                        createdAt = createdAt,
+                        address = address,
+                        founderPhone = founderPhone
                     )
                     repository.insertSchoolAccountDirect(newAcc)
                     account = repository.getSchoolAccountByName(email)
@@ -943,7 +947,7 @@ class SchoolViewModel(
         }
     }
 
-    suspend fun registerSchool(email: String, founderPassword: String, financierPassword: String, displayName: String): Boolean {
+    suspend fun registerSchool(email: String, founderPassword: String, financierPassword: String, displayName: String, address: String = "", founderPhone: String = ""): Boolean {
         return try {
             val auth = FirebaseAuth.getInstance()
             val result = auth.createUserWithEmailAndPassword(email, founderPassword).await()
@@ -958,11 +962,13 @@ class SchoolViewModel(
                     "displayName" to displayName,
                     "hasActiveSubscription" to false,
                     "isPendingValidation" to false,
-                    "createdAt" to System.currentTimeMillis()
+                    "createdAt" to System.currentTimeMillis(),
+                    "address" to address,
+                    "founderPhone" to founderPhone
                 )
                 db.collection("schools").document(email).set(schoolData).await()
                 
-                repository.registerSchool(email, founderPassword, financierPassword, displayName)
+                repository.registerSchool(email, founderPassword, financierPassword, displayName, address, founderPhone)
                 val account = repository.getSchoolAccountByName(email)
                 if (account != null) {
                     _currentSchoolId.value = account.id
@@ -978,7 +984,7 @@ class SchoolViewModel(
             e.printStackTrace()
             try {
                 _userRole.value = "FOUNDER"
-                repository.registerSchool(email, founderPassword, financierPassword, displayName)
+                repository.registerSchool(email, founderPassword, financierPassword, displayName, address, founderPhone)
                 val account = repository.getSchoolAccountByName(email)
                 if (account != null) {
                     _currentSchoolId.value = account.id
@@ -1022,6 +1028,8 @@ class SchoolViewModel(
             var dbRejectionReason: String? = null
 
             var dbCreatedAt: Long? = null
+            var dbAddress = ""
+            var dbFounderPhone = ""
 
             try {
                 val db = FirebaseFirestore.getInstance()
@@ -1038,6 +1046,8 @@ class SchoolViewModel(
                     dbTransactionId = doc.getString("transactionId")
                     dbRejectionReason = doc.getString("rejectionReason")
                     dbCreatedAt = doc.getLong("createdAt")
+                    dbAddress = doc.getString("address") ?: ""
+                    dbFounderPhone = doc.getString("founderPhone") ?: ""
                 }
             } catch (ex: Exception) {
                 ex.printStackTrace()
@@ -1064,7 +1074,9 @@ class SchoolViewModel(
                             paymentPhoneNumber = dbPaymentPhoneNumber,
                             transactionId = dbTransactionId,
                             rejectionReason = dbRejectionReason,
-                            createdAt = dbCreatedAt ?: System.currentTimeMillis()
+                            createdAt = dbCreatedAt ?: System.currentTimeMillis(),
+                            address = dbAddress,
+                            founderPhone = dbFounderPhone
                         )
                         repository.insertSchoolAccountDirect(newAcc)
                         val account = repository.getSchoolAccountByName(cleanEmail)
@@ -1121,6 +1133,8 @@ class SchoolViewModel(
                     val transactionId = doc.getString("transactionId")
                     val rejectionReason = doc.getString("rejectionReason")
                     val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                    val address = doc.getString("address") ?: ""
+                    val founderPhone = doc.getString("founderPhone") ?: ""
 
                     if (passwordHash != password) {
                         passwordHash = password
@@ -1141,7 +1155,9 @@ class SchoolViewModel(
                         paymentPhoneNumber = paymentPhoneNumber,
                         transactionId = transactionId,
                         rejectionReason = rejectionReason,
-                        createdAt = createdAt
+                        createdAt = createdAt,
+                        address = address,
+                        founderPhone = founderPhone
                     )
                     repository.insertSchoolAccountDirect(newAcc)
                     account = repository.getSchoolAccountByName(cleanEmail)
@@ -1306,6 +1322,8 @@ class SchoolViewModel(
                     val transactionId = doc.getString("transactionId")
                     val rejectionReason = doc.getString("rejectionReason")
                     val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                    val address = doc.getString("address") ?: ""
+                    val founderPhone = doc.getString("founderPhone") ?: ""
                     
                     SchoolAdminItem(
                         email = email,
@@ -1316,7 +1334,9 @@ class SchoolViewModel(
                         paymentPhoneNumber = paymentPhoneNumber,
                         transactionId = transactionId,
                         rejectionReason = rejectionReason,
-                        createdAt = createdAt
+                        createdAt = createdAt,
+                        address = address,
+                        founderPhone = founderPhone
                     )
                 }
                 val sortedList = list.sortedByDescending { it.createdAt }
@@ -1384,5 +1404,7 @@ data class SchoolAdminItem(
     val paymentPhoneNumber: String?,
     val transactionId: String?,
     val rejectionReason: String?,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val address: String = "",
+    val founderPhone: String = ""
 )
