@@ -135,7 +135,7 @@ fun StudentsScreen(
                         items(filteredStudents) { student ->
                             val fullName = "${student.firstName} ${student.lastName}"
                             val studentPayments = payments.filter { it.studentId == student.id }
-                            val totalPaid = studentPayments.sumOf { it.amount }
+                            val totalPaid = studentPayments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                             val formattedTotal = "${numberFormat.format(totalPaid)} GNF"
                                                         StudentCard(
                                 name = fullName,

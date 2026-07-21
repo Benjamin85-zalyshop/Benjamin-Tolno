@@ -1377,7 +1377,8 @@ fun DashboardScreen(
                         Text(text = "$formattedCollected GNF", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     
-                    val restToPay = totalTheorique - currentCollected
+                    val currentTuitionCollected = payments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+                    val restToPay = totalTheorique - currentTuitionCollected
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -1998,7 +1999,7 @@ fun DashboardScreen(
                                 items(targetStudents) { student ->
                                     // Calculate due balance for student
                                     val studentPayments = payments.filter { it.studentId == student.id }
-                                    val totalPaid = studentPayments.sumOf { it.amount }
+                                    val totalPaid = studentPayments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                                     val classFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
                                     val unpaidBalance = maxOf(0L, classFee - totalPaid)
 

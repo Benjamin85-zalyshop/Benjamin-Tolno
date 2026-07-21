@@ -34,9 +34,12 @@ fun AdminDashboardScreen(
 ) {
     val context = LocalContext.current
     val schools by viewModel.adminSchools.collectAsStateWithLifecycle()
+    val adminError by viewModel.adminError.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
     var showRejectDialog by remember { mutableStateOf(false) }
     var schoolToReject by remember { mutableStateOf<SchoolAdminItem?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var schoolToDelete by remember { mutableStateOf<SchoolAdminItem?>(null) }
     var rejectionReason by remember { mutableStateOf("") }
     
     // Quick template suggestions for rejection
@@ -139,6 +142,20 @@ fun AdminDashboardScreen(
                     }
                 )
             }
+            
+            if (adminError != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Text(
+                        text = adminError ?: "",
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
 
             if (filteredSchools.isEmpty()) {
                 Box(
@@ -187,6 +204,10 @@ fun AdminDashboardScreen(
                                 schoolToReject = item
                                 rejectionReason = ""
                                 showRejectDialog = true
+                            },
+                            onDeleteClick = {
+                                schoolToDelete = item
+                                showDeleteDialog = true
                             }
                         )
                     }
@@ -264,13 +285,51 @@ fun AdminDashboardScreen(
             }
         )
     }
+
+    if (showDeleteDialog && schoolToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.DeleteForever,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Supprimer l'école")
+                }
+            },
+            text = {
+                Text("Voulez-vous vraiment supprimer définitivement le compte de l'école ${schoolToDelete?.displayName ?: schoolToDelete?.schoolName} ? Cette action est irréversible.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteSchoolAccount(schoolToDelete!!.email)
+                        showDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Oui, supprimer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun SchoolRequestCard(
     item: SchoolAdminItem,
     onApprove: () -> Unit,
-    onRejectClick: () -> Unit
+    onRejectClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
     val localContext = LocalContext.current
     Card(
@@ -464,39 +523,56 @@ fun SchoolRequestCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (item.isPendingValidation) {
-                        OutlinedButton(
-                            onClick = onRejectClick,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Icon(Icons.Filled.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Refuser")
-                        }
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Supprimer", tint = MaterialTheme.colorScheme.error)
+                    }
+                    
+                    Row {
+                        if (item.isPendingValidation) {
+                            OutlinedButton(
+                                onClick = onRejectClick,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Icon(Icons.Filled.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Refuser")
+                            }
 
-                        Button(
-                            onClick = onApprove,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                            modifier = Modifier.testTag("approve_btn")
-                        ) {
-                            Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Valider")
+                            Button(
+                                onClick = onApprove,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                modifier = Modifier.testTag("approve_btn")
+                            ) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Valider")
+                            }
+                        } else if (item.hasActiveSubscription) {
+                            OutlinedButton(
+                                onClick = onRejectClick,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.testTag("revoke_btn")
+                            ) {
+                                Icon(Icons.Filled.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Révoquer / Refuser")
+                            }
                         }
-                    } else if (item.hasActiveSubscription) {
-                        OutlinedButton(
-                            onClick = onRejectClick,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                            modifier = Modifier.testTag("revoke_btn")
-                        ) {
-                            Icon(Icons.Filled.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Révoquer / Refuser")
-                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Supprimer", tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }

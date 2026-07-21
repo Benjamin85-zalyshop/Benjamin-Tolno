@@ -88,7 +88,7 @@ fun AddPaymentScreen(
     }
 
     val totalPaid = remember(payments, studentId) {
-        payments.filter { it.studentId == studentId }.sumOf { it.amount }
+        payments.filter { it.studentId == studentId && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
     }
 
     val remainingToPay = remember(classFee, totalPaid) {

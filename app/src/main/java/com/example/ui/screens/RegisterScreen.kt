@@ -46,6 +46,7 @@ fun RegisterScreen(
     var confirmFinancierPasswordVisible by remember { mutableStateOf(false) }
     
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
     
     val coroutineScope = rememberCoroutineScope()
 
@@ -275,6 +276,7 @@ fun RegisterScreen(
                         errorMessage = "Les mots de passe Fondateur et Financier doivent être différents."
                     } else {
                         errorMessage = null
+                        isLoading = true
                         coroutineScope.launch {
                             val success = viewModel.registerSchool(
                                 email = email.trim(), 
@@ -284,6 +286,7 @@ fun RegisterScreen(
                                 address = schoolAddress.trim(),
                                 founderPhone = founderPhone.trim()
                             )
+                            isLoading = false
                             if(success) {
                                 onRegisterSuccess()
                             } else {
@@ -293,9 +296,17 @@ fun RegisterScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                enabled = schoolNameInput.isNotBlank() && email.isNotBlank() && schoolAddress.isNotBlank() && founderPhone.isNotBlank() && founderPassword.isNotBlank() && confirmFounderPassword.isNotBlank() && financierPassword.isNotBlank() && confirmFinancierPassword.isNotBlank()
+                enabled = !isLoading && schoolNameInput.isNotBlank() && email.isNotBlank() && schoolAddress.isNotBlank() && founderPhone.isNotBlank() && founderPassword.isNotBlank() && confirmFounderPassword.isNotBlank() && financierPassword.isNotBlank() && confirmFinancierPassword.isNotBlank()
             ) {
-                Text("S'inscrire")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("S'inscrire")
+                }
             }
         }
     }

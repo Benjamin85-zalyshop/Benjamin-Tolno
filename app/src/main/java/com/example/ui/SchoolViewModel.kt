@@ -63,6 +63,8 @@ class SchoolViewModel(
     
     private val _userRole = MutableStateFlow<String?>("FOUNDER")
     val userRole: StateFlow<String?> = _userRole
+    private val _loginError = MutableStateFlow<String?>(null)
+    val loginError: StateFlow<String?> = _loginError
 
     private val _schoolAccount = MutableStateFlow<com.example.data.models.SchoolAccount?>(null)
     val schoolAccount: StateFlow<com.example.data.models.SchoolAccount?> = _schoolAccount
@@ -168,6 +170,22 @@ class SchoolViewModel(
             viewModelScope.launch {
                 _userRole.value = lastRole
                 if (lastRole == "ADMIN") {
+                    try {
+                        FirebaseAuth.getInstance().signInWithEmailAndPassword(lastEmail, "Epbomibs5@").await()
+                    } catch (e: Exception) {
+                        android.util.Log.e("SchoolViewModel", "signInWithEmailAndPassword failed: ${e.message}", e)
+                        try {
+                            FirebaseAuth.getInstance().createUserWithEmailAndPassword(lastEmail, "Epbomibs5@").await()
+                        } catch (e2: Exception) {
+                            android.util.Log.e("SchoolViewModel", "createUserWithEmailAndPassword failed: ${e2.message}", e2)
+                        }
+                    }
+                    if (FirebaseAuth.getInstance().currentUser == null) {
+                        android.util.Log.e("SchoolViewModel", "currentUser is still null in init")
+                        clearSession()
+                        _userRole.value = null
+                        return@launch
+                    }
                     _currentSchoolId.value = -1
                     _schoolName.value = "Administrateur ScolaPay"
                     _schoolAccount.value = null
@@ -551,6 +569,7 @@ class SchoolViewModel(
     }
     
     private fun startRealtimeSync(email: String, schoolId: Int) {
+        android.util.Log.d("SchoolViewModel", "startRealtimeSync called for email: $email, schoolId: $schoolId")
         activeListeners.forEach { it.remove() }
         activeListeners.clear()
 
@@ -559,9 +578,11 @@ class SchoolViewModel(
 
         val schoolListener = schoolDocRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
+                android.util.Log.e("SchoolViewModel", "schoolListener error: ${error.message}", error)
                 error.printStackTrace()
                 return@addSnapshotListener
             }
+            android.util.Log.d("SchoolViewModel", "schoolListener received snapshot")
             if (snapshot != null && snapshot.exists()) {
                 val displayName = snapshot.getString("displayName") ?: ""
                 val schoolName = snapshot.getString("schoolName") ?: email
@@ -719,7 +740,37 @@ class SchoolViewModel(
                                     val reason = doc.getString("reason") ?: ""
                                     val paymentMethod = doc.getString("paymentMethod") ?: "Espèces"
                                     
-                                    val localStudentId = repository.getStudentIdByRemoteId(studentRemoteId)
+                                    var localStudentId = repository.getStudentIdByRemoteId(studentRemoteId)
+                                    if (localStudentId == null && studentRemoteId.isNotEmpty()) {
+                                        try {
+                                            val stuDoc = schoolDocRef.collection("students").document(studentRemoteId).get().await()
+                                            if (stuDoc.exists()) {
+                                                val firstName = stuDoc.getString("firstName") ?: ""
+                                                val lastName = stuDoc.getString("lastName") ?: ""
+                                                val grade = stuDoc.getString("grade") ?: ""
+                                                val section = stuDoc.getString("section") ?: "Matin"
+                                                val parentWhatsApp = stuDoc.getString("parentWhatsApp") ?: ""
+                                                val regFee = stuDoc.getLong("registrationFee") ?: 0L
+                                                val reenrFee = stuDoc.getLong("reenrollmentFee") ?: 0L
+                                                repository.insertStudent(
+                                                    com.example.data.models.Student(
+                                                        schoolId = schoolId,
+                                                        firstName = firstName,
+                                                        lastName = lastName,
+                                                        grade = grade,
+                                                        section = section,
+                                                        remoteId = studentRemoteId,
+                                                        parentWhatsApp = parentWhatsApp,
+                                                        registrationFee = regFee,
+                                                        reenrollmentFee = reenrFee
+                                                    )
+                                                )
+                                                localStudentId = repository.getStudentIdByRemoteId(studentRemoteId)
+                                            }
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                    }
                                     if (localStudentId != null) {
                                         val existingPayment = repository.getPaymentByRemoteId(remoteId)
                                         if (existingPayment == null) {
@@ -938,25 +989,57 @@ class SchoolViewModel(
         }
         
         if (account != null) {
+            val auth = FirebaseAuth.getInstance()
+            val resolvedRole = _userRole.value ?: "FOUNDER"
+            val targetEmail = if (resolvedRole == "FINANCIER") email.replace("@", "+financier@") else email
+            val targetPassword = if (resolvedRole == "FINANCIER") account.financierPasswordHash else account.passwordHash
+            val currentEmail = auth.currentUser?.email
+            if (currentEmail == null || currentEmail != targetEmail) {
+                try {
+                    auth.signInWithEmailAndPassword(targetEmail, targetPassword).await()
+                } catch (e: Exception) {
+                    try {
+                        if (resolvedRole != "FINANCIER") {
+                            auth.createUserWithEmailAndPassword(targetEmail, account.passwordHash).await()
+                        } else {
+                            auth.signInWithEmailAndPassword(email, account.passwordHash).await()
+                        }
+                    } catch (e2: Exception) {
+                        e2.printStackTrace()
+                    }
+                }
+            }
+            
             _currentSchoolId.value = account.id
             _schoolName.value = account.displayName.ifEmpty { account.schoolName }
             _schoolAccount.value = account
-            val resolvedRole = _userRole.value ?: "FOUNDER"
             saveSession(email, resolvedRole)
             startRealtimeSync(email, account.id)
         }
     }
 
     suspend fun registerSchool(email: String, founderPassword: String, financierPassword: String, displayName: String, address: String = "", founderPhone: String = ""): Boolean {
+        val cleanEmail = email.trim().lowercase()
         return try {
             val auth = FirebaseAuth.getInstance()
-            val result = auth.createUserWithEmailAndPassword(email, founderPassword).await()
+            val result = auth.createUserWithEmailAndPassword(cleanEmail, founderPassword).await()
             if (result.user != null) {
                 _userRole.value = "FOUNDER"
                 
+                // Create financier sub-account in Firebase Auth using the +financier notation
+                try {
+                    val financierEmail = cleanEmail.replace("@", "+financier@")
+                    auth.createUserWithEmailAndPassword(financierEmail, financierPassword).await()
+                    // After creating the financier user, we are logged in as them, so sign out and sign back in as Founder
+                    auth.signOut()
+                    auth.signInWithEmailAndPassword(cleanEmail, founderPassword).await()
+                } catch (fe: Exception) {
+                    android.util.Log.e("SchoolViewModel", "Failed to register financier sub-account in Auth: ${fe.message}", fe)
+                }
+
                 val db = FirebaseFirestore.getInstance()
                 val schoolData = hashMapOf(
-                    "schoolName" to email,
+                    "schoolName" to cleanEmail,
                     "passwordHash" to founderPassword,
                     "financierPasswordHash" to financierPassword,
                     "displayName" to displayName,
@@ -966,15 +1049,15 @@ class SchoolViewModel(
                     "address" to address,
                     "founderPhone" to founderPhone
                 )
-                db.collection("schools").document(email).set(schoolData).await()
+                db.collection("schools").document(cleanEmail).set(schoolData).await()
                 
-                repository.registerSchool(email, founderPassword, financierPassword, displayName, address, founderPhone)
-                val account = repository.getSchoolAccountByName(email)
+                repository.registerSchool(cleanEmail, founderPassword, financierPassword, displayName, address, founderPhone)
+                val account = repository.getSchoolAccountByName(cleanEmail)
                 if (account != null) {
                     _currentSchoolId.value = account.id
                     _schoolName.value = account.displayName.ifEmpty { account.schoolName }
-                    saveSession(email, "FOUNDER")
-                    startRealtimeSync(email, account.id)
+                    saveSession(cleanEmail, "FOUNDER")
+                    startRealtimeSync(cleanEmail, account.id)
                 }
                 true
             } else {
@@ -982,40 +1065,173 @@ class SchoolViewModel(
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            try {
-                _userRole.value = "FOUNDER"
-                repository.registerSchool(email, founderPassword, financierPassword, displayName, address, founderPhone)
-                val account = repository.getSchoolAccountByName(email)
-                if (account != null) {
-                    _currentSchoolId.value = account.id
-                    _schoolName.value = account.displayName.ifEmpty { account.schoolName }
-                    saveSession(email, "FOUNDER")
-                    startRealtimeSync(email, account.id)
-                    return true
-                }
-            } catch (localEx: Exception) {
-                localEx.printStackTrace()
-            }
             false
         }
     }
 
-    suspend fun login(email: String, password: String): Boolean {
+    private suspend fun syncFinancierAuthAccount(schoolEmail: String, founderPassword: String, financierPassword: String) {
+        val auth = FirebaseAuth.getInstance()
+        val currentAuthUser = auth.currentUser
+        val currentEmail = currentAuthUser?.email
+        
+        val cleanEmail = schoolEmail.trim().lowercase()
+        val financierEmail = cleanEmail.replace("@", "+financier@")
+        
+        try {
+            // Try to sign in as financier to see if credentials need updating
+            try {
+                auth.signOut()
+                auth.signInWithEmailAndPassword(financierEmail, financierPassword).await()
+                // Sign in succeeded, so credentials are correct! We can optionally update it to be safe
+                auth.currentUser?.updatePassword(financierPassword)?.await()
+            } catch (signInEx: Exception) {
+                // Sign in failed, user might not exist, let's create them!
+                try {
+                    auth.createUserWithEmailAndPassword(financierEmail, financierPassword).await()
+                } catch (createEx: Exception) {
+                    android.util.Log.e("SchoolViewModel", "syncFinancierAuthAccount: failed to create financier auth: ${createEx.message}", createEx)
+                }
+            }
+            
+            // Sign back in as the original user (Founder)
+            auth.signOut()
+            if (currentEmail != null && currentEmail == cleanEmail) {
+                auth.signInWithEmailAndPassword(cleanEmail, founderPassword).await()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SchoolViewModel", "syncFinancierAuthAccount error: ${e.message}", e)
+            // Restore founder login if possible
+            try {
+                auth.signOut()
+                if (currentEmail != null && currentEmail == cleanEmail) {
+                    auth.signInWithEmailAndPassword(cleanEmail, founderPassword).await()
+                }
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
+
+    suspend fun login(email: String, rawPassword: String): Boolean {
+        _loginError.value = null
+        android.util.Log.d("LOGIN_ATTEMPT", "Email: '${email.trim()}' | Password: '${rawPassword.trim()}'")
+        val password = rawPassword.trim()
         val cleanEmail = email.trim().lowercase()
         if (cleanEmail == "benjamintolno7@gmail.com") {
-            if (password == "Epbomibs5@") {
-                _userRole.value = "ADMIN"
-                _currentSchoolId.value = -1
-                _schoolName.value = "Administrateur ScolaPay"
-                _schoolAccount.value = null
-                saveSession(cleanEmail, "ADMIN")
-                return true
+            try {
+                FirebaseAuth.getInstance().signInWithEmailAndPassword(cleanEmail, password).await()
+            } catch (e: Exception) {
+                _loginError.value = "Sign in failed: ${e.message}"
+                try {
+                    FirebaseAuth.getInstance().createUserWithEmailAndPassword(cleanEmail, password).await()
+                    _loginError.value = null // Success
+                } catch (e2: Exception) {
+                    _loginError.value = "Create failed: ${e2.message} (Sign in: ${e.message})"
+                    return false
+                }
             }
-            return false // Any other password for this email is denied access
+            
+            if (FirebaseAuth.getInstance().currentUser == null) {
+                return false
+            }
+            
+            _userRole.value = "ADMIN"
+            _currentSchoolId.value = -1
+            _schoolName.value = "Administrateur ScolaPay"
+            _schoolAccount.value = null
+            saveSession(cleanEmail, "ADMIN")
+            return true
         }
 
         return try {
-            // First, try to fetch the Firestore document online to see if we can resolve the credentials
+            val auth = FirebaseAuth.getInstance()
+            
+            // 1. Try direct Firebase Auth sign-in with cleanEmail & password (works for Founder)
+            var signedInAsFounder = false
+            try {
+                auth.signOut()
+                val res = auth.signInWithEmailAndPassword(cleanEmail, password).await()
+                if (res.user != null) {
+                    signedInAsFounder = true
+                }
+            } catch (e: Exception) {
+                // Not the founder, or invalid founder password, or network issue
+            }
+
+            // 2. Try direct Firebase Auth sign-in as Financier (cleanEmail with +financier & password)
+            var signedInAsFinancier = false
+            val financierEmail = cleanEmail.replace("@", "+financier@")
+            if (!signedInAsFounder) {
+                try {
+                    auth.signOut()
+                    val res = auth.signInWithEmailAndPassword(financierEmail, password).await()
+                    if (res.user != null) {
+                        signedInAsFinancier = true
+                    }
+                } catch (e: Exception) {
+                    // Not the financier, or invalid financier password, or user doesn't exist
+                }
+            }
+
+            // If we successfully logged in using either role, we are authenticated online!
+            if (signedInAsFounder || signedInAsFinancier) {
+                val resolvedRole = if (signedInAsFinancier) "FINANCIER" else "FOUNDER"
+                
+                // Read the Firestore document securely to sync details
+                val db = FirebaseFirestore.getInstance()
+                val doc = db.collection("schools").document(cleanEmail).get().await()
+                if (doc.exists()) {
+                    val dbSchoolName = doc.getString("schoolName") ?: cleanEmail
+                    val dbFounderPassword = doc.getString("passwordHash") ?: ""
+                    val dbFinancierPassword = doc.getString("financierPasswordHash") ?: ""
+                    val dbDisplayName = doc.getString("displayName") ?: ""
+                    val dbHasActiveSubscription = doc.getBoolean("hasActiveSubscription") ?: false
+                    val dbIsPendingValidation = doc.getBoolean("isPendingValidation") ?: false
+                    val dbPaymentPhoneNumber = doc.getString("paymentPhoneNumber")
+                    val dbTransactionId = doc.getString("transactionId")
+                    val dbRejectionReason = doc.getString("rejectionReason")
+                    val dbCreatedAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                    val dbAddress = doc.getString("address") ?: ""
+                    val dbFounderPhone = doc.getString("founderPhone") ?: ""
+
+                    // Save/update school account locally in Room
+                    val newAcc = com.example.data.models.SchoolAccount(
+                        schoolName = dbSchoolName,
+                        passwordHash = dbFounderPassword,
+                        financierPasswordHash = dbFinancierPassword,
+                        displayName = dbDisplayName,
+                        hasActiveSubscription = dbHasActiveSubscription,
+                        isPendingValidation = dbIsPendingValidation,
+                        paymentPhoneNumber = dbPaymentPhoneNumber,
+                        transactionId = dbTransactionId,
+                        rejectionReason = dbRejectionReason,
+                        createdAt = dbCreatedAt,
+                        address = dbAddress,
+                        founderPhone = dbFounderPhone
+                    )
+                    repository.insertSchoolAccountDirect(newAcc)
+                    
+                    // If we logged in as Founder, let's make sure the financier Auth sub-account is synced
+                    if (signedInAsFounder && dbFinancierPassword.isNotEmpty()) {
+                        syncFinancierAuthAccount(cleanEmail, dbFounderPassword, dbFinancierPassword)
+                    }
+                }
+
+                // Retrieve account from Room to set StateFlow values
+                val account = repository.getSchoolAccountByName(cleanEmail)
+                if (account != null) {
+                    _userRole.value = resolvedRole
+                    _currentSchoolId.value = account.id
+                    _schoolName.value = account.displayName.ifEmpty { account.schoolName }
+                    _schoolAccount.value = account
+                    saveSession(cleanEmail, resolvedRole)
+                    startRealtimeSync(cleanEmail, account.id)
+                    return true
+                }
+            }
+
+            // 3. Fallback: If both direct Firebase logins failed, let's see if we can do an online fetch
+            // using anonymous sign-in or unauthenticated read.
             var firestoreAccountFound = false
             var dbFounderPassword = ""
             var dbFinancierPassword = ""
@@ -1026,12 +1242,18 @@ class SchoolViewModel(
             var dbPaymentPhoneNumber: String? = null
             var dbTransactionId: String? = null
             var dbRejectionReason: String? = null
-
             var dbCreatedAt: Long? = null
             var dbAddress = ""
             var dbFounderPhone = ""
 
             try {
+                if (auth.currentUser == null) {
+                    try {
+                        auth.signInAnonymously().await()
+                    } catch (e: Exception) {
+                        android.util.Log.e("SchoolViewModel", "signInAnonymously failed: ${e.message}")
+                    }
+                }
                 val db = FirebaseFirestore.getInstance()
                 val doc = db.collection("schools").document(cleanEmail).get().await()
                 if (doc.exists()) {
@@ -1054,16 +1276,38 @@ class SchoolViewModel(
             }
 
             if (firestoreAccountFound) {
-                // If the input password matches either the Founder password or the Financier password:
                 if (password == dbFounderPassword || (dbFinancierPassword.isNotEmpty() && password == dbFinancierPassword)) {
                     val resolvedRole = if (password == dbFinancierPassword) "FINANCIER" else "FOUNDER"
                     
-                    // We must sign in to Firebase Auth using the founder's password (since that's the only one registered in Auth)
-                    val auth = FirebaseAuth.getInstance()
-                    val result = auth.signInWithEmailAndPassword(cleanEmail, dbFounderPassword).await()
+                    auth.signOut()
+                    // If they are Financier, first try to sign them in directly using financierEmail.
+                    // If that fails, we sign in as Founder and sync the Financier account.
+                    val loginSuccess = if (resolvedRole == "FINANCIER") {
+                        try {
+                            auth.signInWithEmailAndPassword(financierEmail, password).await()
+                            true
+                        } catch (e: Exception) {
+                            try {
+                                auth.signInWithEmailAndPassword(cleanEmail, dbFounderPassword).await()
+                                syncFinancierAuthAccount(cleanEmail, dbFounderPassword, dbFinancierPassword)
+                                true
+                            } catch (e2: Exception) {
+                                false
+                            }
+                        }
+                    } else {
+                        try {
+                            auth.signInWithEmailAndPassword(cleanEmail, dbFounderPassword).await()
+                            if (dbFinancierPassword.isNotEmpty()) {
+                                syncFinancierAuthAccount(cleanEmail, dbFounderPassword, dbFinancierPassword)
+                            }
+                            true
+                        } catch (e: Exception) {
+                            false
+                        }
+                    }
 
-                    if (result.user != null) {
-                        // Store/update the school account locally in Room
+                    if (loginSuccess && auth.currentUser != null) {
                         val newAcc = com.example.data.models.SchoolAccount(
                             schoolName = dbSchoolName,
                             passwordHash = dbFounderPassword,
@@ -1094,10 +1338,14 @@ class SchoolViewModel(
                 }
             }
 
-            // Fallback 1: Local cache check (useful when offline)
+            // 4. Local database check (perfect for Offline/cached accounts)
             var account = repository.getSchoolAccountByName(cleanEmail)
             if (account != null) {
                 if (password == account.passwordHash) {
+                    try {
+                        auth.signOut()
+                        auth.signInWithEmailAndPassword(cleanEmail, account.passwordHash).await()
+                    } catch (e: Exception) { e.printStackTrace() }
                     _userRole.value = "FOUNDER"
                     _currentSchoolId.value = account.id
                     _schoolName.value = account.displayName.ifEmpty { account.schoolName }
@@ -1106,6 +1354,14 @@ class SchoolViewModel(
                     startRealtimeSync(cleanEmail, account.id)
                     return true
                 } else if (password == account.financierPasswordHash) {
+                    try {
+                        auth.signOut()
+                        auth.signInWithEmailAndPassword(financierEmail, account.financierPasswordHash).await()
+                    } catch (e: Exception) {
+                        try {
+                            auth.signInWithEmailAndPassword(cleanEmail, account.passwordHash).await()
+                        } catch (e2: Exception) { e2.printStackTrace() }
+                    }
                     _userRole.value = "FINANCIER"
                     _currentSchoolId.value = account.id
                     _schoolName.value = account.displayName.ifEmpty { account.schoolName }
@@ -1116,77 +1372,13 @@ class SchoolViewModel(
                 }
             }
 
-            // Fallback 2: Direct standard Firebase sign-in with the entered password (only works for Founder password)
-            val auth = FirebaseAuth.getInstance()
-            val result = auth.signInWithEmailAndPassword(cleanEmail, password).await()
-            if (result.user != null) {
-                val db = FirebaseFirestore.getInstance()
-                val doc = db.collection("schools").document(cleanEmail).get().await()
-                if (doc.exists()) {
-                    val schoolName = doc.getString("schoolName") ?: cleanEmail
-                    var passwordHash = doc.getString("passwordHash") ?: password
-                    val financierPasswordHash = doc.getString("financierPasswordHash") ?: ""
-                    val displayName = doc.getString("displayName") ?: ""
-                    val hasActiveSubscription = doc.getBoolean("hasActiveSubscription") ?: false
-                    val isPendingValidation = doc.getBoolean("isPendingValidation") ?: false
-                    val paymentPhoneNumber = doc.getString("paymentPhoneNumber")
-                    val transactionId = doc.getString("transactionId")
-                    val rejectionReason = doc.getString("rejectionReason")
-                    val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
-                    val address = doc.getString("address") ?: ""
-                    val founderPhone = doc.getString("founderPhone") ?: ""
-
-                    if (passwordHash != password) {
-                        passwordHash = password
-                        try {
-                            db.collection("schools").document(cleanEmail).update("passwordHash", password).await()
-                        } catch (ex: Exception) {
-                            ex.printStackTrace()
-                        }
-                    }
-
-                    val newAcc = com.example.data.models.SchoolAccount(
-                        schoolName = schoolName,
-                        passwordHash = passwordHash,
-                        financierPasswordHash = financierPasswordHash,
-                        displayName = displayName,
-                        hasActiveSubscription = hasActiveSubscription,
-                        isPendingValidation = isPendingValidation,
-                        paymentPhoneNumber = paymentPhoneNumber,
-                        transactionId = transactionId,
-                        rejectionReason = rejectionReason,
-                        createdAt = createdAt,
-                        address = address,
-                        founderPhone = founderPhone
-                    )
-                    repository.insertSchoolAccountDirect(newAcc)
-                    account = repository.getSchoolAccountByName(cleanEmail)
-                }
-
-                if (account != null) {
-                    if (password == account.passwordHash) {
-                        _userRole.value = "FOUNDER"
-                    } else if (password == account.financierPasswordHash) {
-                        _userRole.value = "FINANCIER"
-                    } else {
-                        _userRole.value = "FOUNDER"
-                    }
-                    _currentSchoolId.value = account.id
-                    _schoolName.value = account.displayName.ifEmpty { account.schoolName }
-                    _schoolAccount.value = account
-                    saveSession(cleanEmail, _userRole.value!!)
-                    startRealtimeSync(cleanEmail, account.id)
-                    return true
-                }
-                _userRole.value = "FOUNDER"
-                syncAccount(cleanEmail)
-                return true
-            } else {
-                false
-            }
+            _loginError.value = "Identifiants incorrects ou problème de connexion"
+            false
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback 3: Offline local check inside catch block
+            _loginError.value = "Erreur: ${e.message}"
+            
+            // 5. Offline Fallback in Catch Block
             val account = repository.getSchoolAccountByName(cleanEmail)
             if (account != null) {
                 if (password == account.passwordHash) {
@@ -1294,6 +1486,9 @@ class SchoolViewModel(
                 val updated = currentAcc.copy(financierPasswordHash = newPassword)
                 repository.insertSchoolAccountDirect(updated)
                 _schoolAccount.value = updated
+                
+                // Sync Firebase Auth Financier Account!
+                syncFinancierAuthAccount(email, currentAcc.passwordHash, newPassword)
             }
         }
     }
@@ -1301,12 +1496,17 @@ class SchoolViewModel(
     private val _adminSchools = MutableStateFlow<List<SchoolAdminItem>>(emptyList())
     val adminSchools: StateFlow<List<SchoolAdminItem>> = _adminSchools
 
+    private val _adminError = MutableStateFlow<String?>(null)
+    val adminError: StateFlow<String?> = _adminError
+
     fun loadAdminSchools() {
         adminListener?.remove()
+        _adminError.value = null
         val db = FirebaseFirestore.getInstance()
         adminListener = db.collection("schools").addSnapshotListener { snapshot, error ->
             if (error != null) {
                 error.printStackTrace()
+                _adminError.value = "Erreur de chargement: ${error.message}"
                 return@addSnapshotListener
             }
             if (snapshot != null) {
@@ -1356,6 +1556,18 @@ class SchoolViewModel(
                         "rejectionReason" to null
                     )
                 ).await()
+                loadAdminSchools()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun deleteSchoolAccount(email: String) {
+        viewModelScope.launch {
+            val db = FirebaseFirestore.getInstance()
+            try {
+                db.collection("schools").document(email).delete().await()
                 loadAdminSchools()
             } catch (e: Exception) {
                 e.printStackTrace()

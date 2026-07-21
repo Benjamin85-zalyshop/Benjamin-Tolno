@@ -146,6 +146,9 @@ fun LoginScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
+                        focusedTextColor = Color(0xFF1F2937),
+                        unfocusedTextColor = Color(0xFF1F2937),
+                        disabledTextColor = Color(0xFF9CA3AF),
                         focusedBorderColor = Color(0xFF0F56E3),
                         unfocusedBorderColor = Color(0xFFE5E7EB),
                         focusedLabelColor = Color(0xFF0F56E3),
@@ -177,6 +180,9 @@ fun LoginScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
+                        focusedTextColor = Color(0xFF1F2937),
+                        unfocusedTextColor = Color(0xFF1F2937),
+                        disabledTextColor = Color(0xFF9CA3AF),
                         focusedBorderColor = Color(0xFF0F56E3),
                         unfocusedBorderColor = Color(0xFFE5E7EB),
                         focusedLabelColor = Color(0xFF0F56E3),
@@ -239,7 +245,8 @@ fun LoginScreen(
                             if (success) {
                                 onNavigateToDashboard()
                             } else {
-                                errorMessage = "E-mail ou mot de passe incorrect"
+                                val vmError = viewModel.loginError.value
+                                errorMessage = vmError ?: "E-mail ou mot de passe incorrect"
                                 isLoggingIn = false
                             }
                         }
@@ -258,7 +265,7 @@ fun LoginScreen(
                     if (isLoggingIn) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.primary,
                             strokeWidth = 2.5.dp
                         )
                     } else {
