@@ -7,15 +7,68 @@ import androidx.room.Query
 import com.example.data.models.Expense
 import com.example.data.models.Payment
 import com.example.data.models.Student
+import com.example.data.models.Subject
+import com.example.data.models.StudentGrade
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SchoolDao {
+    // Subjects
+    @Query("SELECT * FROM subjects WHERE schoolId = :schoolId AND section = :section AND grade = :grade ORDER BY name ASC")
+    fun getSubjectsForGrade(schoolId: Int, section: String, grade: String): Flow<List<Subject>>
+
+    @Query("SELECT * FROM subjects WHERE schoolId = :schoolId ORDER BY section ASC, grade ASC, name ASC")
+    fun getAllSubjects(schoolId: Int): Flow<List<Subject>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSubject(subject: Subject)
+
+    @Query("DELETE FROM subjects WHERE id = :subjectId")
+    suspend fun deleteSubjectById(subjectId: Int)
+
+    @Query("DELETE FROM subjects WHERE remoteId = :remoteId")
+    suspend fun deleteSubjectByRemoteId(remoteId: String)
+
+    @Query("SELECT * FROM subjects WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getSubjectByRemoteId(remoteId: String): Subject?
+
+    // Grades
+    @Query("SELECT * FROM grades WHERE schoolId = :schoolId AND studentId = :studentId AND term = :term")
+    fun getGradesForStudentAndTerm(schoolId: Int, studentId: Int, term: String): Flow<List<StudentGrade>>
+
+    @Query("SELECT * FROM grades WHERE schoolId = :schoolId AND studentId = :studentId")
+    fun getAllGradesForStudent(schoolId: Int, studentId: Int): Flow<List<StudentGrade>>
+
+    @Query("SELECT * FROM grades WHERE schoolId = :schoolId AND term = :term")
+    fun getAllGradesForTerm(schoolId: Int, term: String): Flow<List<StudentGrade>>
+
+    @Query("SELECT * FROM grades WHERE schoolId = :schoolId")
+    fun getAllGrades(schoolId: Int): Flow<List<StudentGrade>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGrade(grade: StudentGrade)
+
+    @Query("DELETE FROM grades WHERE id = :gradeId")
+    suspend fun deleteGradeById(gradeId: Int)
+
+    @Query("DELETE FROM grades WHERE remoteId = :remoteId")
+    suspend fun deleteGradeByRemoteId(remoteId: String)
+
+    @Query("SELECT * FROM grades WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getGradeByRemoteId(remoteId: String): StudentGrade?
     @Query("SELECT * FROM students WHERE schoolId = :schoolId ORDER BY lastName ASC, firstName ASC")
     fun getAllStudents(schoolId: Int): Flow<List<Student>>
 
+    
     @Query("SELECT * FROM students WHERE schoolId = :schoolId")
     suspend fun getAllStudentsDirect(schoolId: Int): List<Student>
+
+    @Query("SELECT * FROM subjects WHERE schoolId = :schoolId")
+    suspend fun getAllSubjectsDirect(schoolId: Int): List<Subject>
+
+    @Query("SELECT * FROM grades WHERE schoolId = :schoolId")
+    suspend fun getAllGradesDirect(schoolId: Int): List<StudentGrade>
+
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStudent(student: Student)
@@ -59,11 +112,29 @@ interface SchoolDao {
     @Query("SELECT * FROM school_accounts WHERE schoolName = :name LIMIT 1")
     suspend fun getSchoolAccountByName(name: String): com.example.data.models.SchoolAccount?
     
+    @Query("DELETE FROM school_accounts WHERE schoolName = :name")
+    suspend fun deleteSchoolAccountByName(name: String)
+    
+    @Query("DELETE FROM students WHERE schoolId = :schoolId")
+    suspend fun deleteStudentsBySchoolId(schoolId: Int)
+    
+    @Query("DELETE FROM payments WHERE schoolId = :schoolId")
+    suspend fun deletePaymentsBySchoolId(schoolId: Int)
+    
+    @Query("DELETE FROM expenses WHERE schoolId = :schoolId")
+    suspend fun deleteExpensesBySchoolId(schoolId: Int)
+    
+    @Query("DELETE FROM grades WHERE schoolId = :schoolId")
+    suspend fun deleteGradesBySchoolId(schoolId: Int)
+    
+    @Query("DELETE FROM subjects WHERE schoolId = :schoolId")
+    suspend fun deleteSubjectsBySchoolId(schoolId: Int)
+    
     @Query("SELECT COUNT(*) FROM school_accounts")
     suspend fun getAccountCount(): Int
     
-    @Query("UPDATE school_accounts SET hasActiveSubscription = 1, isPendingValidation = 0 WHERE id = :schoolId")
-    suspend fun activateSubscription(schoolId: Int)
+    @Query("UPDATE school_accounts SET hasActiveSubscription = 1, isPendingValidation = 0, subscriptionExpiryDate = :expiryDate WHERE id = :schoolId")
+    suspend fun activateSubscription(schoolId: Int, expiryDate: Long)
 
     @Query("SELECT hasActiveSubscription FROM school_accounts WHERE id = :schoolId")
     fun getSubscriptionStatus(schoolId: Int): Flow<Boolean>

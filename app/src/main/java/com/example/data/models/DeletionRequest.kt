@@ -11,5 +11,7 @@ data class DeletionRequest(
     val section: String = "",
     val reason: String = "",
     val requestedBy: String = "",
-    val requestedAt: Long = 0L
+    val requestedAt: Long = 0L,
+    val status: String = "PENDING",
+    val rejectionReason: String = ""
 )

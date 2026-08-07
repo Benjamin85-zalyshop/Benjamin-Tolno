@@ -1,19 +1,34 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import com.example.ui.SchoolViewModel
-import androidx.compose.material.icons.filled.Phone
+import com.example.ui.components.PhotoSourceDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,8 +43,12 @@ fun AddStudentScreen(
     var parentWhatsApp by remember { mutableStateOf("") }
     var registrationFee by remember { mutableStateOf("") }
     var reenrollmentFee by remember { mutableStateOf("") }
+    var photoBase64 by remember { mutableStateOf<String?>(null) }
+    var showPhotoDialog by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var gradeExpanded by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
 
     val gradeSuggestions = remember(section) {
         DEFAULT_CLASSES_BY_SECTION[section] ?: emptyList()
@@ -56,6 +75,67 @@ fun AddStudentScreen(
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Photo Selection Section
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                val decodedBytes = remember(photoBase64) {
+                    if (!photoBase64.isNullOrBlank()) {
+                        try { android.util.Base64.decode(photoBase64, android.util.Base64.DEFAULT) } catch (e: Exception) { null }
+                    } else null
+                }
+                val photoBitmap = remember(decodedBytes) {
+                    decodedBytes?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable { showPhotoDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (photoBitmap != null) {
+                        Image(
+                            bitmap = photoBitmap,
+                            contentDescription = "Photo de l'élève",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Photo",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
+
+                Column {
+                    Text("Photo de l'élève", fontWeight = FontWeight.Bold)
+                    Text("Pour la carte scolaire PDF", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedButton(
+                        onClick = { showPhotoDialog = true }
+                    ) {
+                        Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (photoBase64 != null) "Changer photo" else "Ajouter photo")
+                    }
+                }
+            }
+
+            if (showPhotoDialog) {
+                PhotoSourceDialog(
+                    onDismiss = { showPhotoDialog = false },
+                    onPhotoCaptured = { photoBase64 = it },
+                    hasCurrentPhoto = photoBase64 != null
+                )
+            }
             OutlinedTextField(
                 value = firstName,
                 onValueChange = { firstName = it },
@@ -197,7 +277,8 @@ fun AddStudentScreen(
                             section = section,
                             parentWhatsApp = parentWhatsApp.trim().ifBlank { null },
                             registrationFee = registrationFee.toLongOrNull() ?: 0L,
-                            reenrollmentFee = reenrollmentFee.toLongOrNull() ?: 0L
+                            reenrollmentFee = reenrollmentFee.toLongOrNull() ?: 0L,
+                            photoBase64 = photoBase64
                         )
                         onNavigateBack()
                     }

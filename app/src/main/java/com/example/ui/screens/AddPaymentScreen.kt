@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,8 +65,22 @@ fun AddPaymentScreen(
         onResult = { uri ->
             uri?.let {
                 if (student != null) {
+                    val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
+                    val studentPayments = payments.filter { it.studentId == student.id }
+                    val studentClassFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
+                    val totalToPay = studentClassFee + student.registrationFee + student.reenrollmentFee
+                    val currentTotalPaid = studentPayments.sumOf { it.amount } + student.registrationFee + student.reenrollmentFee
+                    val due = (totalToPay - currentTotalPaid).coerceAtLeast(0L)
+                    val percent = if (totalToPay > 0) (currentTotalPaid.toDouble() / totalToPay.toDouble() * 100).toInt() else 100
+                    
+                    val formattedTotal = numberFormat.format(totalToPay)
+                    val formattedPaid = numberFormat.format(currentTotalPaid)
+                    val formattedDue = numberFormat.format(due)
+
                     generateReceiptPdf(
                         context = context,
+                        studentId = student.id,
+                        matricule = matricule,
                         studentName = "${student.firstName} ${student.lastName}",
                         grade = student.grade,
                         section = student.section,
@@ -75,6 +90,10 @@ fun AddPaymentScreen(
                         date = System.currentTimeMillis(),
                         schoolName = schoolName ?: "",
                         schoolLogoBase64 = schoolLogoBase64,
+                        totalFee = formattedTotal,
+                        paidFee = formattedPaid,
+                        dueFee = formattedDue,
+                        percent = percent.toString(),
                         uri = it
                     )
                     Toast.makeText(context, "Reçu PDF généré avec succès", Toast.LENGTH_SHORT).show()
@@ -136,8 +155,14 @@ fun AddPaymentScreen(
                     )
                     
                     if (student != null) {
+                        val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
                         Text(
-                            text = "Classe : ${student.grade} • Section : ${student.section}",
+                            text = "Matricule : #$matricule • Classe : ${student.grade}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                        Text(
+                            text = "Section : ${student.section}",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -465,31 +490,60 @@ fun AddPaymentScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val cleanName = studentName.replace(" ", "_")
-                        val fileName = "Recu_${cleanName}_${successAmount}.pdf"
-                        exportReceiptPdfLauncher.launch(fileName)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Télécharger Reçu")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showSuccessDialog = false
-                        onNavigateBack()
+                Column(horizontalAlignment = Alignment.End) {
+                    Button(
+                        onClick = {
+                            if (student != null) {
+                                val payment = com.example.data.models.Payment(
+                                    studentId = studentId,
+                                    amount = successAmount,
+                                    reason = successReason,
+                                    paymentMethod = successMethod,
+                                    date = System.currentTimeMillis()
+                                )
+                                com.example.ui.ReceiptPrinter.printReceipt(
+                                    context,
+                                    student,
+                                    payment,
+                                    schoolName ?: "",
+                                    classFee
+                                )
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Icon(imageVector = Icons.Filled.Print, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Imprimer Ticket 58mm")
                     }
-                ) {
-                    Text("Retourner", fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            val cleanName = studentName.replace(" ", "_")
+                            val fileName = "Recu_${cleanName}_${successAmount}.pdf"
+                            exportReceiptPdfLauncher.launch(fileName)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Télécharger Reçu PDF")
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    TextButton(
+                        onClick = {
+                            showSuccessDialog = false
+                            onNavigateBack()
+                        }
+                    ) {
+                        Text("Fermer et Retourner", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         )
@@ -498,6 +552,8 @@ fun AddPaymentScreen(
 
 fun generateReceiptPdf(
     context: android.content.Context,
+    studentId: Int,
+    matricule: String,
     studentName: String,
     grade: String,
     section: String,
@@ -507,6 +563,10 @@ fun generateReceiptPdf(
     date: Long,
     schoolName: String,
     schoolLogoBase64: String?,
+    totalFee: String = "",
+    paidFee: String = "",
+    dueFee: String = "",
+    percent: String = "",
     uri: android.net.Uri
 ) {
     val pdfDocument = android.graphics.pdf.PdfDocument()
@@ -533,12 +593,34 @@ fun generateReceiptPdf(
             val decodedBytes = android.util.Base64.decode(schoolLogoBase64, android.util.Base64.DEFAULT)
             val bitmap = android.graphics.BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
             if (bitmap != null) {
-                val destRect = android.graphics.RectF(475f, 30f, 555f, 100f)
+                val destRect = android.graphics.RectF(405f, 30f, 475f, 100f)
                 canvas.drawBitmap(bitmap, null, destRect, paint)
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    // Draw QR Code on Receipt PDF
+    try {
+        val qrData = com.example.ui.util.QrCodeUtils.buildStudentQrData(
+            studentId = studentId,
+            remoteId = matricule,
+            name = studentName,
+            grade = grade,
+            section = section,
+            totalFee = totalFee,
+            paidFee = paidFee,
+            dueFee = dueFee,
+            percent = percent
+        )
+        val qrBmp = com.example.ui.util.QrCodeUtils.generateQrBitmap(qrData, 200)
+        if (qrBmp != null) {
+            val qrRect = android.graphics.RectF(485f, 30f, 555f, 100f)
+            canvas.drawBitmap(qrBmp, null, qrRect, paint)
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
     
     // Header
@@ -569,9 +651,10 @@ fun generateReceiptPdf(
     canvas.drawText("INFORMATIONS ÉLÈVE", 40f, 140f, paint)
     
     paint.isFakeBoldText = false
-    canvas.drawText("Nom complet : $studentName", 40f, 165f, paint)
-    canvas.drawText("Classe : $grade", 40f, 190f, paint)
-    canvas.drawText("Section : $section", 40f, 215f, paint)
+    canvas.drawText("Matricule : #$matricule", 40f, 165f, paint)
+    canvas.drawText("Nom complet : $studentName", 40f, 190f, paint)
+    canvas.drawText("Classe : $grade", 40f, 215f, paint)
+    canvas.drawText("Section : $section", 40f, 240f, paint)
     
     // Payment info (Right Column)
     paint.isFakeBoldText = true

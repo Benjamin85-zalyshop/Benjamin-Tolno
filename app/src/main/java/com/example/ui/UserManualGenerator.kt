@@ -457,6 +457,179 @@ object UserManualGenerator {
         drawFooter(canvas, 6, paint, textColorLight)
         pdfDocument.finishPage(page)
         
+        // --- PAGE 7: CARTES D'ÉLÈVE, BADGES QR & IMPRESSION TICKETS ---
+        page = pdfDocument.startPage(pageInfo)
+        canvas = page.canvas
+        paint = Paint().apply { isAntiAlias = true }
+        
+        drawPageHeader(canvas, "6. CARTES D'ÉLÈVE, BADGES QR & TICKETS", primaryColor, paint)
+        
+        paint.color = textColorDark
+        paint.textSize = 14f
+        paint.isFakeBoldText = true
+        canvas.drawText("Identification rapide et encaissement optimisé", 50f, 110f, paint)
+        
+        paint.textSize = 12f
+        paint.isFakeBoldText = false
+        paint.color = textColorLight
+        canvas.drawText("Accélérez l'encaissement et fiabilisez l'identification de vos élèves avec", 50f, 135f, paint)
+        canvas.drawText("les cartes scolaires avec QR code et l'impression sur terminaux Android.", 50f, 155f, paint)
+        
+        yPos = 200f
+        paint.color = primaryColor
+        paint.textSize = 13f
+        paint.isFakeBoldText = true
+        canvas.drawText("📇 Cartes d'Élève & Badges QR Imprimables :", 50f, yPos, paint)
+        yPos += 25f
+        
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        paint.textSize = 11f
+        val studentCardFeatures = listOf(
+            "• Concept : Générer automatiquement une Carte Scolaire PDF pour chaque",
+            "  élève avec sa photo (caméra ou galerie), son matricule, sa classe",
+            "  et son QR Code permanent.",
+            "• Avantage : L'élève ou le parent présente simplement sa carte à la caisse.",
+            "  Le caissier scanne le QR Code et la fiche de l'élève s'ouvre instantanément",
+            "  pour effectuer un nouveau paiement sans aucune recherche ni erreur."
+        )
+        for (feature in studentCardFeatures) {
+            canvas.drawText(feature, 50f, yPos, paint)
+            yPos += 19f
+        }
+        
+        yPos += 20f
+        paint.color = primaryColor
+        paint.textSize = 13f
+        paint.isFakeBoldText = true
+        canvas.drawText("🖨️ Impression des tickets (Terminal Android) :", 50f, yPos, paint)
+        yPos += 25f
+        
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        paint.textSize = 11f
+        val printFeatures = listOf(
+            "• Connectez ScolaPay à un terminal de paiement Android avec imprimante",
+            "  thermique intégrée.",
+            "• Imprimez immédiatement le ticket de caisse lors du paiement avec le",
+            "  logo de votre école pour un rendu professionnel."
+        )
+        for (feature in printFeatures) {
+            canvas.drawText(feature, 50f, yPos, paint)
+            yPos += 19f
+        }
+        
+        drawFooter(canvas, 7, paint, textColorLight)
+        pdfDocument.finishPage(page)
+        
+        // --- PAGE 8: BULLETINS & FICHE RÉCAPITULATIVE PARENT ---
+        page = pdfDocument.startPage(pageInfo)
+        canvas = page.canvas
+        paint = Paint().apply { isAntiAlias = true }
+        
+        drawPageHeader(canvas, "7. BULLETINS & FICHE PARENT (ACCÈS DIRECT)", primaryColor, paint)
+        
+        paint.color = textColorDark
+        paint.textSize = 14f
+        paint.isFakeBoldText = true
+        canvas.drawText("Suivi académique et financier transparent", 50f, 110f, paint)
+        
+        paint.textSize = 12f
+        paint.isFakeBoldText = false
+        paint.color = textColorLight
+        canvas.drawText("Partagez facilement les résultats scolaires et offrez une vision claire", 50f, 135f, paint)
+        canvas.drawText("des finances aux parents grâce à la fiche récapitulative via QR Code.", 50f, 155f, paint)
+        
+        yPos = 200f
+        paint.color = primaryColor
+        paint.textSize = 13f
+        paint.isFakeBoldText = true
+        canvas.drawText("📊 Bulletins : Calcul des notes par période :", 50f, yPos, paint)
+        yPos += 25f
+        
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        paint.textSize = 11f
+        val bulletinFeatures = listOf(
+            "• Générez des bulletins détaillés pour chaque élève selon la période :",
+            "  Mensuel, 1er Trimestre, 2ème Trimestre, etc.",
+            "• Le système gère les matières, notes, coefficients et calcule la moyenne.",
+            "• Le bulletin est infalsifiable et porte le logo de l'établissement."
+        )
+        for (feature in bulletinFeatures) {
+            canvas.drawText(feature, 50f, yPos, paint)
+            yPos += 19f
+        }
+        
+        yPos += 20f
+        paint.color = primaryColor
+        paint.textSize = 13f
+        paint.isFakeBoldText = true
+        canvas.drawText("📲 Fiche Récapitulative Parent (Accès Direct) :", 50f, yPos, paint)
+        yPos += 25f
+        
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        paint.textSize = 11f
+        val recapFeatures = listOf(
+            "• Concept : Générer un QR Code sur les bulletins ou relevés de compte",
+            "  que les parents peuvent scanner avec l'appareil photo de leur téléphone.",
+            "• Avantage : Le QR Code redirige directement vers un relevé financier",
+            "  en ligne sécurisé affichant l'historique complet des versements et le",
+            "  reste à payer en temps réel."
+        )
+        for (feature in recapFeatures) {
+            canvas.drawText(feature, 50f, yPos, paint)
+            yPos += 19f
+        }
+        
+        drawFooter(canvas, 8, paint, textColorLight)
+        pdfDocument.finishPage(page)
+        
+        // --- PAGE 9: ABONNEMENT ÉCOLE & PAIEMENT DIGITAL ---
+        page = pdfDocument.startPage(pageInfo)
+        canvas = page.canvas
+        paint = Paint().apply { isAntiAlias = true }
+        
+        drawPageHeader(canvas, "8. ABONNEMENT ÉCOLE & PAIEMENT DIGITAL", primaryColor, paint)
+        
+        paint.color = textColorDark
+        paint.textSize = 14f
+        paint.isFakeBoldText = true
+        canvas.drawText("Paiement en ligne sécurisé via Chap Chap Pay", 50f, 110f, paint)
+        
+        paint.textSize = 12f
+        paint.isFakeBoldText = false
+        paint.color = textColorLight
+        canvas.drawText("Renouvelez facilement votre licence ScolaPay grâce à notre intégration", 50f, 135f, paint)
+        canvas.drawText("avec les services de paiement mobile les plus utilisés en Guinée.", 50f, 155f, paint)
+        
+        yPos = 200f
+        paint.color = primaryColor
+        paint.textSize = 13f
+        paint.isFakeBoldText = true
+        canvas.drawText("💳 Système d'abonnement ScolaPay :", 50f, yPos, paint)
+        yPos += 25f
+        
+        paint.color = textColorDark
+        paint.isFakeBoldText = false
+        paint.textSize = 11f
+        val subFeatures = listOf(
+            "• Intégration de Chap Chap Pay : Réglez votre abonnement directement",
+            "  depuis l'application ScolaPay.",
+            "• Moyens de paiement : Payez facilement avec Orange Money, MTN MoMo,",
+            "  Kulu, Soutra Money, Akiba, PayCard ou VISA/Mastercard.",
+            "• Activation Immédiate : Une fois le paiement validé sur votre mobile,",
+            "  l'application se met à jour automatiquement et débloque votre accès."
+        )
+        for (feature in subFeatures) {
+            canvas.drawText(feature, 50f, yPos, paint)
+            yPos += 19f
+        }
+        
+        drawFooter(canvas, 9, paint, textColorLight)
+        pdfDocument.finishPage(page)
+        
         // Write PDF to output stream
         try {
             context.contentResolver.openOutputStream(uri)?.use { outputStream ->
@@ -490,7 +663,7 @@ object UserManualGenerator {
         paint.color = textColor
         paint.textSize = 9f
         paint.isFakeBoldText = false
-        canvas.drawText("Manuel de l'utilisateur ScolaPay - Page $pageNumber sur 6", 50f, 800f, paint)
+        canvas.drawText("Manuel de l'utilisateur ScolaPay - Page $pageNumber sur 9", 50f, 800f, paint)
         canvas.drawText("Propriété Exclusive de ScolaPay • Tous droits réservés", 330f, 800f, paint)
     }
     

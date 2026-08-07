@@ -28,3 +28,6 @@ object ExpensesRoute
 
 @Serializable
 object AddExpenseRoute
+
+@Serializable
+object AcademicRoute

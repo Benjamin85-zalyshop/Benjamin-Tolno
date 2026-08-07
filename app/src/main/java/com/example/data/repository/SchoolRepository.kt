@@ -4,6 +4,8 @@ import com.example.data.local.SchoolDao
 import com.example.data.models.Expense
 import com.example.data.models.Payment
 import com.example.data.models.Student
+import com.example.data.models.Subject
+import com.example.data.models.StudentGrade
 import kotlinx.coroutines.flow.Flow
 
 class SchoolRepository(private val schoolDao: SchoolDao) {
@@ -16,6 +18,42 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
 
     fun getPaymentsForStudent(studentId: Int): Flow<List<Payment>> = schoolDao.getPaymentsForStudent(studentId)
 
+    // Subjects
+    fun getSubjectsForGrade(schoolId: Int, section: String, grade: String): Flow<List<Subject>> =
+        schoolDao.getSubjectsForGrade(schoolId, section, grade)
+
+    fun getAllSubjects(schoolId: Int): Flow<List<Subject>> =
+        schoolDao.getAllSubjects(schoolId)
+
+    suspend fun insertSubject(subject: Subject) = schoolDao.insertSubject(subject)
+
+    suspend fun deleteSubjectById(subjectId: Int) = schoolDao.deleteSubjectById(subjectId)
+
+    suspend fun deleteSubjectByRemoteId(remoteId: String) = schoolDao.deleteSubjectByRemoteId(remoteId)
+
+    suspend fun getSubjectByRemoteId(remoteId: String): Subject? = schoolDao.getSubjectByRemoteId(remoteId)
+
+    // Grades
+    fun getGradesForStudentAndTerm(schoolId: Int, studentId: Int, term: String): Flow<List<StudentGrade>> =
+        schoolDao.getGradesForStudentAndTerm(schoolId, studentId, term)
+
+    fun getAllGradesForStudent(schoolId: Int, studentId: Int): Flow<List<StudentGrade>> =
+        schoolDao.getAllGradesForStudent(schoolId, studentId)
+
+    fun getAllGradesForTerm(schoolId: Int, term: String): Flow<List<StudentGrade>> =
+        schoolDao.getAllGradesForTerm(schoolId, term)
+
+    fun getAllGrades(schoolId: Int): Flow<List<StudentGrade>> =
+        schoolDao.getAllGrades(schoolId)
+
+    suspend fun insertGrade(grade: StudentGrade) = schoolDao.insertGrade(grade)
+
+    suspend fun deleteGradeById(gradeId: Int) = schoolDao.deleteGradeById(gradeId)
+
+    suspend fun deleteGradeByRemoteId(remoteId: String) = schoolDao.deleteGradeByRemoteId(remoteId)
+
+    suspend fun getGradeByRemoteId(remoteId: String): StudentGrade? = schoolDao.getGradeByRemoteId(remoteId)
+
     fun getSubscriptionStatus(schoolId: Int): Flow<Boolean> = schoolDao.getSubscriptionStatus(schoolId)
     fun getPendingValidationStatus(schoolId: Int): Flow<Boolean> = schoolDao.getPendingValidationStatus(schoolId)
 
@@ -23,8 +61,8 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         schoolDao.submitSubscriptionRequest(schoolId, phoneNumber, transactionId)
     }
 
-    suspend fun activateSubscription(schoolId: Int) {
-        schoolDao.activateSubscription(schoolId)
+    suspend fun activateSubscription(schoolId: Int, expiryDate: Long) {
+        schoolDao.activateSubscription(schoolId, expiryDate)
     }
 
     suspend fun insertStudent(student: Student) {
@@ -55,6 +93,19 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         return schoolDao.getSchoolAccountByName(name)
     }
 
+    suspend fun deleteSchoolAccountAndData(name: String) {
+        val account = schoolDao.getSchoolAccountByName(name)
+        if (account != null) {
+            val schoolId = account.id
+            schoolDao.deleteStudentsBySchoolId(schoolId)
+            schoolDao.deletePaymentsBySchoolId(schoolId)
+            schoolDao.deleteExpensesBySchoolId(schoolId)
+            schoolDao.deleteGradesBySchoolId(schoolId)
+            schoolDao.deleteSubjectsBySchoolId(schoolId)
+            schoolDao.deleteSchoolAccountByName(name)
+        }
+    }
+
     suspend fun hasAccount(): Boolean {
         return schoolDao.getAccountCount() > 0
     }
@@ -69,7 +120,11 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
     suspend fun deleteExpenseByRemoteId(remoteId: String) = schoolDao.deleteExpenseByRemoteId(remoteId)
     suspend fun insertSchoolAccountDirect(account: com.example.data.models.SchoolAccount) = schoolDao.insertSchoolAccount(account)
 
+    
     suspend fun getAllStudentsDirect(schoolId: Int): List<Student> = schoolDao.getAllStudentsDirect(schoolId)
+    suspend fun getAllSubjectsDirect(schoolId: Int): List<Subject> = schoolDao.getAllSubjectsDirect(schoolId)
+    suspend fun getAllGradesDirect(schoolId: Int): List<StudentGrade> = schoolDao.getAllGradesDirect(schoolId)
+
     suspend fun getAllPaymentsDirect(schoolId: Int): List<Payment> = schoolDao.getAllPaymentsDirect(schoolId)
     suspend fun getAllExpensesDirect(schoolId: Int): List<Expense> = schoolDao.getAllExpensesDirect(schoolId)
 }

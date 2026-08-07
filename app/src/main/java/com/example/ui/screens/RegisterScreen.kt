@@ -290,7 +290,7 @@ fun RegisterScreen(
                             if(success) {
                                 onRegisterSuccess()
                             } else {
-                                errorMessage = "Erreur lors de l'inscription. L'email est peut-être déjà utilisé."
+                                errorMessage = "Erreur d'inscription. L'email est peut-être déjà utilisé. S'il s'agit d'un ancien compte supprimé par l'admin, CONNECTEZ-VOUS d'abord avec l'ancien mot de passe pour nettoyer les résidus, puis revenez vous inscrire."
                             }
                         }
                     }

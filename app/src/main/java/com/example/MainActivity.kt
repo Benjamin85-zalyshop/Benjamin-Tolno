@@ -20,6 +20,7 @@ import com.example.ui.SchoolViewModelFactory
 import com.example.ui.navigation.AddExpenseRoute
 import com.example.ui.navigation.AddPaymentRoute
 import com.example.ui.navigation.AddStudentRoute
+import com.example.ui.navigation.AcademicRoute
 import com.example.ui.navigation.DashboardRoute
 import com.example.ui.navigation.ExpensesRoute
 import com.example.ui.navigation.LoginRoute
@@ -29,6 +30,7 @@ import com.example.ui.navigation.StudentsRoute
 import com.example.ui.screens.AddExpenseScreen
 import com.example.ui.screens.AddPaymentScreen
 import com.example.ui.screens.AddStudentScreen
+import com.example.ui.screens.AcademicScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.ExpensesScreen
 import com.example.ui.screens.LoginScreen
@@ -69,6 +71,11 @@ class MainActivity : ComponentActivity() {
         onUserInteractionCallback?.invoke()
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         inactivityJob?.cancel()
@@ -92,6 +99,61 @@ class MainActivity : ComponentActivity() {
                     val viewModel: SchoolViewModel = viewModel(factory = factory)
 
                     val userRoleState = viewModel.userRole.collectAsStateWithLifecycle()
+                    
+                    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
+                    
+                    androidx.compose.runtime.DisposableEffect(activity) {
+                        val listener = androidx.core.util.Consumer<android.content.Intent> { newIntent ->
+                            val uri = newIntent.data
+                            if (uri != null && (uri.scheme == "scolapay" || uri.scheme == "https") && (uri.host == "paiement" || uri.host == "scolapay.gn" || uri.host == "scolapay-b6289.web.app")) {
+                                if (uri.path?.contains("success") == true || uri.path?.contains("return") == true) {
+                                    viewModel.checkPendingPaymentStatus { status ->
+                                        if (status == "SUCCESS") {
+                                            android.widget.Toast.makeText(applicationContext, "Paiement Chap Chap Pay réussi, abonnement activé !", android.widget.Toast.LENGTH_LONG).show()
+                                        } else if (status == "FAILED") {
+                                            android.widget.Toast.makeText(applicationContext, "Paiement échoué ou annulé. Vous pouvez réessayer.", android.widget.Toast.LENGTH_LONG).show()
+                                        } else {
+                                            android.widget.Toast.makeText(applicationContext, "Paiement en attente de validation.", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                    newIntent.data = null // Clear intent
+                                    activity?.intent?.data = null
+                                } else if (uri.path?.contains("cancel") == true) {
+                                    android.widget.Toast.makeText(applicationContext, "Paiement annulé.", android.widget.Toast.LENGTH_LONG).show()
+                                    viewModel.clearPendingOrderId()
+                                    newIntent.data = null // Clear intent
+                                    activity?.intent?.data = null
+                                }
+                            }
+                        }
+                        activity?.addOnNewIntentListener(listener)
+                        
+                        // Handle initial intent
+                        activity?.intent?.let { listener.accept(it) }
+                        
+                        onDispose {
+                            activity?.removeOnNewIntentListener(listener)
+                        }
+                    }
+                    
+                    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                viewModel.checkPendingPaymentStatus { status ->
+                                    if (status == "SUCCESS") {
+                                        android.widget.Toast.makeText(applicationContext, "Paiement Chap Chap Pay réussi !", android.widget.Toast.LENGTH_LONG).show()
+                                    } else if (status == "FAILED") {
+                                        android.widget.Toast.makeText(applicationContext, "Le paiement a échoué. Vous pouvez réessayer.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose {
+                            lifecycleOwner.lifecycle.removeObserver(observer)
+                        }
+                    }
 
                     LaunchedEffect(userRoleState.value) {
                         val role = userRoleState.value
@@ -168,7 +230,19 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate(LoginRoute) {
                                         popUpTo(DashboardRoute) { inclusive = true }
                                     }
+                                },
+                                onNavigateToStudentDetail = { id ->
+                                    navController.navigate(StudentDetailRoute(id))
+                                },
+                                onNavigateToAcademic = {
+                                    navController.navigate(AcademicRoute)
                                 }
+                            )
+                        }
+                        composable<AcademicRoute> {
+                            AcademicScreen(
+                                viewModel = viewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
                         composable<StudentsRoute> {

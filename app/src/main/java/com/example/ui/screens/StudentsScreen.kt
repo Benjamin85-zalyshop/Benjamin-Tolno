@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -38,10 +39,12 @@ fun StudentsScreen(
 ) {
     val students by viewModel.students.collectAsStateWithLifecycle()
     val payments by viewModel.payments.collectAsStateWithLifecycle()
+    val classFees by viewModel.classFees.collectAsStateWithLifecycle()
     val userRole by viewModel.userRole.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedGrade by remember { mutableStateOf<String?>(null) }
+    var showQrScannerDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -50,6 +53,11 @@ fun StudentsScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showQrScannerDialog = true }) {
+                        Icon(Icons.Filled.QrCodeScanner, contentDescription = "Scanner QR Code")
                     }
                 }
             )
@@ -137,8 +145,10 @@ fun StudentsScreen(
                             val studentPayments = payments.filter { it.studentId == student.id }
                             val totalPaid = studentPayments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                             val formattedTotal = "${numberFormat.format(totalPaid)} GNF"
-                                                        StudentCard(
+                                                        val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
+                            StudentCard(
                                 name = fullName,
+                                matricule = matricule,
                                 grade = student.grade,
                                 section = student.section,
                                 totalPaid = formattedTotal,
@@ -152,10 +162,22 @@ fun StudentsScreen(
             }
         }
     }
+
+    if (showQrScannerDialog) {
+        QrScannerDialog(
+            students = students,
+            payments = payments,
+            classFees = classFees,
+            onDismiss = { showQrScannerDialog = false },
+            onStudentSelected = { studentId ->
+                onStudentClick(studentId)
+            }
+        )
+    }
 }
 
 @Composable
-fun StudentCard(name: String, grade: String, section: String, totalPaid: String, showPaymentAction: Boolean, onAddPaymentClick: () -> Unit, onClick: () -> Unit) {
+fun StudentCard(name: String, matricule: String, grade: String, section: String, totalPaid: String, showPaymentAction: Boolean, onAddPaymentClick: () -> Unit, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -176,7 +198,7 @@ fun StudentCard(name: String, grade: String, section: String, totalPaid: String,
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(text = name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(text = "$section - $grade", style = MaterialTheme.typography.bodyMedium)
+                    Text(text = "ID: #$matricule • $section - $grade", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         text = "Payé: $totalPaid",
                         style = MaterialTheme.typography.bodyMedium,

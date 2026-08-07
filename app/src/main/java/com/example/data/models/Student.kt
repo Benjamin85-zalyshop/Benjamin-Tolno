@@ -16,5 +16,7 @@ data class Student(
     val remoteId: String = "",
     val parentWhatsApp: String? = null,
     val registrationFee: Long = 0L,
-    val reenrollmentFee: Long = 0L
+    val reenrollmentFee: Long = 0L,
+    val photoBase64: String? = null,
+    val schoolYear: String = ""
 )

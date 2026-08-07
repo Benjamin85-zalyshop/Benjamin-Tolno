@@ -1,0 +1,48 @@
+--- app/src/main/java/com/example/ui/screens/AdminDashboardScreen.kt
++++ app/src/main/java/com/example/ui/screens/AdminDashboardScreen.kt
+@@ -395,7 +395,22 @@
+                             )
+                         }
+                     }
+                     
+-                    if (!item.hasActiveSubscription) {
++                    if (item.hasActiveSubscription) {
++                        val isExpired = item.subscriptionExpiryDate > 0 && item.subscriptionExpiryDate <= System.currentTimeMillis()
++                        if (isExpired) {
++                            Text(
++                                text = "Abonnement expiré",
++                                style = MaterialTheme.typography.labelSmall,
++                                color = Color(0xFFDC2626),
++                                fontWeight = FontWeight.Medium
++                            )
++                        } else if (item.subscriptionExpiryDate > 0) {
++                            val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
++                            val expiryStr = dateFormat.format(java.util.Date(item.subscriptionExpiryDate))
++                            Text(
++                                text = "Expire le : $expiryStr",
++                                style = MaterialTheme.typography.labelSmall,
++                                color = Color(0xFF16A34A),
++                                fontWeight = FontWeight.Medium
++                            )
++                        }
++                    } else {
+                         val elapsed = System.currentTimeMillis() - item.createdAt
+                         val trialDuration = 90L * 24L * 60L * 60L * 1000L
+@@ -409,8 +424,11 @@
+                     }
+                 }
+                 
++                val isExpired = item.hasActiveSubscription && item.subscriptionExpiryDate > 0 && item.subscriptionExpiryDate <= System.currentTimeMillis()
++
+                 val badgeColor = when {
+                     item.isPendingValidation -> Color(0xFFFF9800) // Orange
++                    isExpired -> Color(0xFFDC2626) // Red
+                     item.hasActiveSubscription -> Color(0xFF4CAF50) // Green
+                     else -> {
+@@ -419,8 +437,9 @@
+                 
+                 val badgeText = when {
+                     item.isPendingValidation -> "En attente"
++                    isExpired -> "Abon. expiré"
+                     item.hasActiveSubscription -> "Abonné"
+                     else -> {

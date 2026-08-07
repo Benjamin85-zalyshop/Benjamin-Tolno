@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import java.io.ByteArrayOutputStream
 import android.util.Base64
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -49,15 +50,15 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
-val SECTIONS = listOf("Toutes les sections", "LA MATERNELLE", "LE PRIMAIRE", "LE COLLEGE", "LE LYCÉE", "L'UNIVERSITE", "L'ECOLE PROFESSIONNELLE")
+val SECTIONS = listOf("Toutes les sections", "LA MATERNELLE", "LE PRIMAIRE", "LE COLLÈGE", "LE LYCÉE", "L'UNIVERSITÉ", "L'ÉCOLE PROFESSIONNELLE")
 
 val DEFAULT_CLASSES_BY_SECTION = mapOf(
     "LA MATERNELLE" to listOf("Petite Section", "Moyenne Section", "Grande Section"),
     "LE PRIMAIRE" to listOf("1ère Année", "2ème Année", "3ème Année", "4ème Année", "5ème Année", "6ème Année"),
-    "LE COLLEGE" to listOf("7ème Année", "8ème Année", "9ème Année", "10ème Année"),
+    "LE COLLÈGE" to listOf("7ème", "8ème", "9ème", "10ème"),
     "LE LYCÉE" to listOf("11ème Année", "12ème Année", "Terminale"),
-    "L'UNIVERSITE" to listOf("Licence 1", "Licence 2", "Licence 3", "Licence 4"),
-    "L'ECOLE PROFESSIONNELLE" to listOf("1ère Année Pro", "2ème Année Pro", "3ème Année Pro")
+    "L'UNIVERSITÉ" to listOf("Licence 1", "Licence 2", "Licence 3"),
+    "L'ÉCOLE PROFESSIONNELLE" to listOf("1ère Année", "2ème Année", "3ème Année")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,9 +67,21 @@ fun DashboardScreen(
     viewModel: SchoolViewModel,
     onNavigateToStudents: () -> Unit,
     onNavigateToExpenses: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToStudentDetail: (Int) -> Unit = {},
+    onNavigateToAcademic: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val pendingOrderId by viewModel.pendingOrderId.collectAsStateWithLifecycle()
+    
+    LaunchedEffect(Unit) {
+        viewModel.getPendingOrderId()
+    }
+
+    var requestToReject by remember { mutableStateOf<com.example.data.models.DeletionRequest?>(null) }
+    var showRejectDialog by remember { mutableStateOf(false) }
+    var rejectDialogReason by remember { mutableStateOf("") }
+    var showQrScannerDialog by remember { mutableStateOf(false) }
     val totalCollected by viewModel.totalCollected.collectAsStateWithLifecycle()
     val totalExpenses by viewModel.totalExpenses.collectAsStateWithLifecycle()
     val balance by viewModel.balance.collectAsStateWithLifecycle()
@@ -108,6 +121,7 @@ fun DashboardScreen(
     var showCommuniquesDialog by remember { mutableStateOf(false) }
     var showSupportDialog by remember { mutableStateOf(false) }
     var showInscriptionDialog by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     val exportManualPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/pdf"),
@@ -179,6 +193,8 @@ fun DashboardScreen(
     val trialDaysRemaining by viewModel.trialDaysRemaining.collectAsStateWithLifecycle()
     val hasActiveSubscription by viewModel.hasActiveSubscription.collectAsStateWithLifecycle()
     val isPendingValidation by viewModel.isPendingValidation.collectAsStateWithLifecycle()
+    val schoolAcc by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val rejectionReason = schoolAcc?.rejectionReason
 
     var showDirectSubscriptionDialog by remember { mutableStateOf(false) }
 
@@ -272,6 +288,23 @@ fun DashboardScreen(
                             contentDescription = "Partager l'application",
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // QR Code Scanner Button
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f))
+                            .clickable { showQrScannerDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.QrCodeScanner,
+                            contentDescription = "Scanner QR Code",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -418,38 +451,80 @@ fun DashboardScreen(
                                     modifier = Modifier.padding(16.dp)
                                 ) {
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
+                                        verticalAlignment = Alignment.Top,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Info,
                                             contentDescription = "Info d'essai",
-                                            tint = Color(0xFFEA580C)
+                                            tint = Color(0xFFEA580C),
+                                            modifier = Modifier.padding(top = 2.dp)
                                         )
-                                        Text(
-                                            text = "Période d'essai gratuite active",
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFFEA580C),
-                                            fontSize = 15.sp
-                                        )
-                                        Spacer(modifier = Modifier.weight(1f))
-                                        SuggestionChip(
-                                            onClick = {},
-                                            label = {
+                                        Column {
+                                            Text(
+                                                text = "Période d'essai gratuite active",
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFEA580C),
+                                                fontSize = 15.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Surface(
+                                                color = Color(0xFFFFEDD5),
+                                                shape = RoundedCornerShape(12.dp),
+                                                border = BorderStroke(1.dp, Color(0xFFFED7AA))
+                                            ) {
                                                 Text(
                                                     text = "$trialDaysRemaining jours restants",
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 12.sp,
-                                                    color = Color(0xFFEA580C)
+                                                    color = Color(0xFFEA580C),
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                                 )
-                                            },
-                                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                                containerColor = Color(0xFFFFEDD5)
-                                            ),
-                                            border = BorderStroke(1.dp, Color(0xFFFED7AA))
-                                        )
+                                            }
+                                        }
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
+                                    if (isPendingValidation) {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2FE)) // Light blue
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFF0284C7))
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "Votre demande d'abonnement est en cours de vérification.",
+                                                    color = Color(0xFF0284C7),
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    } else if (!rejectionReason.isNullOrBlank()) {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                                        ) {
+                                            Column(modifier = Modifier.padding(12.dp)) {
+                                                Text(
+                                                    "Abonnement refusé",
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                                    fontSize = 14.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Motif : $rejectionReason",
+                                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            }
+                                        }
+                                    }
+                                    
                                     Text(
                                         text = "Vous bénéficiez de 3 mois d'essai gratuit. Profitez de notre offre spéciale de lancement : abonnez-vous maintenant pour seulement 200 000 GNF/an au lieu de 500 000 GNF !",
                                         style = MaterialTheme.typography.bodyMedium,
@@ -457,22 +532,70 @@ fun DashboardScreen(
                                         fontSize = 13.5.sp
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    Button(
-                                        onClick = { showDirectSubscriptionDialog = true },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFFEA580C)
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Payment,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                            tint = Color.White
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("S'abonner maintenant (200 000 GNF)", fontWeight = FontWeight.Bold, color = Color.White)
+                                    if (!isPendingValidation) {
+                                        if (pendingOrderId != null) {
+                                            var isCheckingStatus by remember { mutableStateOf(false) }
+                                            Button(
+                                                onClick = { 
+                                                    isCheckingStatus = true
+                                                    viewModel.checkPendingPaymentStatus { status ->
+                                                        isCheckingStatus = false
+                                                        if (status == "SUCCESS") {
+                                                            android.widget.Toast.makeText(context, "Paiement validé avec succès !", android.widget.Toast.LENGTH_SHORT).show()
+                                                        } else if (status == "FAILED") {
+                                                            android.widget.Toast.makeText(context, "Paiement échoué ou annulé. Vous pouvez réessayer.", android.widget.Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "Paiement en attente de validation.", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = Color(0xFF10B981) // Emerald green
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                enabled = !isCheckingStatus
+                                            ) {
+                                                if (isCheckingStatus) {
+                                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                                } else {
+                                                    Icon(
+                                                        imageVector = Icons.Default.CheckCircle,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = Color.White
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("Finaliser le paiement", fontWeight = FontWeight.Bold, color = Color.White)
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            OutlinedButton(
+                                                onClick = { viewModel.clearPendingOrderId() },
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("Annuler et réessayer", color = Color(0xFFEA580C))
+                                            }
+                                        } else {
+                                            Button(
+                                                onClick = { showDirectSubscriptionDialog = true },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = Color(0xFFEA580C)
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Payment,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = Color.White
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (200 000 GNF)", fontWeight = FontWeight.Bold, color = Color.White)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -753,7 +876,8 @@ fun DashboardScreen(
                         }
                     }
                     
-                    if (userRole == "FOUNDER" && deletionRequests.isNotEmpty()) {
+                    val pendingRequests = deletionRequests.filter { it.status == "PENDING" }
+                    if (userRole == "FOUNDER" && pendingRequests.isNotEmpty()) {
                         item {
                             Column(
                                 modifier = Modifier
@@ -774,7 +898,7 @@ fun DashboardScreen(
                                         tint = Color(0xFFDC2626)
                                     )
                                     Text(
-                                        text = "Demandes de suppression d'élèves (${deletionRequests.size})",
+                                        text = "Demandes de suppression d'élèves (${pendingRequests.size})",
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF991B1B)
@@ -787,7 +911,7 @@ fun DashboardScreen(
                                     color = Color(0xFF7F1D1D)
                                 )
                                 
-                                deletionRequests.forEach { request ->
+                                pendingRequests.forEach { request ->
                                     Card(
                                         colors = CardDefaults.cardColors(containerColor = Color.White),
                                         border = BorderStroke(1.dp, Color(0xFFFEE2E2)),
@@ -809,8 +933,9 @@ fun DashboardScreen(
                                                         color = Color(0xFF111827),
                                                         fontSize = 14.sp
                                                     )
+                                                    val matricule = if (request.studentRemoteId.length >= 5) request.studentRemoteId.take(5).uppercase() else request.studentRemoteId
                                                     Text(
-                                                        text = "${request.section} - ${request.grade}",
+                                                        text = "ID: #$matricule • ${request.section} - ${request.grade}",
                                                         fontSize = 12.sp,
                                                         color = Color(0xFF4B5563)
                                                     )
@@ -842,7 +967,10 @@ fun DashboardScreen(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Button(
-                                                    onClick = { viewModel.rejectDeletionRequest(request) },
+                                                    onClick = { 
+                                                        requestToReject = request
+                                                        rejectDialogReason = ""
+                                                    },
                                                     colors = ButtonDefaults.buttonColors(
                                                         containerColor = Color(0xFFF3F4F6),
                                                         contentColor = Color(0xFF374151)
@@ -995,7 +1123,13 @@ fun DashboardScreen(
                                     bgColor = Color(0xFFFDF2F8),
                                     onClick = { showInscriptionDialog = true }
                                 )
-                                Spacer(modifier = Modifier.width(68.dp))
+                                QuickAccessButton(
+                                    title = "Bulletins",
+                                    icon = Icons.Default.MenuBook,
+                                    iconColor = Color(0xFF0284C7),
+                                    bgColor = Color(0xFFE0F2FE),
+                                    onClick = onNavigateToAcademic
+                                )
                             }
                         }
                     }
@@ -2120,6 +2254,8 @@ fun DashboardScreen(
         var subPhoneNumber by remember { mutableStateOf("") }
         var subTransactionId by remember { mutableStateOf("") }
         var subErrorMessage by remember { mutableStateOf<String?>(null) }
+        var selectedPaymentMethod by remember { mutableStateOf("CHAP_CHAP") }
+        var isLoadingChapChap by remember { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { showDirectSubscriptionDialog = false },
@@ -2144,70 +2280,145 @@ fun DashboardScreen(
                         color = Color(0xFF4B5563)
                     )
                     
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F4F6))
+                    androidx.compose.material3.TabRow(
+                        selectedTabIndex = if (selectedPaymentMethod == "CHAP_CHAP") 0 else 1,
+                        containerColor = Color.Transparent
                     ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text("Instructions de paiement :", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF374151))
-                            Text("Orange Money : 628 37 65 66", fontWeight = FontWeight.Bold, color = Color(0xFFFF6600), fontSize = 14.sp)
-                            Text("MTN MoMo : 660 37 78 87", fontWeight = FontWeight.Bold, color = Color(0xFFCC9900), fontSize = 14.sp)
-                        }
-                    }
-
-                    if (subErrorMessage != null) {
-                        Text(
-                            text = subErrorMessage!!,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                        androidx.compose.material3.Tab(
+                            selected = selectedPaymentMethod == "CHAP_CHAP",
+                            onClick = { selectedPaymentMethod = "CHAP_CHAP" },
+                            text = { Text("Chap Chap Pay") }
+                        )
+                        androidx.compose.material3.Tab(
+                            selected = selectedPaymentMethod == "MOBILE_MONEY",
+                            onClick = { selectedPaymentMethod = "MOBILE_MONEY" },
+                            text = { Text("Mobile Money") }
                         )
                     }
 
-                    OutlinedTextField(
-                        value = subSchoolName,
-                        onValueChange = { subSchoolName = it },
-                        label = { Text("Nom de l'école") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    if (selectedPaymentMethod == "MOBILE_MONEY") {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F4F6))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("Instructions de paiement :", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF374151))
+                                Text("Orange Money : 628 37 65 66", fontWeight = FontWeight.Bold, color = Color(0xFFFF6600), fontSize = 14.sp)
+                                Text("MTN MoMo : 660 37 78 87", fontWeight = FontWeight.Bold, color = Color(0xFFCC9900), fontSize = 14.sp)
+                            }
+                        }
 
-                    OutlinedTextField(
-                        value = subPhoneNumber,
-                        onValueChange = { subPhoneNumber = it },
-                        label = { Text("Numéro de téléphone de paiement") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                        if (subErrorMessage != null) {
+                            Text(
+                                text = subErrorMessage!!,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
 
-                    OutlinedTextField(
-                        value = subTransactionId,
-                        onValueChange = { subTransactionId = it },
-                        label = { Text("Identifiant de transaction (ID)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                        OutlinedTextField(
+                            value = subSchoolName,
+                            onValueChange = { subSchoolName = it },
+                            label = { Text("Nom de l'école") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = subPhoneNumber,
+                            onValueChange = { subPhoneNumber = it },
+                            label = { Text("Numéro de téléphone de paiement") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = subTransactionId,
+                            onValueChange = { subTransactionId = it },
+                            label = { Text("Identifiant de transaction (ID)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    } else {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Paiement Rapide avec Chap Chap Pay",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFD946EF)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Vous serez redirigé vers Chap Chap Pay pour payer en toute sécurité via Orange Money, MTN MoMo ou carte bancaire.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        if (subSchoolName.isBlank() || subPhoneNumber.isBlank() || subTransactionId.isBlank()) {
-                            subErrorMessage = "Veuillez remplir tous les champs"
+                if (selectedPaymentMethod == "MOBILE_MONEY") {
+                    Button(
+                        onClick = {
+                            if (subSchoolName.isBlank() || subPhoneNumber.isBlank() || subTransactionId.isBlank()) {
+                                subErrorMessage = "Veuillez remplir tous les champs"
+                            } else {
+                                subErrorMessage = null
+                                viewModel.submitSubscriptionRequest(subPhoneNumber, subTransactionId)
+                                showDirectSubscriptionDialog = false
+                                Toast.makeText(context, "Demande d'abonnement soumise avec succès", Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
+                        Text("Soumettre", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            isLoadingChapChap = true
+                            coroutineScope.launch {
+                                val orderId = "SUB_${System.currentTimeMillis()}"
+                                val chapChapUrl = com.example.utils.ChapChapPayApi.createPaymentOperation(200000.0, "Abonnement Annuel ScolaPay", orderId)
+                                isLoadingChapChap = false
+                                if (chapChapUrl != null) {
+                                    viewModel.savePendingOrderId(orderId)
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(chapChapUrl))
+                                    context.startActivity(intent)
+                                } else {
+                                    Toast.makeText(context, "Erreur lors de la création du lien de paiement Chap Chap Pay.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD946EF), contentColor = Color.White),
+                        enabled = !isLoadingChapChap
+                    ) {
+                        if (isLoadingChapChap) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
                         } else {
-                            subErrorMessage = null
-                            viewModel.submitSubscriptionRequest(subPhoneNumber, subTransactionId)
-                            showDirectSubscriptionDialog = false
-                            Toast.makeText(context, "Demande d'abonnement soumise avec succès", Toast.LENGTH_LONG).show()
+                            Text("Payer avec Chap Chap Pay", fontWeight = FontWeight.Bold)
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                ) {
-                    Text("Soumettre", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             },
             dismissButton = {
@@ -3001,7 +3212,8 @@ fun DashboardScreen(
                                             ) {
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(name, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                                    Text("$grade • ${p.paymentMethod}", fontSize = 10.sp, color = Color.Gray)
+                                                    val matricule = s?.let { if (it.remoteId.length >= 5) it.remoteId.take(5).uppercase() else it.id.toString() } ?: "?"
+                                                    Text("ID: #$matricule • $grade • ${p.paymentMethod}", fontSize = 10.sp, color = Color.Gray)
                                                 }
                                                 Column(horizontalAlignment = Alignment.End) {
                                                     val isInsc = p.reason == "Inscription"
@@ -3275,8 +3487,53 @@ fun DashboardScreen(
             }
         )
     }
-}
+    
+    if (showRejectDialog && requestToReject != null) {
+        AlertDialog(
+            onDismissRequest = { showRejectDialog = false },
+            title = { Text("Motif de rejet") },
+            text = {
+                OutlinedTextField(
+                    value = rejectDialogReason,
+                    onValueChange = { rejectDialogReason = it },
+                    label = { Text("Pourquoi rejetez-vous cette suppression ?") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
+                )
+            },
+            confirmButton = {
+                Button(
+                    enabled = rejectDialogReason.isNotBlank(),
+                    onClick = {
+                        viewModel.rejectDeletionRequest(requestToReject!!, rejectDialogReason)
+                        Toast.makeText(context, "Demande rejetée", Toast.LENGTH_SHORT).show()
+                        showRejectDialog = false
+                        rejectDialogReason = ""
+                    }
+                ) {
+                    Text("Confirmer le rejet")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRejectDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
 
+    if (showQrScannerDialog) {
+        QrScannerDialog(
+            students = students,
+            payments = payments,
+            classFees = classFees,
+            onDismiss = { showQrScannerDialog = false },
+            onStudentSelected = { studentId ->
+                onNavigateToStudentDetail(studentId)
+            }
+        )
+    }
+}
 @Composable
 fun QuickAccessButton(
     title: String,

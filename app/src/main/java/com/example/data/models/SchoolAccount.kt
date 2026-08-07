@@ -17,5 +17,6 @@ data class SchoolAccount(
     val rejectionReason: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val address: String = "",
-    val founderPhone: String = ""
+    val founderPhone: String = "",
+    val subscriptionExpiryDate: Long = 0L
 )

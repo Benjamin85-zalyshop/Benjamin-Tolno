@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScolaPay - Portail Parent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+:root {
+    --primary: #1D4ED8; /* blue-700 */
+    --primary-light: #EFF6FF;
+    --success: #10B981;
+    --danger: #EF4444;
+    --warning: #F59E0B;
+    --text-main: #111827;
+    --text-muted: #6B7280;
+    --bg-main: #F3F4F6;
+    --bg-card: #FFFFFF;
+    --border: #E5E7EB;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.app-container {
+    width: 100%;
+    max-width: 480px;
+    background-color: var(--bg-main);
+    min-height: 100vh;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+.app-header {
+    background-color: var(--primary);
+    color: white;
+    padding: 2rem 1.5rem 2rem 1.5rem;
+    text-align: center;
+    border-bottom-left-radius: 24px;
+    border-bottom-right-radius: 24px;
+}
+
+.app-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.subtitle {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin-top: 0.25rem;
+}
+
+main {
+    padding: 0 1rem;
+    margin-top: 1rem;
+}
+
+.welcome-section {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+.welcome-section h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.balance-card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border: 2px solid var(--primary);
+}
+.balance-card h3 {
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+.balance-card .amount {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 1.5rem;
+}
+.btn {
+    width: 100%;
+    padding: 1rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+}
+.btn-primary:hover {
+    background-color: #1E3A8A;
+}
+.btn-outline {
+    background: transparent;
+    border: 2px solid var(--primary);
+    color: var(--primary);
+}
+.btn-outline:hover {
+    background: var(--primary-light);
+}
+.mt-2 { margin-top: 0.75rem; }
+
+.action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+.action-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1rem 0.5rem;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    cursor: pointer;
+    transition: transform 0.1s;
+    border: 1px solid var(--border);
+}
+.action-card:active {
+    transform: scale(0.95);
+}
+.action-card .icon {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+}
+.action-card span {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-main);
+    display: block;
+}
+
+.card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.financials h3, .academic h3 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: var(--text-main);
+    text-align: center;
+}
+
+.progress-container {
+    height: 8px;
+    background-color: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--success);
+    width: 0%;
+    transition: width 1s ease-in-out;
+}
+
+.progress-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-align: right;
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.academic-grid {
+    grid-template-columns: 1fr 1fr;
+}
+
+.stat-box {
+    background-color: var(--bg-main);
+    padding: 1rem 0.5rem;
+    border-radius: 12px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-box .label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.stat-box .value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.stat-box .sub-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.stat-box.success .value { color: var(--success); }
+.stat-box.danger .value { color: var(--danger); }
+.stat-box.primary .value { color: var(--primary); font-size: 1.5rem; }
+
+.mention-box {
+    margin-top: 1rem;
+    background-color: var(--primary-light);
+    padding: 0.75rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--primary);
+    text-align: center;
+}
+
+.loading-state, .error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+}
+
+.spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border-left-color: var(--primary);
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 16px;
+    text-align: center;
+    position: relative;
+    width: 90%;
+    max-width: 320px;
+}
+.close {
+    position: absolute;
+    top: 1rem; right: 1.5rem;
+    font-size: 2rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+#qrCodeContainer img {
+    margin: 1rem auto;
+    width: 200px;
+    height: 200px;
+}
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1 id="schoolName">ScolaPay</h1>
+            <p id="schoolYear" class="subtitle">Portail Parent</p>
+        </header>
+
+        <main id="mainContent" class="hidden">
+            <section class="welcome-section">
+                <h2 id="welcomeText">Bonjour, Parent de ...</h2>
+            </section>
+
+            <section class="balance-card">
+                <h3>Solde dû</h3>
+                <div class="amount" id="mainDueFee">0 GNF</div>
+                <button class="btn btn-outline" onclick="toggleSection('financialSection')">Voir l'historique</button>
+                <button class="btn btn-primary mt-2" onclick="window.location.href='https://scolapay-b6289.web.app/paiement'">Payer la scolarité en ligne</button>
+            </section>
+
+            <div class="action-grid">
+                <div class="action-card" onclick="toggleSection('financialSection')">
+                    <div class="icon">📄</div>
+                    <span>Mes Reçus</span>
+                </div>
+                <div class="action-card" onclick="toggleSection('academicSection')">
+                    <div class="icon">🎓</div>
+                    <span>Bulletins</span>
+                </div>
+                <div class="action-card" onclick="showQrBadge()">
+                    <div class="icon">📱</div>
+                    <span>Badge QR</span>
+                </div>
+            </div>
+
+            <section class="card financials hidden" id="financialSection">
+                <h3>Situation Financière</h3>
+                <div class="progress-container">
+                    <div class="progress-bar" id="paymentProgress"></div>
+                </div>
+                <p class="progress-text" id="paymentPercent">0% Payé</p>
+
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <span class="label">Total à payer</span>
+                        <span class="value" id="totalFee">0 GNF</span>
+                    </div>
+                    <div class="stat-box success">
+                        <span class="label">Montant Payé</span>
+                        <span class="value" id="paidFee">0 GNF</span>
+                    </div>
+                    <div class="stat-box danger">
+                        <span class="label">Reste à payer</span>
+                        <span class="value" id="dueFee">0 GNF</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card academic hidden" id="academicSection">
+                <h3>Résultats Scolaires (<span id="academicTerm">Période</span>)</h3>
+                
+                <div class="stats-grid academic-grid">
+                    <div class="stat-box primary">
+                        <span class="label">Moyenne</span>
+                        <span class="value" id="academicAvg">0.00</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Rang</span>
+                        <span class="value" id="academicRank">0</span>
+                        <span class="sub-label">sur <span id="academicSize">0</span></span>
+                    </div>
+                </div>
+                <div class="mention-box">
+                    <strong>Appréciation :</strong> <span id="academicMention">Passable</span>
+                </div>
+            </section>
+        </main>
+
+        <div id="loading" class="loading-state">
+            <div class="spinner"></div>
+            <p>Chargement du dossier de l'élève...</p>
+        </div>
+
+        <div id="errorState" class="error-state hidden">
+            <h2>Scan invalide</h2>
+            <p>Veuillez scanner un QR Code ScolaPay valide depuis le bulletin ou la carte de l'élève.</p>
+        </div>
+    </div>
+
+    <!-- Modal for Badge QR -->
+    <div id="qrModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeQrModal()">&times;</span>
+            <h2>Badge Élève</h2>
+            <div id="qrCodeContainer"></div>
+            <h3 id="qrStudentName" style="margin-top: 1rem;"></h3>
+            <p id="qrStudentMat" style="color: #6B7280;"></p>
+            <p style="font-size: 0.8rem; margin-top: 1rem; color: #6B7280;">Présentez ce code à la caisse de l'école pour l'identification rapide.</p>
+        </div>
+    </div>
+
+    <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCFzxiVtMxfbFmnl9nXdg9JOLBjqAedqK0",
+  authDomain: "scolapay-b6289.firebaseapp.com",
+  databaseURL: "https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "scolapay-b6289",
+  storageBucket: "scolapay-b6289.firebasestorage.app",
+  messagingSenderId: "906222981497",
+  appId: "1:906222981497:web:cdfc4b9bfe87e99ef0dfa8"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+
+// Make functions available globally for HTML onclick attributes
+window.toggleSection = function(id) {
+    const section = document.getElementById(id);
+    if (section.classList.contains('hidden')) {
+        section.classList.remove('hidden');
+        setTimeout(() => {
+            section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    } else {
+        section.classList.add('hidden');
+    }
+};
+
+window.showQrBadge = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const rawUrl = window.location.href; 
+    
+    const qrData = encodeURIComponent(rawUrl);
+    
+    document.getElementById('qrCodeContainer').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}" alt="QR Code">`;
+    document.getElementById('qrStudentName').textContent = urlParams.get('name') || '';
+    document.getElementById('qrStudentMat').textContent = 'Matricule: ' + (urlParams.get('mat') || '');
+    
+    document.getElementById('qrModal').classList.remove('hidden');
+};
+
+window.closeQrModal = function() {
+    document.getElementById('qrModal').classList.add('hidden');
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    if (!urlParams.has('name') && !urlParams.has('mat') && !urlParams.has('id')) {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('errorState').classList.remove('hidden');
+        return;
+    }
+
+    const studentId = urlParams.get('id');
+    const studentName = urlParams.get('name') || 'Élève';
+    const studentMat = urlParams.get('mat') || 'N/A';
+    const studentGrade = urlParams.get('grade') || '';
+    const studentSection = urlParams.get('section') || '';
+    
+    // Finances (from URL initially)
+    let totalFee = urlParams.get('totalFee') || '';
+    let paidFee = urlParams.get('paidFee') || '';
+    let dueFee = urlParams.get('dueFee') || '';
+    let percent = urlParams.get('percent') || '0';
+    
+    // Académique (Bulletin)
+    const term = urlParams.get('term') || '';
+    const avg = urlParams.get('avg') || '';
+    const rank = urlParams.get('rank') || '';
+    const size = urlParams.get('size') || '';
+    const mention = urlParams.get('mention') || '';
+    
+    // Ecole
+    const school = urlParams.get('school') || 'ScolaPay';
+    const year = urlParams.get('year') || 'Portail Parent';
+
+    // Remplir les informations de l'école
+    document.getElementById('schoolName').textContent = school;
+    document.getElementById('schoolYear').textContent = year;
+    document.getElementById('welcomeText').textContent = `Bonjour, Parent de ${studentName} (${studentGrade})`;
+
+    function updateFinancialUI(tFee, pFee, dFee, pCent) {
+        if (!tFee) {
+            document.getElementById('financialSection').classList.add('hidden');
+            return;
+        }
+        
+        document.getElementById('financialSection').classList.remove('hidden');
+        
+        document.getElementById('mainDueFee').textContent = dFee || '0 GNF';
+        document.getElementById('totalFee').textContent = tFee;
+        document.getElementById('paidFee').textContent = pFee;
+        document.getElementById('dueFee').textContent = dFee;
+        
+        let percentValue = parseFloat(String(pCent).replace(',', '.').replace('%', ''));
+        if (isNaN(percentValue)) percentValue = 0;
+        
+        const barWidth = percentValue > 100 ? 100 : percentValue;
+        
+        setTimeout(() => {
+            document.getElementById('paymentProgress').style.width = barWidth + '%';
+        }, 300);
+        
+        document.getElementById('paymentPercent').textContent = percentValue.toFixed(0) + '% Payé';
+        
+        if (percentValue >= 100) {
+            document.getElementById('paymentPercent').style.color = 'var(--success)';
+            document.getElementById('paymentPercent').textContent = '✅ Scolarité Soldée';
+        } else {
+            document.getElementById('paymentPercent').style.color = 'var(--text-muted)';
+        }
+    }
+
+    // Initialize with URL params first
+    updateFinancialUI(totalFee, paidFee, dueFee, percent);
+
+    // Setup academic UI
+    if (avg) {
+        document.getElementById('academicTerm').textContent = term;
+        
+        let maxScore = 20;
+        if (studentSection.toLowerCase().includes('primaire') || studentSection.toLowerCase().includes('maternelle')) {
+            maxScore = 10;
+        }
+        
+        document.getElementById('academicAvg').textContent = avg + ' / ' + maxScore;
+        document.getElementById('academicRank').textContent = rank + (rank == '1' ? 'er' : 'ème');
+        document.getElementById('academicSize').textContent = size;
+        document.getElementById('academicMention').textContent = mention;
+    } else {
+        document.getElementById('academicSection').classList.add('hidden');
+    }
+
+    // Connect to Firebase Realtime Database
+    // We use the 'mat' (matricule) as the key to find the student data
+    const studentKey = studentMat !== 'N/A' ? studentMat : studentId;
+    
+    if (studentKey) {
+        const studentRef = ref(database, 'students/' + studentKey);
+        onValue(studentRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const formatGNF = (num) => {
+                    if (num === null || num === undefined) return "0 GNF";
+                    // Using French locale and replacing spaces for large numbers
+                    return Number(num).toLocaleString('fr-FR').replace(/,/g, ' ') + " GNF";
+                };
+
+                // Override URL data with fresh DB data
+                const dbTotal = data.totalFee || 0;
+                const dbPaid = data.paidFee || 0;
+                const dbDue = dbTotal - dbPaid;
+                
+                let dbPercent = 0;
+                if (dbTotal > 0) {
+                    dbPercent = (dbPaid / dbTotal) * 100;
+                }
+
+                updateFinancialUI(formatGNF(dbTotal), formatGNF(dbPaid), formatGNF(dbDue), dbPercent);
+            }
+        });
+    }
+
+    // Afficher le contenu
+    setTimeout(() => {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('mainContent').classList.remove('hidden');
+    }, 500);
+});
+
+    </script>
+</body>
+</html>

@@ -8,8 +8,10 @@ import com.example.data.models.Expense
 import com.example.data.models.Payment
 import com.example.data.models.SchoolAccount
 import com.example.data.models.Student
+import com.example.data.models.Subject
+import com.example.data.models.StudentGrade
 
-@Database(entities = [Student::class, Payment::class, Expense::class, SchoolAccount::class], version = 16, exportSchema = false)
+@Database(entities = [Student::class, Payment::class, Expense::class, SchoolAccount::class, Subject::class, StudentGrade::class], version = 20, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun schoolDao(): SchoolDao
 

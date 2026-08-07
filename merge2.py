@@ -1,0 +1,132 @@
+import os
+
+html_top = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScolaPay - Portail Parent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+"""
+
+with open("scolapay-web/public/style.css", "r") as f:
+    css_content = f.read()
+
+html_mid = """    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1 id="schoolName">ScolaPay</h1>
+            <p id="schoolYear" class="subtitle">Portail Parent</p>
+        </header>
+
+        <main id="mainContent" class="hidden">
+            <section class="welcome-section">
+                <h2 id="welcomeText">Bonjour, Parent de ...</h2>
+            </section>
+
+            <section class="balance-card">
+                <h3>Solde dû</h3>
+                <div class="amount" id="mainDueFee">0 GNF</div>
+                <button class="btn btn-outline" onclick="toggleSection('financialSection')">Voir l'historique</button>
+                <button class="btn btn-primary mt-2" onclick="window.location.href='https://scolapay-b6289.web.app/paiement'">Payer la scolarité en ligne</button>
+            </section>
+
+            <div class="action-grid">
+                <div class="action-card" onclick="toggleSection('financialSection')">
+                    <div class="icon">📄</div>
+                    <span>Mes Reçus</span>
+                </div>
+                <div class="action-card" onclick="toggleSection('academicSection')">
+                    <div class="icon">🎓</div>
+                    <span>Bulletins</span>
+                </div>
+                <div class="action-card" onclick="showQrBadge()">
+                    <div class="icon">📱</div>
+                    <span>Badge QR</span>
+                </div>
+            </div>
+
+            <section class="card financials hidden" id="financialSection">
+                <h3>Situation Financière</h3>
+                <div class="progress-container">
+                    <div class="progress-bar" id="paymentProgress"></div>
+                </div>
+                <p class="progress-text" id="paymentPercent">0% Payé</p>
+
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <span class="label">Total à payer</span>
+                        <span class="value" id="totalFee">0 GNF</span>
+                    </div>
+                    <div class="stat-box success">
+                        <span class="label">Montant Payé</span>
+                        <span class="value" id="paidFee">0 GNF</span>
+                    </div>
+                    <div class="stat-box danger">
+                        <span class="label">Reste à payer</span>
+                        <span class="value" id="dueFee">0 GNF</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card academic hidden" id="academicSection">
+                <h3>Résultats Scolaires (<span id="academicTerm">Période</span>)</h3>
+                
+                <div class="stats-grid academic-grid">
+                    <div class="stat-box primary">
+                        <span class="label">Moyenne</span>
+                        <span class="value" id="academicAvg">0.00</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Rang</span>
+                        <span class="value" id="academicRank">0</span>
+                        <span class="sub-label">sur <span id="academicSize">0</span></span>
+                    </div>
+                </div>
+                <div class="mention-box">
+                    <strong>Appréciation :</strong> <span id="academicMention">Passable</span>
+                </div>
+            </section>
+        </main>
+
+        <div id="loading" class="loading-state">
+            <div class="spinner"></div>
+            <p>Chargement du dossier de l'élève...</p>
+        </div>
+
+        <div id="errorState" class="error-state hidden">
+            <h2>Scan invalide</h2>
+            <p>Veuillez scanner un QR Code ScolaPay valide depuis le bulletin ou la carte de l'élève.</p>
+        </div>
+    </div>
+
+    <!-- Modal for Badge QR -->
+    <div id="qrModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeQrModal()">&times;</span>
+            <h2>Badge Élève</h2>
+            <div id="qrCodeContainer"></div>
+            <h3 id="qrStudentName" style="margin-top: 1rem;"></h3>
+            <p id="qrStudentMat" style="color: #6B7280;"></p>
+            <p style="font-size: 0.8rem; margin-top: 1rem; color: #6B7280;">Présentez ce code à la caisse de l'école pour l'identification rapide.</p>
+        </div>
+    </div>
+
+    <script type="module">
+"""
+
+with open("scolapay-web/public/app.js", "r") as f:
+    js_content = f.read()
+
+html_bot = """
+    </script>
+</body>
+</html>
+"""
+
+with open("index_complet.html", "w") as f:
+    f.write(html_top + css_content + html_mid + js_content + html_bot)
+

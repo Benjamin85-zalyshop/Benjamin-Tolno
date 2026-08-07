@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -41,6 +42,16 @@ fun AdminDashboardScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var schoolToDelete by remember { mutableStateOf<SchoolAdminItem?>(null) }
     var rejectionReason by remember { mutableStateOf("") }
+    
+    var showWhatsAppDialog by remember { mutableStateOf(false) }
+    var schoolForWhatsApp by remember { mutableStateOf<SchoolAdminItem?>(null) }
+    var whatsappMessage by remember { mutableStateOf("") }
+    val whatsappSuggestions = listOf(
+        "Bonjour, ceci est un rappel que votre abonnement à ScolaPay arrive à expiration. Veuillez le renouveler.",
+        "Bonjour, votre demande d'abonnement à ScolaPay est en cours de traitement.",
+        "Bonjour, nous avons une information importante concernant l'application ScolaPay.",
+        "Bonjour, merci pour votre abonnement à ScolaPay ! Votre compte est maintenant activé pour un an. Nous restons à votre entière disposition."
+    )
     
     // Quick template suggestions for rejection
     val rejectionSuggestions = listOf(
@@ -208,6 +219,11 @@ fun AdminDashboardScreen(
                             onDeleteClick = {
                                 schoolToDelete = item
                                 showDeleteDialog = true
+                            },
+                            onWhatsAppClick = {
+                                schoolForWhatsApp = item
+                                whatsappMessage = whatsappSuggestions.first()
+                                showWhatsAppDialog = true
                             }
                         )
                     }
@@ -322,6 +338,91 @@ fun AdminDashboardScreen(
             }
         )
     }
+    
+    if (showWhatsAppDialog && schoolForWhatsApp != null) {
+        val school = schoolForWhatsApp!!
+        AlertDialog(
+            onDismissRequest = { showWhatsAppDialog = false },
+            title = { Text("Message WhatsApp") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "À : ${school.schoolName}",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Modèles de message :",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(whatsappSuggestions, key = { it }) { suggestion ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { whatsappMessage = suggestion }
+                            ) {
+                                Text(
+                                    text = suggestion,
+                                    modifier = Modifier.padding(8.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = whatsappMessage,
+                        onValueChange = { whatsappMessage = it },
+                        label = { Text("Message") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 5
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        try {
+                            var phone = school.founderPhone.replace(" ", "").replace("+", "")
+                            if (!phone.startsWith("224") && phone.length == 9) {
+                                phone = "224$phone"
+                            }
+                            val url = "https://wa.me/$phone?text=${android.net.Uri.encode(whatsappMessage)}"
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                data = android.net.Uri.parse(url)
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                        showWhatsAppDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366))
+                ) {
+                    Icon(imageVector = Icons.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Ouvrir WhatsApp")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWhatsAppDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -329,7 +430,8 @@ fun SchoolRequestCard(
     item: SchoolAdminItem,
     onApprove: () -> Unit,
     onRejectClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onWhatsAppClick: () -> Unit
 ) {
     val localContext = LocalContext.current
     Card(
@@ -371,9 +473,11 @@ fun SchoolRequestCard(
                     if (item.founderPhone.isNotEmpty()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .padding(top = 2.dp)
-                                .clickable {
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable {
                                     try {
                                         val intent = Intent(Intent.ACTION_DIAL).apply {
                                             data = Uri.parse("tel:${item.founderPhone}")
@@ -383,18 +487,65 @@ fun SchoolRequestCard(
                                         e.printStackTrace()
                                     }
                                 }
-                        ) {
-                            Text(
-                                text = "📞 Tél Fondateur : ${item.founderPhone}",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF16A34A),
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
+                            ) {
+                                Text(
+                                    text = "📞 Tél Fondateur : ${item.founderPhone}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF16A34A),
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.width(12.dp))
+                            
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF25D366).copy(alpha = 0.15f),
+                                contentColor = Color(0xFF128C7E),
+                                modifier = Modifier
+                                    .clickable { onWhatsAppClick() }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Send,
+                                        contentDescription = "WhatsApp",
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "WhatsApp",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
-                    
-                    if (!item.hasActiveSubscription) {
+                    if (item.hasActiveSubscription) {
+                        val isExpired = item.subscriptionExpiryDate > 0 && item.subscriptionExpiryDate <= System.currentTimeMillis()
+                        if (isExpired) {
+                            Text(
+                                text = "Abonnement expiré",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFDC2626),
+                                fontWeight = FontWeight.Medium
+                            )
+                        } else if (item.subscriptionExpiryDate > 0) {
+                            val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+                            val expiryStr = dateFormat.format(java.util.Date(item.subscriptionExpiryDate))
+                            Text(
+                                text = "Expire le : $expiryStr",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF16A34A),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
                         val elapsed = System.currentTimeMillis() - item.createdAt
                         val trialDuration = 90L * 24L * 60L * 60L * 1000L
                         val isTrialActive = elapsed < trialDuration
@@ -409,8 +560,11 @@ fun SchoolRequestCard(
                     }
                 }
 
+                val isExpired = item.hasActiveSubscription && item.subscriptionExpiryDate > 0 && item.subscriptionExpiryDate <= System.currentTimeMillis()
+
                 val badgeColor = when {
                     item.isPendingValidation -> Color(0xFFFF9800) // Orange
+                    isExpired -> Color(0xFFDC2626) // Red
                     item.hasActiveSubscription -> Color(0xFF4CAF50) // Green
                     else -> {
                         val elapsed = System.currentTimeMillis() - item.createdAt
@@ -421,6 +575,7 @@ fun SchoolRequestCard(
 
                 val badgeText = when {
                     item.isPendingValidation -> "En attente"
+                    isExpired -> "Abon. expiré"
                     item.hasActiveSubscription -> "Abonné"
                     else -> {
                         val elapsed = System.currentTimeMillis() - item.createdAt

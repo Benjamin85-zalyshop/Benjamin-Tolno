@@ -8,9 +8,12 @@ import com.example.data.models.Payment
 import com.example.data.models.Student
 import com.example.data.models.DeletionRequest
 import com.example.data.models.ClassFee
+import com.example.data.models.Subject
+import com.example.data.models.StudentGrade
 import com.example.data.repository.SchoolRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.DocumentChange
 import kotlinx.coroutines.tasks.await
@@ -18,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -209,12 +213,12 @@ class SchoolViewModel(
         _selectedSection.value = section
     }
 
-    val students: StateFlow<List<Student>> = combine(_currentSchoolId, _selectedSection) { id, section ->
-        Pair(id, section)
-    }.flatMapLatest { (id, section) ->
+    val students: StateFlow<List<Student>> = combine(_currentSchoolId, _selectedSection, _selectedSchoolYear) { id, section, year ->
+        Triple(id, section, year)
+    }.flatMapLatest { (id, section, year) ->
         if (id == null) flowOf(emptyList())
-        else if (section == "Toutes les sections") repository.getAllStudents(id)
-        else repository.getAllStudents(id).map { list -> list.filter { it.section == section } }
+        else if (section == "Toutes les sections") repository.getAllStudents(id).map { list -> list.filter { (it.schoolYear.ifEmpty { "2024 - 2025" }) == year } }
+        else repository.getAllStudents(id).map { list -> list.filter { it.section == section && (it.schoolYear.ifEmpty { "2024 - 2025" }) == year } }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val payments: StateFlow<List<Payment>> = combine(_currentSchoolId, _selectedSection, students, _selectedSchoolYear) { id, section, studentList, schoolYear ->
@@ -277,13 +281,21 @@ class SchoolViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
-    val isAppAccessGranted: StateFlow<Boolean> = combine(hasActiveSubscription, isTrialActive) { hasSub, trialActive ->
-        hasSub || trialActive
+    val isAppAccessGranted: StateFlow<Boolean> = combine(schoolAccount, isTrialActive) { account, trialActive ->
+        if (account == null) false else ((account.hasActiveSubscription && (account.subscriptionExpiryDate > System.currentTimeMillis() || account.subscriptionExpiryDate == 0L)) || trialActive)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val balance: StateFlow<Long> = combine(totalCollected, totalExpenses) { collected, expenses ->
         (collected ?: 0L) - (expenses ?: 0L)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    val subjects: StateFlow<List<Subject>> = _currentSchoolId
+        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.getAllSubjects(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val grades: StateFlow<List<StudentGrade>> = _currentSchoolId
+        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.getAllGrades(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun insertStudent(
         firstName: String,
@@ -292,10 +304,12 @@ class SchoolViewModel(
         section: String,
         parentWhatsApp: String? = null,
         registrationFee: Long = 0L,
-        reenrollmentFee: Long = 0L
+        reenrollmentFee: Long = 0L,
+        photoBase64: String? = null
     ) {
         val schoolId = _currentSchoolId.value ?: return
         val email = sharedPrefs.getString("last_email", null) ?: return
+        val year = _selectedSchoolYear.value
         viewModelScope.launch {
             val db = FirebaseFirestore.getInstance()
             val docRef = db.collection("schools").document(email).collection("students").document()
@@ -308,7 +322,9 @@ class SchoolViewModel(
                 "section" to section,
                 "parentWhatsApp" to (parentWhatsApp ?: ""),
                 "registrationFee" to registrationFee,
-                "reenrollmentFee" to reenrollmentFee
+                "reenrollmentFee" to reenrollmentFee,
+                "photoBase64" to (photoBase64 ?: ""),
+                "schoolYear" to year
             )
             try {
                 docRef.set(studentData)
@@ -326,9 +342,29 @@ class SchoolViewModel(
                     remoteId = remoteId,
                     parentWhatsApp = parentWhatsApp,
                     registrationFee = registrationFee,
-                    reenrollmentFee = reenrollmentFee
+                    reenrollmentFee = reenrollmentFee,
+                    photoBase64 = photoBase64,
+                    schoolYear = year
                 )
             )
+        }
+    }
+
+    fun updateStudentPhoto(student: Student, photoBase64: String?) {
+        val email = sharedPrefs.getString("last_email", null)
+        viewModelScope.launch {
+            val updated = student.copy(photoBase64 = photoBase64)
+            repository.insertStudent(updated)
+            if (!email.isNullOrBlank() && student.remoteId.isNotBlank()) {
+                try {
+                    val db = FirebaseFirestore.getInstance()
+                    db.collection("schools").document(email)
+                        .collection("students").document(student.remoteId)
+                        .update("photoBase64", photoBase64 ?: "")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -376,7 +412,9 @@ class SchoolViewModel(
                 "section" to student.section,
                 "reason" to reason,
                 "requestedBy" to "Financier",
-                "requestedAt" to System.currentTimeMillis()
+                "requestedAt" to System.currentTimeMillis(),
+                "status" to "PENDING",
+                "rejectionReason" to ""
             )
             try {
                 docRef.set(requestData)
@@ -417,7 +455,23 @@ class SchoolViewModel(
         }
     }
 
-    fun rejectDeletionRequest(request: DeletionRequest) {
+    fun rejectDeletionRequest(request: DeletionRequest, reason: String) {
+        val email = sharedPrefs.getString("last_email", null) ?: return
+        viewModelScope.launch {
+            val db = FirebaseFirestore.getInstance()
+            try {
+                db.collection("schools").document(email)
+                    .collection("deletionRequests").document(request.id).update(
+                        "status", "REJECTED",
+                        "rejectionReason", reason
+                    )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+    
+    fun dismissDeletionRequest(request: DeletionRequest) {
         val email = sharedPrefs.getString("last_email", null) ?: return
         viewModelScope.launch {
             val db = FirebaseFirestore.getInstance()
@@ -460,7 +514,11 @@ class SchoolViewModel(
         val email = sharedPrefs.getString("last_email", null) ?: return
         viewModelScope.launch {
             val student = repository.getAllStudentsDirect(schoolId).find { it.id == studentId }
-            val studentRemoteId = student?.remoteId ?: ""
+            if (student == null) {
+                android.util.Log.e("SchoolViewModel", "Cannot insert payment: student with id $studentId not found.")
+                return@launch
+            }
+            val studentRemoteId = student.remoteId ?: ""
             
             val db = FirebaseFirestore.getInstance()
             val docRef = db.collection("schools").document(email).collection("payments").document()
@@ -491,6 +549,7 @@ class SchoolViewModel(
                     paymentMethod = paymentMethod
                 )
             )
+            updateStudentFinancialsInRTDB(schoolId, studentId)
         }
     }
 
@@ -509,6 +568,9 @@ class SchoolViewModel(
                 }
             }
             repository.deletePayment(paymentId)
+            if (payment != null) {
+                updateStudentFinancialsInRTDB(payment.schoolId, payment.studentId)
+            }
         }
     }
 
@@ -587,6 +649,7 @@ class SchoolViewModel(
                 val displayName = snapshot.getString("displayName") ?: ""
                 val schoolName = snapshot.getString("schoolName") ?: email
                 val hasActiveSubscription = snapshot.getBoolean("hasActiveSubscription") ?: false
+                val subscriptionExpiryDate = snapshot.getLong("subscriptionExpiryDate") ?: 0L
                 val isPendingValidation = snapshot.getBoolean("isPendingValidation") ?: false
                 val paymentPhoneNumber = snapshot.getString("paymentPhoneNumber")
                 val transactionId = snapshot.getString("transactionId")
@@ -604,6 +667,7 @@ class SchoolViewModel(
                             displayName = displayName,
                             schoolName = schoolName,
                             hasActiveSubscription = hasActiveSubscription,
+                        subscriptionExpiryDate = subscriptionExpiryDate,
                             isPendingValidation = isPendingValidation,
                             paymentPhoneNumber = paymentPhoneNumber,
                             transactionId = transactionId,
@@ -614,6 +678,12 @@ class SchoolViewModel(
                         _schoolAccount.value = updated
                         _schoolName.value = displayName.ifEmpty { schoolName }
                     }
+                }
+            } else if (snapshot != null && !snapshot.exists()) {
+                // School document was deleted from Firebase, delete local data and force logout
+                viewModelScope.launch {
+                    repository.deleteSchoolAccountAndData(email)
+                    logout()
                 }
             }
         }
@@ -641,6 +711,8 @@ class SchoolViewModel(
                                     val parentWhatsApp = doc.getString("parentWhatsApp")
                                     val regFee = doc.getLong("registrationFee") ?: 0L
                                     val reenrFee = doc.getLong("reenrollmentFee") ?: 0L
+                                    val photoBase64 = doc.getString("photoBase64")
+                                    val schoolYear = doc.getString("schoolYear") ?: ""
                                     
                                     var needsUpdate = false
                                     val normalizedGrade = normalizeGradeName(grade)
@@ -684,7 +756,9 @@ class SchoolViewModel(
                                                 remoteId = remoteId,
                                                 parentWhatsApp = parentWhatsApp,
                                                 registrationFee = regFee,
-                                                reenrollmentFee = reenrFee
+                                                reenrollmentFee = reenrFee,
+                                                photoBase64 = photoBase64,
+                                                schoolYear = schoolYear
                                             )
                                         )
                                     } else {
@@ -694,7 +768,9 @@ class SchoolViewModel(
                                             existingStudent.section != section ||
                                             existingStudent.parentWhatsApp != parentWhatsApp ||
                                             existingStudent.registrationFee != regFee ||
-                                            existingStudent.reenrollmentFee != reenrFee) {
+                                            existingStudent.reenrollmentFee != reenrFee ||
+                                            existingStudent.photoBase64 != photoBase64 ||
+                                            existingStudent.schoolYear != schoolYear) {
                                             repository.insertStudent(
                                                 existingStudent.copy(
                                                     firstName = firstName,
@@ -703,7 +779,9 @@ class SchoolViewModel(
                                                     section = section,
                                                     parentWhatsApp = parentWhatsApp,
                                                     registrationFee = regFee,
-                                                    reenrollmentFee = reenrFee
+                                                    reenrollmentFee = reenrFee,
+                                                    photoBase64 = photoBase64,
+                                                    schoolYear = schoolYear
                                                 )
                                             )
                                         }
@@ -887,6 +965,8 @@ class SchoolViewModel(
                         val reason = doc.getString("reason") ?: ""
                         val requestedBy = doc.getString("requestedBy") ?: ""
                         val requestedAt = doc.getLong("requestedAt") ?: 0L
+                        val status = doc.getString("status") ?: "PENDING"
+                        val rejectionReason = doc.getString("rejectionReason") ?: ""
                         DeletionRequest(
                             id = doc.id,
                             studentRemoteId = studentRemoteId,
@@ -895,7 +975,9 @@ class SchoolViewModel(
                             section = section,
                             reason = reason,
                             requestedBy = requestedBy,
-                            requestedAt = requestedAt
+                            requestedAt = requestedAt,
+                            status = status,
+                            rejectionReason = rejectionReason
                         )
                     }
                     _deletionRequests.value = requestsList
@@ -935,6 +1017,292 @@ class SchoolViewModel(
                 }
             }
         activeListeners.add(classFeesListener)
+
+        val subjectsListener = schoolDocRef.collection("subjects")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    error.printStackTrace()
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    viewModelScope.launch {
+                        for (change in snapshot.documentChanges) {
+                            val doc = change.document
+                            val remoteId = doc.id
+                            when (change.type) {
+                                DocumentChange.Type.ADDED,
+                                DocumentChange.Type.MODIFIED -> {
+                                    val name = doc.getString("name") ?: ""
+                                    val section = doc.getString("section") ?: ""
+                                    val grade = doc.getString("grade") ?: ""
+                                    val coefficient = doc.getLong("coefficient")?.toInt() ?: 1
+                                    val maxScore = doc.getDouble("maxScore")?.toFloat() ?: 20f
+
+                                    val existing = repository.getSubjectByRemoteId(remoteId)
+                                    if (existing == null) {
+                                        repository.insertSubject(
+                                            Subject(
+                                                schoolId = schoolId,
+                                                section = section,
+                                                grade = grade,
+                                                name = name,
+                                                coefficient = coefficient,
+                                                maxScore = maxScore,
+                                                remoteId = remoteId
+                                            )
+                                        )
+                                    } else {
+                                        repository.insertSubject(
+                                            existing.copy(
+                                                section = section,
+                                                grade = grade,
+                                                name = name,
+                                                coefficient = coefficient,
+                                                maxScore = maxScore
+                                            )
+                                        )
+                                    }
+                                }
+                                DocumentChange.Type.REMOVED -> {
+                                    repository.deleteSubjectByRemoteId(remoteId)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        activeListeners.add(subjectsListener)
+
+        val gradesListener = schoolDocRef.collection("grades")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    error.printStackTrace()
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    viewModelScope.launch {
+                        for (change in snapshot.documentChanges) {
+                            val doc = change.document
+                            val remoteId = doc.id
+                            when (change.type) {
+                                DocumentChange.Type.ADDED,
+                                DocumentChange.Type.MODIFIED -> {
+                                    val studentId = doc.getLong("studentId")?.toInt() ?: 0
+                                    val studentRemoteId = doc.getString("studentRemoteId") ?: ""
+                                    val subjectId = doc.getLong("subjectId")?.toInt() ?: 0
+                                    val subjectRemoteId = doc.getString("subjectRemoteId") ?: ""
+                                    val term = doc.getString("term") ?: "1er Trimestre"
+                                    val evalScoreVal = doc.getDouble("evaluationScore")?.toFloat()
+                                    val evalScore = if (evalScoreVal != null && evalScoreVal >= 0f) evalScoreVal else null
+                                    val examScoreVal = doc.getDouble("examScore")?.toFloat()
+                                    val examScore = if (examScoreVal != null && examScoreVal >= 0f) examScoreVal else null
+                                    val teacherComment = doc.getString("teacherComment")
+
+                                    var localStudentId = studentId
+                                    if (localStudentId == 0 && studentRemoteId.isNotEmpty()) {
+                                        localStudentId = repository.getStudentIdByRemoteId(studentRemoteId) ?: 0
+                                    }
+
+                                    if (localStudentId > 0) {
+                                        val existing = repository.getGradeByRemoteId(remoteId)
+                                        if (existing == null) {
+                                            repository.insertGrade(
+                                                StudentGrade(
+                                                    schoolId = schoolId,
+                                                    studentId = localStudentId,
+                                                    studentRemoteId = studentRemoteId,
+                                                    subjectId = subjectId,
+                                                    subjectRemoteId = subjectRemoteId,
+                                                    term = term,
+                                                    evaluationScore = evalScore,
+                                                    examScore = examScore,
+                                                    teacherComment = teacherComment,
+                                                    remoteId = remoteId
+                                                )
+                                            )
+                                        } else {
+                                            repository.insertGrade(
+                                                existing.copy(
+                                                    studentId = localStudentId,
+                                                    studentRemoteId = studentRemoteId,
+                                                    subjectId = subjectId,
+                                                    subjectRemoteId = subjectRemoteId,
+                                                    term = term,
+                                                    evaluationScore = evalScore,
+                                                    examScore = examScore,
+                                                    teacherComment = teacherComment
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                                DocumentChange.Type.REMOVED -> {
+                                    repository.deleteGradeByRemoteId(remoteId)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        activeListeners.add(gradesListener)
+    }
+
+    fun insertSubject(section: String, grade: String, name: String, coefficient: Int, maxScore: Float = 20f) {
+        val schoolId = _currentSchoolId.value ?: return
+        val email = sharedPrefs.getString("last_email", null) ?: return
+        viewModelScope.launch {
+            val db = FirebaseFirestore.getInstance()
+            val docRef = db.collection("schools").document(email).collection("subjects").document()
+            val remoteId = docRef.id
+            val data = hashMapOf(
+                "section" to section,
+                "grade" to grade,
+                "name" to name,
+                "coefficient" to coefficient,
+                "maxScore" to maxScore
+            )
+            try { docRef.set(data) } catch (e: Exception) { e.printStackTrace() }
+            repository.insertSubject(
+                Subject(
+                    schoolId = schoolId,
+                    section = section,
+                    grade = grade,
+                    name = name,
+                    coefficient = coefficient,
+                    maxScore = maxScore,
+                    remoteId = remoteId
+                )
+            )
+        }
+    }
+
+    fun deleteSubject(subject: Subject) {
+        val email = sharedPrefs.getString("last_email", null) ?: return
+        viewModelScope.launch {
+            if (subject.remoteId.isNotEmpty()) {
+                val db = FirebaseFirestore.getInstance()
+                try {
+                    db.collection("schools").document(email)
+                        .collection("subjects").document(subject.remoteId).delete()
+                } catch (e: Exception) { e.printStackTrace() }
+            }
+            repository.deleteSubjectById(subject.id)
+        }
+    }
+
+    fun seedDefaultSubjects(section: String, grade: String) {
+        val defaultList = when {
+            section.equals("LA MATERNELLE", ignoreCase = true) -> listOf(
+                Triple("Graphisme & Écriture", 1, 20f),
+                Triple("Éveil & Langage", 1, 20f),
+                Triple("Calcul & Manipulation", 1, 20f),
+                Triple("Activités Manuelles", 1, 20f),
+                Triple("Psychomotricité", 1, 20f)
+            )
+            section.equals("LE PRIMAIRE", ignoreCase = true) -> {
+                if (grade.contains("1") || grade.contains("2") || grade.contains("CP", ignoreCase = true)) {
+                    listOf(
+                        Triple("Lecture", 1, 10f),
+                        Triple("Langage", 1, 10f),
+                        Triple("Ecriture", 1, 10f),
+                        Triple("Calcul", 1, 10f),
+                        Triple("Exercice Sensoriels", 1, 10f),
+                        Triple("Dessin", 1, 10f),
+                        Triple("Récitation/Chant", 1, 10f)
+                    )
+                } else {
+                    listOf(
+                        Triple("Lecture", 1, 10f),
+                        Triple("Dictée/questions", 1, 10f),
+                        Triple("Expression Ecrite/Redaction", 1, 10f),
+                        Triple("Ecriture", 1, 10f),
+                        Triple("Calcul Ecrit", 1, 10f),
+                        Triple("Histoire", 1, 10f),
+                        Triple("Science Observation", 1, 10f),
+                        Triple("Geographie", 1, 10f),
+                        Triple("Dessin", 1, 10f),
+                        Triple("Récitation/Chant", 1, 10f),
+                        Triple("Instruction Civique", 1, 10f)
+                    )
+                }
+            }
+            section.contains("COLLEGE", ignoreCase = true) || section.contains("COLLÈGE", ignoreCase = true) -> listOf(
+                Triple("DICTEE/QUESTION", 2, 20f),
+                Triple("REDACTION", 1, 20f),
+                Triple("HISTOIRE", 1, 20f),
+                Triple("GEOGRAPHIE", 1, 20f),
+                Triple("MATHS", 2, 20f),
+                Triple("BIOLOGIE", 1, 20f),
+                Triple("PHYSIQUES", 1, 20f),
+                Triple("CHIMIE", 1, 20f),
+                Triple("E.C.M", 1, 20f),
+                Triple("ANGLAIS", 1, 20f)
+            )
+            section.equals("LE LYCÉE", ignoreCase = true) || section.equals("LE LYCEE", ignoreCase = true) -> listOf(
+                Triple("Mathématiques", 5, 20f),
+                Triple("Physique", 4, 20f),
+                Triple("Chimie", 3, 20f),
+                Triple("Français / Philosophie", 3, 20f),
+                Triple("SVT", 3, 20f),
+                Triple("Anglais", 2, 20f),
+                Triple("Histoire-Géographie", 2, 20f)
+            )
+            else -> emptyList()
+        }
+
+        defaultList.forEach { (name, coeff, max) ->
+            insertSubject(section, grade, name, coeff, max)
+        }
+    }
+
+    fun saveGrade(
+        studentId: Int,
+        studentRemoteId: String,
+        subjectId: Int,
+        subjectRemoteId: String,
+        term: String,
+        evaluationScore: Float?,
+        examScore: Float?,
+        comment: String? = null
+    ) {
+        val schoolId = _currentSchoolId.value ?: return
+        val email = sharedPrefs.getString("last_email", null) ?: return
+        viewModelScope.launch {
+            val db = FirebaseFirestore.getInstance()
+            val allGrades = grades.value
+            val existingGrade = allGrades.find { it.studentId == studentId && it.subjectId == subjectId && it.term == term }
+            val remoteId = existingGrade?.remoteId?.ifEmpty { null } ?: db.collection("schools").document(email).collection("grades").document().id
+
+            val gradeData = hashMapOf(
+                "studentId" to studentId,
+                "studentRemoteId" to studentRemoteId,
+                "subjectId" to subjectId,
+                "subjectRemoteId" to subjectRemoteId,
+                "term" to term,
+                "evaluationScore" to (evaluationScore ?: -1f),
+                "examScore" to (examScore ?: -1f),
+                "teacherComment" to (comment ?: "")
+            )
+            try {
+                db.collection("schools").document(email).collection("grades").document(remoteId).set(gradeData)
+            } catch (e: Exception) { e.printStackTrace() }
+
+            val newGradeObj = StudentGrade(
+                id = existingGrade?.id ?: 0,
+                schoolId = schoolId,
+                studentId = studentId,
+                studentRemoteId = studentRemoteId,
+                subjectId = subjectId,
+                subjectRemoteId = subjectRemoteId,
+                term = term,
+                evaluationScore = evaluationScore,
+                examScore = examScore,
+                teacherComment = comment,
+                remoteId = remoteId
+            )
+            repository.insertGrade(newGradeObj)
+            syncStudentAcademicsToRTDB(schoolId, studentId, term)
+        }
     }
 
     private suspend fun syncAccount(email: String) {
@@ -949,6 +1317,7 @@ class SchoolViewModel(
                     val financierPasswordHash = doc.getString("financierPasswordHash") ?: ""
                     val displayName = doc.getString("displayName") ?: ""
                     val hasActiveSubscription = doc.getBoolean("hasActiveSubscription") ?: false
+                    val subscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
                     val isPendingValidation = doc.getBoolean("isPendingValidation") ?: false
                     val paymentPhoneNumber = doc.getString("paymentPhoneNumber")
                     val transactionId = doc.getString("transactionId")
@@ -967,6 +1336,7 @@ class SchoolViewModel(
                         financierPasswordHash = financierPasswordHash,
                         displayName = displayName,
                         hasActiveSubscription = hasActiveSubscription,
+                        subscriptionExpiryDate = subscriptionExpiryDate,
                         isPendingValidation = isPendingValidation,
                         paymentPhoneNumber = paymentPhoneNumber,
                         transactionId = transactionId,
@@ -1186,6 +1556,7 @@ class SchoolViewModel(
                     val dbFinancierPassword = doc.getString("financierPasswordHash") ?: ""
                     val dbDisplayName = doc.getString("displayName") ?: ""
                     val dbHasActiveSubscription = doc.getBoolean("hasActiveSubscription") ?: false
+                    val dbSubscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
                     val dbIsPendingValidation = doc.getBoolean("isPendingValidation") ?: false
                     val dbPaymentPhoneNumber = doc.getString("paymentPhoneNumber")
                     val dbTransactionId = doc.getString("transactionId")
@@ -1201,6 +1572,7 @@ class SchoolViewModel(
                         financierPasswordHash = dbFinancierPassword,
                         displayName = dbDisplayName,
                         hasActiveSubscription = dbHasActiveSubscription,
+                        subscriptionExpiryDate = dbSubscriptionExpiryDate,
                         isPendingValidation = dbIsPendingValidation,
                         paymentPhoneNumber = dbPaymentPhoneNumber,
                         transactionId = dbTransactionId,
@@ -1215,11 +1587,22 @@ class SchoolViewModel(
                     if (signedInAsFounder && dbFinancierPassword.isNotEmpty()) {
                         syncFinancierAuthAccount(cleanEmail, dbFounderPassword, dbFinancierPassword)
                     }
+                } else {
+                    // Document doesn't exist online, meaning this Auth account is orphaned (deleted by admin)
+                    try {
+                        auth.currentUser?.delete()?.await()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                    auth.signOut()
+                    repository.deleteSchoolAccountAndData(cleanEmail)
+                    _loginError.value = "Ce compte a été supprimé. Les données ont été effacées, vous pouvez vous réinscrire."
+                    return false
                 }
 
                 // Retrieve account from Room to set StateFlow values
                 val account = repository.getSchoolAccountByName(cleanEmail)
-                if (account != null) {
+                if (account != null && doc.exists()) {
                     _userRole.value = resolvedRole
                     _currentSchoolId.value = account.id
                     _schoolName.value = account.displayName.ifEmpty { account.schoolName }
@@ -1238,6 +1621,7 @@ class SchoolViewModel(
             var dbSchoolName = ""
             var dbDisplayName = ""
             var dbHasActiveSubscription = false
+            var dbSubscriptionExpiryDate = 0L
             var dbIsPendingValidation = false
             var dbPaymentPhoneNumber: String? = null
             var dbTransactionId: String? = null
@@ -1263,6 +1647,7 @@ class SchoolViewModel(
                     dbSchoolName = doc.getString("schoolName") ?: cleanEmail
                     dbDisplayName = doc.getString("displayName") ?: ""
                     dbHasActiveSubscription = doc.getBoolean("hasActiveSubscription") ?: false
+                    dbSubscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
                     dbIsPendingValidation = doc.getBoolean("isPendingValidation") ?: false
                     dbPaymentPhoneNumber = doc.getString("paymentPhoneNumber")
                     dbTransactionId = doc.getString("transactionId")
@@ -1270,6 +1655,11 @@ class SchoolViewModel(
                     dbCreatedAt = doc.getLong("createdAt")
                     dbAddress = doc.getString("address") ?: ""
                     dbFounderPhone = doc.getString("founderPhone") ?: ""
+                } else {
+                    // Document clearly doesn't exist online. Delete local account if it exists.
+                    repository.deleteSchoolAccountAndData(cleanEmail)
+                    _loginError.value = "Ce compte a été supprimé ou n'existe pas."
+                    return false
                 }
             } catch (ex: Exception) {
                 ex.printStackTrace()
@@ -1314,6 +1704,7 @@ class SchoolViewModel(
                             financierPasswordHash = dbFinancierPassword,
                             displayName = dbDisplayName,
                             hasActiveSubscription = dbHasActiveSubscription,
+                        subscriptionExpiryDate = dbSubscriptionExpiryDate,
                             isPendingValidation = dbIsPendingValidation,
                             paymentPhoneNumber = dbPaymentPhoneNumber,
                             transactionId = dbTransactionId,
@@ -1403,6 +1794,98 @@ class SchoolViewModel(
         }
     }
 
+
+    private fun updateStudentFinancialsInRTDB(schoolId: Int, studentId: Int) {
+        viewModelScope.launch {
+            try {
+                val student = repository.getAllStudentsDirect(schoolId).find { it.id == studentId } ?: return@launch
+                val payments = repository.getAllPaymentsDirect(schoolId).filter { it.studentId == studentId }
+                val classFeeAmount = _classFees.value.find { it.grade == student.grade }?.feeAmount ?: 0L
+                val totalFee = classFeeAmount + student.registrationFee + student.reenrollmentFee
+                val paidFee = payments.sumOf { it.amount }
+                
+                val matricule = if (!student.remoteId.isNullOrEmpty() && student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
+                
+                val database = FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                val studentRef = database.getReference("students").child(matricule)
+                val updates = mapOf(
+                    "totalFee" to totalFee,
+                    "paidFee" to paidFee
+                )
+                studentRef.updateChildren(updates)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+
+    fun syncStudentAcademicsToRTDB(schoolId: Int, studentId: Int, term: String) {
+        viewModelScope.launch {
+            try {
+                val student = repository.getAllStudentsDirect(schoolId).find { it.id == studentId } ?: return@launch
+                val classStudents = repository.getAllStudentsDirect(schoolId).filter { it.grade == student.grade && it.section == student.section }
+                val subjectsList = repository.getAllSubjectsDirect(schoolId).filter { it.grade == student.grade && it.section == student.section }
+                val allGradesForClass = repository.getAllGradesDirect(schoolId).filter { g -> classStudents.any { it.id == g.studentId } && g.term == term }
+                
+                val summary = com.example.ui.util.ReportCardPdfUtils.calculateSummary(
+                    student = student,
+                    term = term,
+                    allStudentsInClass = classStudents,
+                    subjects = subjectsList,
+                    allGradesForClassAndTerm = allGradesForClass
+                )
+                
+                val matricule = if (!student.remoteId.isNullOrEmpty() && student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
+                
+                val database = FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                
+                // Build subject data
+                val studentGrades = allGradesForClass.filter { it.studentId == studentId }
+                val subjectsMap = mutableMapOf<String, Any>()
+                
+                for (sub in subjectsList) {
+                    val g = studentGrades.find { it.subjectId == sub.id }
+                    if (g != null) {
+                        val eval = g.evaluationScore
+                        val exam = g.examScore
+                        
+                        val subAvg = when {
+                            eval != null && exam != null -> (eval + exam * 2f) / 3f
+                            eval != null -> eval
+                            exam != null -> exam
+                            else -> null
+                        }
+                        
+                        if (subAvg != null) {
+                            subjectsMap[sub.name] = mapOf(
+                                "eval" to (eval ?: ""),
+                                "exam" to (exam ?: ""),
+                                "avg" to String.format(java.util.Locale.US, "%.2f", subAvg),
+                                "max" to sub.maxScore,
+                                "coef" to sub.coefficient
+                            )
+                        }
+                    }
+                }
+                
+                val termData = mapOf(
+                    "avg" to String.format(java.util.Locale.US, "%.2f", summary.average),
+                    "rank" to summary.rank,
+                    "size" to summary.classSize,
+                    "mention" to summary.mention,
+                    "subjects" to subjectsMap
+                )
+                
+                val studentRef = database.getReference("students").child(matricule).child("academics").child(term)
+                studentRef.setValue(termData)
+                
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun logout() {
         activeListeners.forEach { it.remove() }
         activeListeners.clear()
@@ -1426,20 +1909,61 @@ class SchoolViewModel(
         val email = sharedPrefs.getString("last_email", null) ?: return
         viewModelScope.launch {
             val db = FirebaseFirestore.getInstance()
+            val newExpiryDate = System.currentTimeMillis() + 31536000000L
             try {
                 db.collection("schools").document(email).update(
                     mapOf(
                         "hasActiveSubscription" to true,
+                        "subscriptionExpiryDate" to newExpiryDate,
                         "isPendingValidation" to false
                     )
                 )
             } catch (e: Exception) {
                 e.printStackTrace()
             }
-            repository.activateSubscription(schoolId)
+            repository.activateSubscription(schoolId, newExpiryDate)
         }
     }
     
+    private val _pendingOrderId = MutableStateFlow<String?>(null)
+    val pendingOrderId: StateFlow<String?> = _pendingOrderId.asStateFlow()
+
+    fun savePendingOrderId(orderId: String) {
+        sharedPrefs.edit().putString("pending_order_id", orderId).apply()
+        _pendingOrderId.value = orderId
+    }
+    
+    fun getPendingOrderId(): String? {
+        val orderId = sharedPrefs.getString("pending_order_id", null)
+        _pendingOrderId.value = orderId
+        return orderId
+    }
+    
+    fun clearPendingOrderId() {
+        sharedPrefs.edit().remove("pending_order_id").apply()
+        _pendingOrderId.value = null
+    }
+    
+    fun checkPendingPaymentStatus(onResult: ((String) -> Unit)? = null) {
+        val orderId = getPendingOrderId()
+        if (orderId == null) {
+            onResult?.invoke("NONE")
+            return
+        }
+        viewModelScope.launch {
+            val status = com.example.utils.ChapChapPayApi.checkOrderStatus(orderId)
+            if (status == "SUCCESS") {
+                activateSubscription()
+                clearPendingOrderId()
+            } else if (status == "FAILED") {
+                clearPendingOrderId()
+            }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onResult?.invoke(status)
+            }
+        }
+    }
+
     fun submitSubscriptionRequest(phoneNumber: String, transactionId: String) {
         val schoolId = _currentSchoolId.value ?: return
         val email = sharedPrefs.getString("last_email", null) ?: return
@@ -1517,6 +2041,7 @@ class SchoolViewModel(
                     val schoolName = doc.getString("schoolName") ?: email
                     val displayName = doc.getString("displayName") ?: ""
                     val hasActiveSubscription = doc.getBoolean("hasActiveSubscription") ?: false
+                    val subscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
                     val isPendingValidation = doc.getBoolean("isPendingValidation") ?: false
                     val paymentPhoneNumber = doc.getString("paymentPhoneNumber")
                     val transactionId = doc.getString("transactionId")
@@ -1530,6 +2055,7 @@ class SchoolViewModel(
                         schoolName = schoolName,
                         displayName = displayName,
                         hasActiveSubscription = hasActiveSubscription,
+                        subscriptionExpiryDate = subscriptionExpiryDate,
                         isPendingValidation = isPendingValidation,
                         paymentPhoneNumber = paymentPhoneNumber,
                         transactionId = transactionId,
@@ -1552,6 +2078,7 @@ class SchoolViewModel(
                 db.collection("schools").document(email).update(
                     mapOf(
                         "hasActiveSubscription" to true,
+                        "subscriptionExpiryDate" to System.currentTimeMillis() + 31536000000L,
                         "isPendingValidation" to false,
                         "rejectionReason" to null
                     )
@@ -1612,6 +2139,7 @@ data class SchoolAdminItem(
     val schoolName: String,
     val displayName: String,
     val hasActiveSubscription: Boolean,
+    val subscriptionExpiryDate: Long = 0L,
     val isPendingValidation: Boolean,
     val paymentPhoneNumber: String?,
     val transactionId: String?,
