@@ -5,10 +5,307 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ScolaPay - Portail Parent</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <style>
+:root {
+    --primary: #1D4ED8; /* blue-700 */
+    --primary-light: #EFF6FF;
+    --success: #10B981;
+    --danger: #EF4444;
+    --warning: #F59E0B;
+    --text-main: #111827;
+    --text-muted: #6B7280;
+    --bg-main: #F3F4F6;
+    --bg-card: #FFFFFF;
+    --border: #E5E7EB;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.app-container {
+    width: 100%;
+    max-width: 480px;
+    background-color: var(--bg-main);
+    min-height: 100vh;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+.app-header {
+    background-color: var(--primary);
+    color: white;
+    padding: 2rem 1.5rem 2rem 1.5rem;
+    text-align: center;
+    border-bottom-left-radius: 24px;
+    border-bottom-right-radius: 24px;
+}
+
+.app-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.subtitle {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin-top: 0.25rem;
+}
+
+main {
+    padding: 0 1rem;
+    margin-top: 1rem;
+}
+
+.welcome-section {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+.welcome-section h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.balance-card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border: 2px solid var(--primary);
+}
+.balance-card h3 {
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+.balance-card .amount {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 1.5rem;
+}
+.btn {
+    width: 100%;
+    padding: 1rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+}
+.btn-primary:hover {
+    background-color: #1E3A8A;
+}
+.btn-outline {
+    background: transparent;
+    border: 2px solid var(--primary);
+    color: var(--primary);
+}
+.btn-outline:hover {
+    background: var(--primary-light);
+}
+.mt-2 { margin-top: 0.75rem; }
+
+.action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+.action-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1rem 0.5rem;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    cursor: pointer;
+    transition: transform 0.1s;
+    border: 1px solid var(--border);
+}
+.action-card:active {
+    transform: scale(0.95);
+}
+.action-card .icon {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+}
+.action-card span {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-main);
+    display: block;
+}
+
+.card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.financials h3, .academic h3 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: var(--text-main);
+    text-align: center;
+}
+
+.progress-container {
+    height: 8px;
+    background-color: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--success);
+    width: 0%;
+    transition: width 1s ease-in-out;
+}
+
+.progress-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-align: right;
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.academic-grid {
+    grid-template-columns: 1fr 1fr;
+}
+
+.stat-box {
+    background-color: var(--bg-main);
+    padding: 1rem 0.5rem;
+    border-radius: 12px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-box .label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.stat-box .value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.stat-box .sub-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.stat-box.success .value { color: var(--success); }
+.stat-box.danger .value { color: var(--danger); }
+.stat-box.primary .value { color: var(--primary); font-size: 1.5rem; }
+
+.mention-box {
+    margin-top: 1rem;
+    background-color: var(--primary-light);
+    padding: 0.75rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--primary);
+    text-align: center;
+}
+
+.loading-state, .error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+}
+
+.spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border-left-color: var(--primary);
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 16px;
+    text-align: center;
+    position: relative;
+    width: 90%;
+    max-width: 320px;
+}
+.close {
+    position: absolute;
+    top: 1rem; right: 1.5rem;
+    font-size: 2rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+#qrCodeContainer img {
+    margin: 1rem auto;
+    width: 200px;
+    height: 200px;
+}
+    </style>
 </head>
 <body>
-
     <div class="app-container">
         <header class="app-header">
             <h1 id="schoolName">ScolaPay</h1>
@@ -91,7 +388,6 @@
                                 <tr>
                                     <th style="padding: 0.75rem; font-weight: 600;">Matière</th>
                                     <th style="padding: 0.75rem; font-weight: 600;">Éval.</th>
-                                    <th style="padding: 0.75rem; font-weight: 600;">Évaluation</th>
                                     <th style="padding: 0.75rem; font-weight: 600;">Moy.</th>
                                 </tr>
                             </thead>
@@ -127,7 +423,7 @@
         </div>
     </div>
 
-    
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=5"></script>
+
 </body>
 </html>

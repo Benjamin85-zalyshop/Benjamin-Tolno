@@ -197,18 +197,24 @@ document.addEventListener("DOMContentLoaded", () => {
                                 tdEval.style.padding = "0.75rem";
                                 tdEval.textContent = subjData.eval;
                                 
-                                const tdExam = document.createElement('td');
-                                tdExam.style.padding = "0.75rem";
-                                tdExam.textContent = subjData.exam;
-                                
                                 const tdAvg = document.createElement('td');
                                 tdAvg.style.padding = "0.75rem";
                                 tdAvg.style.fontWeight = "600";
                                 tdAvg.textContent = subjData.avg;
                                 
+                                const maxScore = parseFloat(subjData.max) || 20;
+                                const avgScore = parseFloat(subjData.avg);
+                                if (!isNaN(avgScore) && avgScore < maxScore / 2) {
+                                    tdAvg.style.color = "var(--danger)";
+                                }
+                                
+                                const evalScore = parseFloat(subjData.eval);
+                                if (!isNaN(evalScore) && evalScore < maxScore / 2) {
+                                    tdEval.style.color = "var(--danger)";
+                                }
+                                
                                 tr.appendChild(tdName);
                                 tr.appendChild(tdEval);
-                                tr.appendChild(tdExam);
                                 tr.appendChild(tdAvg);
                                 
                                 tbody.appendChild(tr);

@@ -44,14 +44,7 @@ object ReportCardPdfUtils {
             for (sub in subjects) {
                 val g = stGrades.find { it.subjectId == sub.id }
                 if (g != null) {
-                    val eval = g.evaluationScore
-                    val exam = g.examScore
-                    val subAvg = when {
-                        eval != null && exam != null -> (eval + exam * 2f) / 3f
-                        eval != null -> eval
-                        exam != null -> exam
-                        else -> null
-                    }
+                    val subAvg = g.evaluationScore
                     if (subAvg != null) {
                         points += subAvg * sub.coefficient
                         coeffSum += sub.coefficient
@@ -87,14 +80,7 @@ object ReportCardPdfUtils {
         for (sub in subjects) {
             val g = myGrades.find { it.subjectId == sub.id }
             if (g != null) {
-                val eval = g.evaluationScore
-                val exam = g.examScore
-                val subAvg = when {
-                    eval != null && exam != null -> (eval + exam * 2f) / 3f
-                    eval != null -> eval
-                    exam != null -> exam
-                    else -> null
-                }
+                val subAvg = g.evaluationScore
                 if (subAvg != null) {
                     myTotalPoints += subAvg * sub.coefficient
                     myTotalCoeff += sub.coefficient
@@ -316,7 +302,7 @@ object ReportCardPdfUtils {
 
             val scaledSubAvg = if (isPrimary && subAvg != null) subAvg * 2f else subAvg
             paint.isFakeBoldText = true
-            paint.color = if (subAvg != null && ((isPrimary && subAvg < 5f) || (!isPrimary && subAvg < 10f))) Color.parseColor("#DC2626") else Color.parseColor("#0F56E3")
+            paint.color = if (subAvg != null && subAvg < (sub.maxScore / 2f)) Color.parseColor("#DC2626") else Color.parseColor("#0F56E3")
             canvas.drawText(avgStr, tableLeft + 290f, startY + 15f, paint)
 
             paint.isFakeBoldText = false

@@ -197,10 +197,6 @@ document.addEventListener("DOMContentLoaded", () => {
                                 tdEval.style.padding = "0.75rem";
                                 tdEval.textContent = subjData.eval;
                                 
-                                const tdExam = document.createElement('td');
-                                tdExam.style.padding = "0.75rem";
-                                tdExam.textContent = subjData.exam;
-                                
                                 const tdAvg = document.createElement('td');
                                 tdAvg.style.padding = "0.75rem";
                                 tdAvg.style.fontWeight = "600";
@@ -217,14 +213,8 @@ document.addEventListener("DOMContentLoaded", () => {
                                     tdEval.style.color = "var(--danger)";
                                 }
                                 
-                                const examScore = parseFloat(subjData.exam);
-                                if (!isNaN(examScore) && examScore < maxScore / 2) {
-                                    tdExam.style.color = "var(--danger)";
-                                }
-                                
                                 tr.appendChild(tdName);
                                 tr.appendChild(tdEval);
-                                tr.appendChild(tdExam);
                                 tr.appendChild(tdAvg);
                                 
                                 tbody.appendChild(tr);

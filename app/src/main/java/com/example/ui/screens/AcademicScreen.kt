@@ -666,12 +666,8 @@ private fun GradesEntryTab(
                     var evalText by remember(studentGradeObj) {
                         mutableStateOf(studentGradeObj?.evaluationScore?.let { String.format(Locale.US, "%.1f", it) } ?: "")
                     }
-                    var examText by remember(studentGradeObj) {
-                        mutableStateOf(studentGradeObj?.examScore?.let { String.format(Locale.US, "%.1f", it) } ?: "")
-                    }
 
                     val evalVal = evalText.toFloatOrNull()
-                    val examVal = examText.toFloatOrNull()
                     val averageVal = evalVal
 
                     Card(
@@ -748,7 +744,10 @@ private fun GradesEntryTab(
                                     label = { Text("Note (/${sub.maxScore.toInt()})") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
+                                    textStyle = androidx.compose.ui.text.TextStyle(
+                                        color = if (evalVal != null && evalVal < (sub.maxScore / 2f)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                                    )
                                 )
 
                                 IconButton(

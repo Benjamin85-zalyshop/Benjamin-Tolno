@@ -1848,20 +1848,12 @@ class SchoolViewModel(
                     val g = studentGrades.find { it.subjectId == sub.id }
                     if (g != null) {
                         val eval = g.evaluationScore
-                        val exam = g.examScore
-                        
-                        val subAvg = when {
-                            eval != null && exam != null -> (eval + exam * 2f) / 3f
-                            eval != null -> eval
-                            exam != null -> exam
-                            else -> null
-                        }
+                        val subAvg = eval
                         
                         if (subAvg != null) {
                             val safeSubName = sub.name.replace(Regex("[.#$\\[\\]/]"), "-")
                             subjectsMap[safeSubName] = mapOf(
                                 "eval" to (eval ?: ""),
-                                "exam" to (exam ?: ""),
                                 "avg" to String.format(java.util.Locale.US, "%.2f", subAvg),
                                 "max" to sub.maxScore,
                                 "coef" to sub.coefficient
