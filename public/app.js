@@ -206,6 +206,22 @@ document.addEventListener("DOMContentLoaded", () => {
                                 tdAvg.style.fontWeight = "600";
                                 tdAvg.textContent = subjData.avg;
                                 
+                                const maxScore = parseFloat(subjData.max) || 20;
+                                const avgScore = parseFloat(subjData.avg);
+                                if (!isNaN(avgScore) && avgScore < maxScore / 2) {
+                                    tdAvg.style.color = "var(--danger)";
+                                }
+                                
+                                const evalScore = parseFloat(subjData.eval);
+                                if (!isNaN(evalScore) && evalScore < maxScore / 2) {
+                                    tdEval.style.color = "var(--danger)";
+                                }
+                                
+                                const examScore = parseFloat(subjData.exam);
+                                if (!isNaN(examScore) && examScore < maxScore / 2) {
+                                    tdExam.style.color = "var(--danger)";
+                                }
+                                
                                 tr.appendChild(tdName);
                                 tr.appendChild(tdEval);
                                 tr.appendChild(tdExam);

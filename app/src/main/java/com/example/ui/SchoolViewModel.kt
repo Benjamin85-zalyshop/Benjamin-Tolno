@@ -1858,7 +1858,8 @@ class SchoolViewModel(
                         }
                         
                         if (subAvg != null) {
-                            subjectsMap[sub.name] = mapOf(
+                            val safeSubName = sub.name.replace(Regex("[.#$\\[\\]/]"), "-")
+                            subjectsMap[safeSubName] = mapOf(
                                 "eval" to (eval ?: ""),
                                 "exam" to (exam ?: ""),
                                 "avg" to String.format(java.util.Locale.US, "%.2f", subAvg),

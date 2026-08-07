@@ -101,10 +101,11 @@ fun AcademicScreen(
             val student = selectedStudentForBulletin ?: return@rememberLauncherForActivityResult
             val classSubjects = subjects.filter { it.section == student.section && it.grade == student.grade }
             val classGrades = grades.filter { it.term == selectedTerm }
+            val allClassStudents = students.filter { it.grade == student.grade && it.section == student.section }
             val summary = ReportCardPdfUtils.calculateSummary(
                 student = student,
                 term = selectedTerm,
-                allStudentsInClass = filteredStudentsForGrade,
+                allStudentsInClass = allClassStudents,
                 subjects = classSubjects,
                 allGradesForClassAndTerm = classGrades
             )
@@ -882,8 +883,8 @@ private fun BulletinPdfTab(
                 ReportCardPdfUtils.calculateSummary(
                     student = st,
                     term = selectedTerm,
-                    allStudentsInClass = students,
-                    subjects = subjects,
+                    allStudentsInClass = students.filter { it.grade == st.grade && it.section == st.section },
+                    subjects = subjects.filter { it.grade == st.grade && it.section == st.section },
                     allGradesForClassAndTerm = classGrades
                 )
             }

@@ -1,0 +1,15 @@
+{
+  "avg": "7.00",
+  "rank": 1,
+  "size": 1,
+  "mention": "Encouragements",
+  "subjects": {
+    "Calcul": { "eval": "", "exam": 4, "avg": "4.00", "max": 10, "coef": 1 },
+    "Dessin": { "eval": "", "exam": 10, "avg": "10.00", "max": 10, "coef": 1 },
+    "Ecriture": { "eval": "", "exam": 5, "avg": "5.00", "max": 10, "coef": 1 },
+    "Exercice Sensoriels": { "eval": "", "exam": 9, "avg": "9.00", "max": 10, "coef": 1 },
+    "Langage": { "eval": "", "exam": 5, "avg": "5.00", "max": 10, "coef": 1 },
+    "Lecture": { "eval": "", "exam": 10, "avg": "10.00", "max": 10, "coef": 1 },
+    "Récitation-Chant": { "eval": "", "exam": 6, "avg": "6.00", "max": 10, "coef": 1 }
+  }
+}
