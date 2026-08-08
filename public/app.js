@@ -28,6 +28,21 @@ window.toggleSection = function(id) {
     }
 };
 
+window.downloadPdf = function() {
+    const element = document.getElementById('academicSection');
+    const btn = document.getElementById('downloadPdfBtn');
+    if (btn) btn.style.display = 'none';
+    const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: 'bulletin_de_notes.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save().then(() => {
+        if (btn) btn.style.display = 'block';
+    });
+};
 window.showQrBadge = function() {
     const urlParams = new URLSearchParams(window.location.search);
     const rawUrl = window.location.href; 
@@ -228,18 +243,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
-
-    document.getElementById('downloadPdfBtn')?.addEventListener('click', () => {
-        const element = document.getElementById('academicSection');
-        const opt = {
-            margin: 1,
-            filename: 'bulletin_de_notes.pdf',
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2 },
-            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-        };
-        html2pdf().set(opt).from(element).save();
-    });
 
     // Afficher le contenu
     setTimeout(() => {
