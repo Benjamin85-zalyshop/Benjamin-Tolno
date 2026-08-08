@@ -32,15 +32,38 @@ window.downloadPdf = function() {
     const element = document.getElementById('academicSection');
     const btn = document.getElementById('downloadPdfBtn');
     if (btn) btn.style.display = 'none';
+    const originalScroll = window.scrollY;
+    window.scrollTo(0, 0);
+    const tableContainer = element.querySelector('div[style*="overflow-x"]');
+    const oldOverflow = tableContainer ? tableContainer.style.overflowX : '';
+    if (tableContainer) tableContainer.style.overflowX = 'visible';
+    const oldBg = element.style.backgroundColor;
+    element.style.backgroundColor = '#ffffff';
     const opt = {
-        margin: [0.5, 0.5, 0.5, 0.5],
+        margin: 10,
         filename: 'bulletin_de_notes.pdf',
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
+    setTimeout(() => {
+        html2pdf().set(opt).from(element).save().then(() => {
+            if (btn) btn.style.display = 'block';
+            if (tableContainer) tableContainer.style.overflowX = oldOverflow;
+            element.style.backgroundColor = oldBg;
+            window.scrollTo(0, originalScroll);
+        }).catch(err => {
+            console.error(err);
+            if (btn) btn.style.display = 'block';
+            if (tableContainer) tableContainer.style.overflowX = oldOverflow;
+            element.style.backgroundColor = oldBg;
+            window.scrollTo(0, originalScroll);
+        });
+    }, 300);
+};
     html2pdf().set(opt).from(element).save().then(() => {
         if (btn) btn.style.display = 'block';
+        window.scrollTo(0, originalScroll);
     });
 };
 window.showQrBadge = function() {
