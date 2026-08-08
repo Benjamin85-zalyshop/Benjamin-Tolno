@@ -61,11 +61,6 @@ window.downloadPdf = function() {
         });
     }, 300);
 };
-    html2pdf().set(opt).from(element).save().then(() => {
-        if (btn) btn.style.display = 'block';
-        window.scrollTo(0, originalScroll);
-    });
-};
 window.showQrBadge = function() {
     const urlParams = new URLSearchParams(window.location.search);
     const rawUrl = window.location.href; 
