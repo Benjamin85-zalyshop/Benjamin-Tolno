@@ -113,6 +113,9 @@ window.downloadPdf = function() {
     template.style.position = 'absolute';
     template.style.top = '0px';
     template.style.left = '0px';
+    template.style.width = '800px';
+    template.style.transform = 'scale(1)';
+    template.style.transformOrigin = 'top left';
     template.style.zIndex = '999998'; // Just below overlay
     
     setTimeout(() => {
@@ -121,7 +124,7 @@ window.downloadPdf = function() {
             margin: [10, 0, 10, 0],
             filename: 'bulletin_de_notes.pdf',
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowWidth: 1000 },
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0, windowWidth: 800 },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         html2pdf().set(opt).from(elementToCapture).save().then(() => {
