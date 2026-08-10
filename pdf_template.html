@@ -1,0 +1,85 @@
+    <!-- PDF Template (Hidden) -->
+    <div id="pdfTemplate" style="display: none;">
+        <div id="pdfContent" style="width: 800px; padding: 20px; font-family: 'Inter', sans-serif; background: #fff; box-sizing: border-box; color: #111827;">
+            <!-- Header -->
+            <div style="background-color: #0047FF; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div style="width: 60px; height: 60px; background: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #0047FF; font-size: 24px;">
+                        Z
+                    </div>
+                    <div>
+                        <h1 style="margin: 0; font-size: 24px; font-weight: bold;">SALOME</h1>
+                        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">N'Zerekore • 625667522</p>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <h2 style="margin: 0; font-size: 20px; font-weight: bold;">BULLETIN DE NOTES</h2>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;" id="pdfTermInfo"></p>
+                </div>
+            </div>
+
+            <!-- Student Info -->
+            <div style="border: 1px solid #E5E7EB; border-top: none; border-radius: 0 0 8px 8px; padding: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #F9FAFB;">
+                <div style="display: flex; gap: 20px; align-items: center;">
+                    <div style="width: 80px; height: 80px; background: #E5E7EB; border-radius: 8px; overflow: hidden; display: flex; justify-content: center; align-items: center; color: #6B7280; font-size: 12px;">
+                        <span id="pdfStudentPhotoPlaceholder">Photo</span>
+                    </div>
+                    <div>
+                        <h2 id="pdfStudentName" style="margin: 0 0 8px 0; font-size: 20px; font-weight: bold; color: #111827; text-transform: uppercase;"></h2>
+                        <p style="margin: 0 0 4px 0; font-size: 14px; color: #0047FF; font-weight: 600;">Matricule : #<span id="pdfStudentMat"></span></p>
+                        <p style="margin: 0; font-size: 14px; color: #4B5563;">Section : <span id="pdfStudentSection"></span> &nbsp;|&nbsp; Classe : <span id="pdfStudentGrade"></span></p>
+                    </div>
+                </div>
+                <div style="text-align: center;">
+                    <div id="pdfQrCode" style="width: 70px; height: 70px; background: white; padding: 5px; border: 1px solid #E5E7EB; border-radius: 4px; display: inline-flex; justify-content: center; align-items: center;">
+                    </div>
+                    <div style="font-size: 9px; color: #6B7280; margin-top: 4px;">VERIF. SCANNABLE</div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden;">
+                <thead>
+                    <tr style="background: #0047FF; color: white;">
+                        <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 13px; text-transform: uppercase;">MATIÈRE</th>
+                        <th style="padding: 10px 16px; text-align: center; font-weight: 600; font-size: 13px; text-transform: uppercase;">COEFF</th>
+                        <th style="padding: 10px 16px; text-align: center; font-weight: 600; font-size: 13px; text-transform: uppercase;">NOTE (/10)</th>
+                        <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 13px; text-transform: uppercase;">APPRÉCIATION / REMARQUE</th>
+                    </tr>
+                </thead>
+                <tbody id="pdfSubjectsTableBody">
+                </tbody>
+            </table>
+
+            <!-- Summary -->
+            <div style="border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; display: flex; justify-content: space-between; align-items: center; background: #F9FAFB; margin-bottom: 40px;">
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #111827; text-transform: uppercase;">RÉCAPITULATIF DES RÉSULTATS</h3>
+                    <p style="margin: 0 0 6px 0; font-size: 13px; color: #4B5563;">Total Coefficients : <span id="pdfTotalCoeff">-</span></p>
+                    <p style="margin: 0 0 6px 0; font-size: 13px; color: #4B5563;">Total Points : <span id="pdfTotalPoints">-</span></p>
+                    <p style="margin: 0; font-size: 13px; color: #4B5563;">Moyenne de la Classe : <span id="pdfClassAvg">-</span></p>
+                </div>
+                <div style="flex: 1; text-align: center; border-left: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #0047FF; text-transform: uppercase;">MOYENNE GÉNÉRALE</h3>
+                    <div style="font-size: 32px; font-weight: bold; color: #0047FF; margin-bottom: 8px;" id="pdfAvg"></div>
+                    <div style="font-size: 14px; color: #111827; font-weight: 600;">Rang : <span id="pdfRank"></span></div>
+                </div>
+                <div style="flex: 1; padding-left: 20px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #111827; text-transform: uppercase;">MENTION DU CONSEIL</h3>
+                    <div style="font-size: 16px; font-weight: bold; color: #991B1B;" id="pdfAppreciation"></div>
+                </div>
+            </div>
+
+            <!-- Signatures -->
+            <div style="display: flex; justify-content: space-between; padding: 0 20px;">
+                <div>
+                    <div style="font-weight: 600; font-size: 14px; color: #111827;">Le Parent d'Élève</div>
+                    <div style="font-size: 12px; color: #9CA3AF; margin-top: 4px;">(Signature)</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-weight: 600; font-size: 14px; color: #111827;">Le Chef d'Établissement & Cachet</div>
+                    <div style="font-size: 12px; color: #9CA3AF; margin-top: 4px;">(Signature et Sceau Officiel)</div>
+                </div>
+            </div>
+        </div>
+    </div>
