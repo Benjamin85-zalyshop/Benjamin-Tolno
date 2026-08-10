@@ -33,19 +33,25 @@ window.downloadPdf = function() {
     if (btn) btn.style.display = 'none';
     const urlParams = new URLSearchParams(window.location.search);
     const term = urlParams.get('term') || '1er Trimestre';
+    const schoolName = urlParams.get('school') || 'ScolaPay';
+    document.getElementById('pdfSchoolName').textContent = schoolName;
+    document.getElementById('pdfSchoolLogoInitial').textContent = schoolName.charAt(0).toUpperCase();
     document.getElementById('pdfTermInfo').textContent = `${term} • Année : 2025 - 2026`;
     document.getElementById('pdfStudentName').textContent = urlParams.get('name') || 'Élève';
     document.getElementById('pdfStudentMat').textContent = urlParams.get('mat') || 'N/A';
     document.getElementById('pdfStudentSection').textContent = urlParams.get('section') || 'LE PRIMAIRE';
     document.getElementById('pdfStudentGrade').textContent = urlParams.get('grade') || '2ème Année';
+    
     const qrData = encodeURIComponent(window.location.href);
     document.getElementById('pdfQrCode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}" alt="QR" style="width:100%;height:100%;" crossorigin="anonymous">`;
+    
     const avg = document.getElementById('academicAvg').textContent;
     document.getElementById('pdfAvg').textContent = avg + ' / 10';
     const rank = document.getElementById('academicRank').textContent;
     document.getElementById('pdfRank').textContent = rank + 'er sur 1 élèves';
     const apprec = document.getElementById('academicAppreciation');
     document.getElementById('pdfAppreciation').textContent = apprec ? apprec.textContent.replace('Appréciation : ', '') : 'Encouragements';
+    
     const origTbody = document.getElementById('subjectsTableBody');
     const pdfTbody = document.getElementById('pdfSubjectsTableBody');
     pdfTbody.innerHTML = '';
@@ -81,29 +87,56 @@ window.downloadPdf = function() {
     document.getElementById('pdfTotalCoeff').textContent = totalCoeff;
     document.getElementById('pdfTotalPoints').textContent = totalPoints.toFixed(2);
     document.getElementById('pdfClassAvg').textContent = avg + ' / 10';
+    
     const template = document.getElementById('pdfTemplate');
+    const originalScroll = window.scrollY;
+    
+    // Create an overlay to hide the template from the user while rendering
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100vw';
+    overlay.style.height = '100vh';
+    overlay.style.backgroundColor = '#ffffff';
+    overlay.style.zIndex = '999999';
+    overlay.style.display = 'flex';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.style.flexDirection = 'column';
+    overlay.innerHTML = '<div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #0047FF; border-radius: 50%; animation: spin 1s linear infinite;"></div><p style="margin-top: 20px; font-family: Inter, sans-serif; font-weight: 600; color: #111827;">Génération du PDF...</p><style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>';
+    document.body.appendChild(overlay);
+
+    window.scrollTo(0, 0);
+    
     template.style.display = 'block';
     template.style.position = 'absolute';
-    template.style.top = '-9999px';
-    template.style.left = '-9999px';
+    template.style.top = '0px';
+    template.style.left = '0px';
+    template.style.zIndex = '999998'; // Just below overlay
+    
     setTimeout(() => {
         const elementToCapture = document.getElementById('pdfContent');
         const opt = {
             margin: [10, 0, 10, 0],
             filename: 'bulletin_de_notes.pdf',
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowWidth: 1000 },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         html2pdf().set(opt).from(elementToCapture).save().then(() => {
             if (btn) btn.style.display = 'block';
             template.style.display = 'none';
+            document.body.removeChild(overlay);
+            window.scrollTo(0, originalScroll);
         }).catch(err => {
             console.error(err);
             if (btn) btn.style.display = 'block';
             template.style.display = 'none';
+            document.body.removeChild(overlay);
+            window.scrollTo(0, originalScroll);
         });
-    }, 1000);
+    }, 1500); // Wait 1.5s for QR Code image to fully load
 };
 window.showQrBadge = function() {
     const urlParams = new URLSearchParams(window.location.search);

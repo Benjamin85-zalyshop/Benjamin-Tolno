@@ -1,6 +1,10 @@
 {
   "rules": {
-    ".read": "true",
-    ".write": "true"
+    "students": {
+      "$student_id": {
+        ".read": true,
+        ".write": "auth != null"
+      }
+    }
   }
 }
