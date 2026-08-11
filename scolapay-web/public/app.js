@@ -282,7 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (data.schoolLogo) {
                     window.schoolLogoBase64 = data.schoolLogo;
                     const logoContainer = document.getElementById('pdfSchoolLogoInitial').parentElement;
-                    logoContainer.innerHTML = '<img src="data:image/jpeg;base64,' + data.schoolLogo + '" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" crossorigin="anonymous">';
+                    logoContainer.innerHTML = '<img src="data:image/png;base64,' + data.schoolLogo + '" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" crossorigin="anonymous">';
                 }
 
 
