@@ -1808,10 +1808,17 @@ class SchoolViewModel(
                 
                 val database = FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
                 val studentRef = database.getReference("students").child(matricule)
-                val updates = mapOf(
+                val updates = mutableMapOf<String, Any>(
                     "totalFee" to totalFee,
                     "paidFee" to paidFee
                 )
+                if (!student.photoBase64.isNullOrBlank()) {
+                    updates["photoBase64"] = student.photoBase64
+                }
+                val logo = _schoolLogoBase64.value
+                if (!logo.isNullOrBlank()) {
+                    updates["schoolLogo"] = logo
+                }
                 studentRef.updateChildren(updates)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -1862,7 +1869,7 @@ class SchoolViewModel(
                     }
                 }
                 
-                val termData = mapOf(
+                val termData = mutableMapOf<String, Any>(
                     "avg" to String.format(java.util.Locale.US, "%.2f", summary.average),
                     "rank" to summary.rank,
                     "size" to summary.classSize,
@@ -1872,6 +1879,20 @@ class SchoolViewModel(
                 
                 val studentRef = database.getReference("students").child(matricule).child("academics").child(term)
                 studentRef.setValue(termData)
+                
+                // Sync photo and logo too
+                val rootStudentRef = database.getReference("students").child(matricule)
+                val profileUpdates = mutableMapOf<String, Any>()
+                if (!student.photoBase64.isNullOrBlank()) {
+                    profileUpdates["photoBase64"] = student.photoBase64
+                }
+                val logo = _schoolLogoBase64.value
+                if (!logo.isNullOrBlank()) {
+                    profileUpdates["schoolLogo"] = logo
+                }
+                if (profileUpdates.isNotEmpty()) {
+                    rootStudentRef.updateChildren(profileUpdates)
+                }
                 
             } catch (e: Exception) {
                 e.printStackTrace()

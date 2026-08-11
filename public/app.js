@@ -46,7 +46,7 @@ window.downloadPdf = function() {
     document.getElementById('pdfQrCode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}" alt="QR" style="width:100%;height:100%;" crossorigin="anonymous">`;
     
     const avg = document.getElementById('academicAvg').textContent;
-    document.getElementById('pdfAvg').textContent = avg + ' / 10';
+    document.getElementById('pdfAvg').textContent = avg;
     const rank = document.getElementById('academicRank').textContent;
     document.getElementById('pdfRank').textContent = rank + 'er sur 1 élèves';
     const apprec = document.getElementById('academicAppreciation');
@@ -86,7 +86,7 @@ window.downloadPdf = function() {
     }
     document.getElementById('pdfTotalCoeff').textContent = totalCoeff;
     document.getElementById('pdfTotalPoints').textContent = totalPoints.toFixed(2);
-    document.getElementById('pdfClassAvg').textContent = avg + ' / 10';
+    document.getElementById('pdfClassAvg').textContent = avg;
     
     const template = document.getElementById('pdfTemplate');
     const originalScroll = window.scrollY;
@@ -273,6 +273,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 updateFinancialUI(formatGNF(dbTotal), formatGNF(dbPaid), formatGNF(dbDue), dbPercent);
+
+                if (data.photoBase64) {
+                    window.studentPhotoBase64 = data.photoBase64;
+                    const photoContainer = document.getElementById('pdfStudentPhotoPlaceholder').parentElement;
+                    photoContainer.innerHTML = '<img src="data:image/jpeg;base64,' + data.photoBase64 + '" style="width:100%;height:100%;object-fit:cover;" crossorigin="anonymous">';
+                }
+                if (data.schoolLogo) {
+                    window.schoolLogoBase64 = data.schoolLogo;
+                    const logoContainer = document.getElementById('pdfSchoolLogoInitial').parentElement;
+                    logoContainer.innerHTML = '<img src="data:image/jpeg;base64,' + data.schoolLogo + '" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" crossorigin="anonymous">';
+                }
+
 
                 if (data.academics) {
                     const currentTerm = document.getElementById('academicTerm').textContent;
