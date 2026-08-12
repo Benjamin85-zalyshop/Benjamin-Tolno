@@ -311,7 +311,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     
                     if (termData) {
                         document.getElementById('academicSection').classList.remove('hidden');
-                        document.getElementById('academicAvg').textContent = termData.avg + ' / ' + (document.getElementById('academicAvg').textContent.split('/')[1] || '20').trim();
+                        let maxScore = 20;
+                        if (studentSection.toLowerCase().includes('primaire') || studentSection.toLowerCase().includes('maternelle')) {
+                            maxScore = 10;
+                        }
+                        document.getElementById('academicAvg').textContent = termData.avg + ' / ' + maxScore;
                         document.getElementById('academicRank').textContent = termData.rank + (termData.rank == '1' ? 'er' : 'ème');
                         document.getElementById('academicSize').textContent = termData.size;
                         document.getElementById('academicMention').textContent = termData.mention;
