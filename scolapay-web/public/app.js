@@ -284,6 +284,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     const logoContainer = document.getElementById('pdfSchoolLogoInitial').parentElement;
                     logoContainer.innerHTML = '<img src="data:image/png;base64,' + data.schoolLogo + '" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" crossorigin="anonymous">';
                 }
+                if (data.schoolName) {
+                    document.getElementById('schoolName').textContent = data.schoolName;
+                    document.getElementById('pdfSchoolName').textContent = data.schoolName;
+                }
+                if (data.schoolAddress) {
+                    document.getElementById('pdfSchoolContact').textContent = data.schoolAddress;
+                }
+                if (data.schoolYear) {
+                    document.getElementById('schoolYear').textContent = data.schoolYear;
+                }
 
 
                 if (data.academics) {

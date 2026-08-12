@@ -367,6 +367,12 @@ class SchoolViewModel(
                 if (!logo.isNullOrBlank()) {
                     updates["schoolLogo"] = logo
                 }
+                _schoolAccount.value?.let { acc ->
+                    updates["schoolName"] = acc.displayName.ifEmpty { acc.schoolName }
+                    updates["schoolAddress"] = acc.address
+                    updates["schoolPhone"] = acc.founderPhone
+                    updates["schoolYear"] = _selectedSchoolYear.value
+                }
                 studentRef.updateChildren(updates)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -411,7 +417,14 @@ class SchoolViewModel(
                 val students = _currentSchoolId.value?.let { repository.getAllStudentsDirect(it) } ?: emptyList()
                 for (s in students) {
                     val matricule = if (!s.remoteId.isNullOrEmpty() && s.remoteId.length >= 5) s.remoteId.take(5).uppercase() else s.id.toString()
-                    database.getReference("students").child(matricule).child("schoolLogo").setValue(base64 ?: "")
+                    val ref = database.getReference("students").child(matricule)
+                    ref.child("schoolLogo").setValue(base64 ?: "")
+                    _schoolAccount.value?.let { acc ->
+                        ref.child("schoolName").setValue(acc.displayName.ifEmpty { acc.schoolName })
+                        ref.child("schoolAddress").setValue(acc.address)
+                        ref.child("schoolPhone").setValue(acc.founderPhone)
+                        ref.child("schoolYear").setValue(_selectedSchoolYear.value)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -1848,6 +1861,12 @@ class SchoolViewModel(
                 if (!logo.isNullOrBlank()) {
                     updates["schoolLogo"] = logo
                 }
+                _schoolAccount.value?.let { acc ->
+                    updates["schoolName"] = acc.displayName.ifEmpty { acc.schoolName }
+                    updates["schoolAddress"] = acc.address
+                    updates["schoolPhone"] = acc.founderPhone
+                    updates["schoolYear"] = _selectedSchoolYear.value
+                }
                 studentRef.updateChildren(updates)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -1918,6 +1937,12 @@ class SchoolViewModel(
                 val logo = _schoolLogoBase64.value
                 if (!logo.isNullOrBlank()) {
                     profileUpdates["schoolLogo"] = logo
+                }
+                _schoolAccount.value?.let { acc ->
+                    profileUpdates["schoolName"] = acc.displayName.ifEmpty { acc.schoolName }
+                    profileUpdates["schoolAddress"] = acc.address
+                    profileUpdates["schoolPhone"] = acc.founderPhone
+                    profileUpdates["schoolYear"] = _selectedSchoolYear.value
                 }
                 if (profileUpdates.isNotEmpty()) {
                     rootStudentRef.updateChildren(profileUpdates)
