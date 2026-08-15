@@ -15,7 +15,8 @@ object ReceiptPrinter {
         student: Student,
         payment: Payment,
         schoolName: String,
-        classFee: Long
+        classFee: Long,
+        currency: String = "GNF"
     ) {
         try {
             val printer = SrPrinter.getInstance(context.applicationContext)
@@ -39,7 +40,7 @@ object ReceiptPrinter {
             printer.printText("Classe: ${student.grade}\n\n")
             
             val fmt = java.text.NumberFormat.getInstance(java.util.Locale("fr", "GN"))
-            printer.printText("Montant: ${fmt.format(payment.amount)} GNF\n")
+            printer.printText("Montant: ${fmt.format(payment.amount)} $currency\n")
             printer.printText("Motif: ${payment.reason}\n")
             printer.printText("Mode: ${payment.paymentMethod}\n\n")
             
@@ -61,7 +62,8 @@ object ReceiptPrinter {
         studentName: String,
         studentGrade: String,
         totalPaid: Long,
-        remaining: Long
+        remaining: Long,
+        currency: String = "GNF"
     ) {
         try {
             val printer = SrPrinter.getInstance(context.applicationContext)
@@ -84,8 +86,8 @@ object ReceiptPrinter {
             printer.printText("Classe: $studentGrade\n\n")
             
             val fmt = java.text.NumberFormat.getInstance(java.util.Locale("fr", "GN"))
-            printer.printText("TOTAL PAYE: ${fmt.format(totalPaid)} GNF\n")
-            printer.printText("RESTE: ${fmt.format(remaining)} GNF\n\n")
+            printer.printText("TOTAL PAYE: ${fmt.format(totalPaid)} $currency\n")
+            printer.printText("RESTE: ${fmt.format(remaining)} $currency\n\n")
             
             printer.setAlignment(1)
             printer.printText("Merci de votre confiance.\n")

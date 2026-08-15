@@ -47,6 +47,9 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         schoolDao.getAllGrades(schoolId)
 
     suspend fun insertGrade(grade: StudentGrade) = schoolDao.insertGrade(grade)
+    
+    suspend fun getExistingGrade(schoolId: Int, studentId: Int, subjectId: Int, term: String): StudentGrade? = 
+        schoolDao.getExistingGrade(schoolId, studentId, subjectId, term)
 
     suspend fun deleteGradeById(gradeId: Int) = schoolDao.deleteGradeById(gradeId)
 
@@ -69,6 +72,10 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         schoolDao.insertStudent(student)
     }
 
+    suspend fun updateStudent(student: Student) {
+        schoolDao.updateStudent(student)
+    }
+
     suspend fun insertPayment(payment: Payment) {
         schoolDao.insertPayment(payment)
     }
@@ -85,8 +92,12 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         schoolDao.deleteExpenseById(expenseId)
     }
 
-    suspend fun registerSchool(name: String, founderPassword: String, financierPassword: String, displayName: String = "", address: String = "", founderPhone: String = "") {
+    suspend fun registerSchool(name: String, founderPassword: String, financierPassword: String, displayName: String = "", address: String = "", founderPhone: String = "", currency: String = "GNF") {
         schoolDao.insertSchoolAccount(com.example.data.models.SchoolAccount(schoolName = name, passwordHash = founderPassword, financierPasswordHash = financierPassword, displayName = displayName, address = address, founderPhone = founderPhone))
+    }
+
+    suspend fun updateSchoolAccount(account: com.example.data.models.SchoolAccount) {
+        schoolDao.updateSchoolAccount(account)
     }
 
     suspend fun getSchoolAccountByName(name: String): com.example.data.models.SchoolAccount? {
@@ -104,6 +115,10 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
             schoolDao.deleteSubjectsBySchoolId(schoolId)
             schoolDao.deleteSchoolAccountByName(name)
         }
+    }
+
+    suspend fun getFirstSchoolAccount(): com.example.data.models.SchoolAccount? {
+        return schoolDao.getFirstSchoolAccount()
     }
 
     suspend fun hasAccount(): Boolean {

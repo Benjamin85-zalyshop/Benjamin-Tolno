@@ -23,6 +23,7 @@ import java.util.*
 
 @Composable
 fun Ticket58mmDialog(
+    currency: String = "GNF",
     schoolName: String,
     matricule: String,
     studentName: String,
@@ -137,7 +138,7 @@ fun Ticket58mmDialog(
                         color = Color.Black
                     )
                     Text(
-                        text = "${java.text.NumberFormat.getInstance(Locale("fr", "GN")).format(totalPaid)} GNF",
+                        text = "${java.text.NumberFormat.getInstance(Locale("fr", "GN")).format(totalPaid)} $currency",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
@@ -158,7 +159,7 @@ fun Ticket58mmDialog(
                         color = Color.Black
                     )
                     Text(
-                        text = "${java.text.NumberFormat.getInstance(Locale("fr", "GN")).format(remaining)} GNF",
+                        text = "${java.text.NumberFormat.getInstance(Locale("fr", "GN")).format(remaining)} $currency",
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
                         color = Color.Black

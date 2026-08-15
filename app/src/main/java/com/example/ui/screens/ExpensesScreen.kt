@@ -40,6 +40,8 @@ fun ExpensesScreen(
 ) {
     val expenses by viewModel.expenses.collectAsStateWithLifecycle()
     val userRole by viewModel.userRole.collectAsStateWithLifecycle()
+    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val currency = schoolAccount?.currency ?: "GNF"
 
     var selectedMonth by remember { mutableStateOf<String?>(null) }
     
@@ -63,7 +65,7 @@ fun ExpensesScreen(
         contract = ActivityResultContracts.CreateDocument("application/pdf"),
         onResult = { uri ->
             uri?.let {
-                generateExpensesPdf(context, filteredExpenses, selectedMonth ?: "Tous", it)
+                generateExpensesPdf(context, filteredExpenses, selectedMonth ?: "Tous", it, currency)
                 Toast.makeText(context, "PDF généré avec succès", Toast.LENGTH_SHORT).show()
             }
         }
@@ -91,7 +93,8 @@ fun ExpensesScreen(
             )
         },
         floatingActionButton = {
-            if (userRole == "FINANCIER") {
+            val isAuthorized = userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"
+            if (isAuthorized) {
                 FloatingActionButton(onClick = onAddExpense) {
                     Icon(Icons.Filled.Add, contentDescription = "Ajouter une dépense")
                 }
@@ -145,7 +148,7 @@ fun ExpensesScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "Total Période : ${numberFormat.format(totalExpenses)} GNF",
+                                    text = "Total Période : ${numberFormat.format(totalExpenses)} $currency",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onErrorContainer
@@ -160,7 +163,8 @@ fun ExpensesScreen(
                             reason = expense.reason,
                             section = expense.section,
                             date = expense.date,
-                            showDeleteAction = (userRole == "FINANCIER"),
+                            showDeleteAction = (userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"),
+                            currency = currency,
                             onDelete = { viewModel.deleteExpense(expense.id) }
                         )
                     }
@@ -175,7 +179,15 @@ fun ExpensesScreen(
 }
 
 @Composable
-fun ExpenseItem(amount: Long, reason: String, section: String, date: Long, showDeleteAction: Boolean, onDelete: () -> Unit) {
+fun ExpenseItem(
+    amount: Long,
+    reason: String,
+    section: String,
+    date: Long,
+    showDeleteAction: Boolean,
+    currency: String = "GNF",
+    onDelete: () -> Unit
+) {
     val numberFormat = NumberFormat.getNumberInstance(Locale("fr", "GN"))
     val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("fr", "GN"))
     
@@ -196,7 +208,7 @@ fun ExpenseItem(amount: Long, reason: String, section: String, date: Long, showD
             Spacer(modifier = Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "- ${numberFormat.format(amount)} GNF",
+                    text = "- ${numberFormat.format(amount)} $currency",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error
@@ -219,7 +231,8 @@ fun generateExpensesPdf(
     context: android.content.Context,
     expenses: List<com.example.data.models.Expense>,
     period: String,
-    uri: android.net.Uri
+    uri: android.net.Uri,
+    currency: String = "GNF"
 ) {
     val pdfDocument = android.graphics.pdf.PdfDocument()
     val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, 1).create() // A4 size
@@ -256,7 +269,7 @@ fun generateExpensesPdf(
         }
         
         val dateStr = sdf.format(java.util.Date(expense.date))
-        val amountStr = "${numberFormat.format(expense.amount)} GNF"
+        val amountStr = "${numberFormat.format(expense.amount)} $currency"
         
         val line = "- $dateStr : ${expense.reason} (${expense.section}) -> $amountStr"
         canvas.drawText(line, 50f, yPosition, paint)
@@ -272,7 +285,7 @@ fun generateExpensesPdf(
         yPosition = 50f
     }
     paint.isFakeBoldText = true
-    canvas.drawText("Total dépensé : ${numberFormat.format(total)} GNF", 50f, yPosition, paint)
+    canvas.drawText("Total dépensé : ${numberFormat.format(total)} $currency", 50f, yPosition, paint)
     
     pdfDocument.finishPage(page)
     

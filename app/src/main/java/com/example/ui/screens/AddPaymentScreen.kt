@@ -45,6 +45,8 @@ fun AddPaymentScreen(
     var reason by remember { mutableStateOf("Frais de scolarité") }
     var selectedMethod by remember { mutableStateOf("Espèces") }
     val context = LocalContext.current
+    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val currency = schoolAccount?.currency ?: "GNF"
 
     val students by viewModel.students.collectAsStateWithLifecycle()
     val payments by viewModel.payments.collectAsStateWithLifecycle()
@@ -90,6 +92,7 @@ fun AddPaymentScreen(
                         date = System.currentTimeMillis(),
                         schoolName = schoolName ?: "",
                         schoolLogoBase64 = schoolLogoBase64,
+                                    currency = currency,
                         totalFee = formattedTotal,
                         paidFee = formattedPaid,
                         dueFee = formattedDue,
@@ -179,7 +182,7 @@ fun AddPaymentScreen(
                     ) {
                         Text("Frais Scolaires Prévus :", fontSize = 13.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         Text(
-                            text = if (classFee > 0L) "${numberFormat.format(classFee)} GNF" else "Non défini",
+                            text = if (classFee > 0L) "${numberFormat.format(classFee)} $currency" else "Non défini",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -192,7 +195,7 @@ fun AddPaymentScreen(
                     ) {
                         Text("Déjà Payé :", fontSize = 13.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         Text(
-                            text = "${numberFormat.format(totalPaid)} GNF",
+                            text = "${numberFormat.format(totalPaid)} $currency",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = Color(0xFF10B981)
@@ -206,7 +209,7 @@ fun AddPaymentScreen(
                         ) {
                             Text("Reste à Payer :", fontSize = 13.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text(
-                                text = "${numberFormat.format(remainingToPay)} GNF",
+                                text = "${numberFormat.format(remainingToPay)} $currency",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
                                 color = if (remainingToPay == 0L) Color(0xFF10B981) else MaterialTheme.colorScheme.error
@@ -246,7 +249,7 @@ fun AddPaymentScreen(
                         amount = newValue
                     }
                 },
-                label = { Text("Montant du paiement (GNF)") },
+                label = { Text("Montant du paiement ($currency)") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
@@ -256,7 +259,7 @@ fun AddPaymentScreen(
 
             if (isOverpaid) {
                 Text(
-                    text = "Erreur : Le montant ne peut pas dépasser le reste à payer de l'élève (${numberFormat.format(remainingToPay)} GNF).",
+                    text = "Erreur : Le montant ne peut pas dépasser le reste à payer de l'élève (${numberFormat.format(remainingToPay)} $currency).",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium
@@ -445,7 +448,7 @@ fun AddPaymentScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Montant :", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${numberFormat.format(successAmount)} GNF", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                Text("${numberFormat.format(successAmount)} $currency", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             }
                             
                             Row(
@@ -506,7 +509,8 @@ fun AddPaymentScreen(
                                     student,
                                     payment,
                                     schoolName ?: "",
-                                    classFee
+                                    classFee,
+                                    currency
                                 )
                             }
                         },
@@ -563,6 +567,7 @@ fun generateReceiptPdf(
     date: Long,
     schoolName: String,
     schoolLogoBase64: String?,
+    currency: String,
     totalFee: String = "",
     paidFee: String = "",
     dueFee: String = "",
@@ -696,7 +701,7 @@ fun generateReceiptPdf(
     canvas.drawText("MONTANT PAYÉ", 335f, 235f, paint)
     
     paint.textSize = 16f
-    canvas.drawText("${numberFormat.format(amount)} GNF", 335f, 255f, paint)
+    canvas.drawText("${numberFormat.format(amount)} $currency", 335f, 255f, paint)
     
     // Divider before footer
     paint.strokeWidth = 1f

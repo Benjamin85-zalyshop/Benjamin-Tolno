@@ -279,12 +279,12 @@ fun RegisterScreen(
                         isLoading = true
                         coroutineScope.launch {
                             val success = viewModel.registerSchool(
-                                email = email.trim(), 
-                                founderPassword = founderPassword, 
-                                financierPassword = financierPassword,
-                                displayName = schoolNameInput.trim(),
-                                address = schoolAddress.trim(),
-                                founderPhone = founderPhone.trim()
+                                name = email.trim(), 
+                                fp = founderPassword, 
+                                finp = financierPassword,
+                                dn = schoolNameInput.trim(),
+                                addr = schoolAddress.trim(),
+                                phone = founderPhone.trim()
                             )
                             isLoading = false
                             if(success) {

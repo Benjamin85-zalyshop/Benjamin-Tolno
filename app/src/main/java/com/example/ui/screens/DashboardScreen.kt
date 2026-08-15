@@ -26,6 +26,8 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.example.ui.UserManualGenerator
@@ -56,7 +58,7 @@ val DEFAULT_CLASSES_BY_SECTION = mapOf(
     "LA MATERNELLE" to listOf("Petite Section", "Moyenne Section", "Grande Section"),
     "LE PRIMAIRE" to listOf("1ère Année", "2ème Année", "3ème Année", "4ème Année", "5ème Année", "6ème Année"),
     "LE COLLÈGE" to listOf("7ème", "8ème", "9ème", "10ème"),
-    "LE LYCÉE" to listOf("11ème Année", "12ème Année", "Terminale"),
+    "LE LYCÉE" to listOf("11ème SS", "11ème SE", "11ème SM", "12ème SS", "12ème SE", "12ème SM", "Terminale SS", "Terminale SE", "Terminale SM"),
     "L'UNIVERSITÉ" to listOf("Licence 1", "Licence 2", "Licence 3"),
     "L'ÉCOLE PROFESSIONNELLE" to listOf("1ère Année", "2ème Année", "3ème Année")
 )
@@ -94,6 +96,7 @@ fun DashboardScreen(
     val selectedSchoolYear by viewModel.selectedSchoolYear.collectAsStateWithLifecycle()
     
     val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val currency = schoolAccount?.currency ?: "GNF"
     val deletionRequests by viewModel.deletionRequests.collectAsStateWithLifecycle()
     val classFees by viewModel.classFees.collectAsStateWithLifecycle()
 
@@ -120,6 +123,8 @@ fun DashboardScreen(
     var showRapportsDialog by remember { mutableStateOf(false) }
     var showCommuniquesDialog by remember { mutableStateOf(false) }
     var showSupportDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var selectedCurrency by remember { mutableStateOf(schoolAccount?.currency ?: "GNF") }
     var showInscriptionDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -184,9 +189,9 @@ fun DashboardScreen(
     val currentExpenses = totalExpenses ?: 0L
     val currentBalance = balance ?: 0L
 
-    val formattedCollected = numberFormat.format(currentCollected) + " GNF"
-    val formattedExpenses = numberFormat.format(currentExpenses) + " GNF"
-    val formattedBalance = numberFormat.format(currentBalance) + " GNF"
+    val formattedCollected = numberFormat.format(currentCollected) + " $currency"
+    val formattedExpenses = numberFormat.format(currentExpenses) + " $currency"
+    val formattedBalance = numberFormat.format(currentBalance) + " $currency"
     
     val isAppAccessGranted by viewModel.isAppAccessGranted.collectAsStateWithLifecycle()
     val isTrialActive by viewModel.isTrialActive.collectAsStateWithLifecycle()
@@ -427,7 +432,7 @@ fun DashboardScreen(
                                             color = Color(0xFF6B7280)
                                         )
                                         Text(
-                                            text = if (selectedSchoolYear == "Toutes les années") "Toutes" else selectedSchoolYear,
+                                            text = if (selectedSchoolYear == "Toutes les années") "Toutes" else (selectedSchoolYear ?: ""),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF1F2937)
@@ -526,7 +531,7 @@ fun DashboardScreen(
                                     }
                                     
                                     Text(
-                                        text = "Vous bénéficiez de 3 mois d'essai gratuit. Profitez de notre offre spéciale de lancement : abonnez-vous maintenant pour seulement 200 000 GNF/an au lieu de 500 000 GNF !",
+                                        text = "Vous bénéficiez de 3 mois d'essai gratuit. Profitez de notre offre spéciale de lancement : abonnez-vous maintenant pour seulement 200 000 $currency/an au lieu de 500 000 $currency !",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = Color(0xFF4F46E5), // Elegant indigo/blue text for promotional info
                                         fontSize = 13.5.sp
@@ -593,7 +598,7 @@ fun DashboardScreen(
                                                     tint = Color.White
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (200 000 GNF)", fontWeight = FontWeight.Bold, color = Color.White)
+                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (200 000 $currency)", fontWeight = FontWeight.Bold, color = Color.White)
                                             }
                                         }
                                     }
@@ -680,7 +685,7 @@ fun DashboardScreen(
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            text = if (isBalanceVisible) formattedBalance else "•••••••• GNF",
+                                            text = if (isBalanceVisible) formattedBalance else "•••••••• $currency",
                                             color = Color.White,
                                             fontSize = 28.sp,
                                             fontWeight = FontWeight.Bold
@@ -877,7 +882,8 @@ fun DashboardScreen(
                     }
                     
                     val pendingRequests = deletionRequests.filter { it.status == "PENDING" }
-                    if (userRole == "FOUNDER" && pendingRequests.isNotEmpty()) {
+                    val isUserFounder = userRole == null || userRole.equals("FOUNDER", ignoreCase = true) || userRole.equals("FONDATEUR", ignoreCase = true) || userRole.equals("ADMIN", ignoreCase = true)
+                    if (isUserFounder && pendingRequests.isNotEmpty()) {
                         item {
                             Column(
                                 modifier = Modifier
@@ -1101,9 +1107,10 @@ fun DashboardScreen(
                                     iconColor = Color(0xFF6B7280),
                                     bgColor = Color(0xFFF3F4F6),
                                     onClick = {
-                                        if (userRole == "FOUNDER") {
-                                            newFinancierPassword = ""
-                                            showFinancierMgmtDialog = true
+                                        val isFounder = userRole == null || userRole.equals("FOUNDER", ignoreCase = true) || userRole.equals("FONDATEUR", ignoreCase = true) || userRole.equals("ADMIN", ignoreCase = true)
+                                        if (isFounder) {
+                                            selectedCurrency = schoolAccount?.currency ?: "GNF"
+                                            showSettingsDialog = true
                                         } else {
                                             Toast.makeText(context, "Réservé au fondateur de l'école", Toast.LENGTH_SHORT).show()
                                         }
@@ -1196,7 +1203,7 @@ fun DashboardScreen(
                                                 maxLines = 1
                                             )
                                             Text(
-                                                text = "${numberFormat.format(totalAmount)} GNF",
+                                                text = "${numberFormat.format(totalAmount)} $currency",
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = Color(0xFF10B981)
@@ -1346,7 +1353,7 @@ fun DashboardScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Text(
-                                            text = "+${numberFormat.format(payment.amount)} GNF",
+                                            text = "+${numberFormat.format(payment.amount)} $currency",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF10B981),
@@ -1382,6 +1389,66 @@ fun DashboardScreen(
     }
 
     // A. DIALOG: GERER LE COMPTE FINANCIER
+    
+    if (showSettingsDialog) {
+        val currencies = listOf("GNF", "XOF", "XAF", "EUR", "USD")
+        var expandedCurrency by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = { Text("Paramètres de l'école", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text("Devise principale", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    ExposedDropdownMenuBox(
+                        expanded = expandedCurrency,
+                        onExpandedChange = { expandedCurrency = !expandedCurrency }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedCurrency,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Devise") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCurrency) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandedCurrency,
+                            onDismissRequest = { expandedCurrency = false }
+                        ) {
+                            currencies.forEach { currency ->
+                                DropdownMenuItem(
+                                    text = { Text(currency) },
+                                    onClick = {
+                                        selectedCurrency = currency
+                                        expandedCurrency = false
+                                        viewModel.updateCurrency(currency)
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Sécurité", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    OutlinedButton(
+                        onClick = { 
+                            showSettingsDialog = false
+                            newFinancierPassword = ""
+                            showFinancierMgmtDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Gérer le mot de passe Financier")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSettingsDialog = false }) { Text("Fermer") }
+            }
+        )
+    }
+
     if (showFinancierMgmtDialog) {
         val currentFinancierPassword = schoolAccount?.financierPasswordHash ?: "Non défini"
         AlertDialog(
@@ -1500,7 +1567,7 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(text = "Total Scolarisé (Théorique) :", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text(text = "${numberFormat.format(totalTheorique)} GNF", color = Color(0xFF1F2937), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(text = "${numberFormat.format(totalTheorique)} $currency", color = Color(0xFF1F2937), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     
                     Row(
@@ -1508,7 +1575,7 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(text = "Total Déjà Recouvré :", color = Color(0xFF10B981), fontSize = 13.sp)
-                        Text(text = "$formattedCollected GNF", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(text = "$formattedCollected $currency", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     
                     val currentTuitionCollected = payments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
@@ -1518,7 +1585,7 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(text = "Reste à Recouvrer :", color = Color(0xFFEF4444), fontSize = 13.sp)
-                        Text(text = "${numberFormat.format(restToPay.coerceAtLeast(0L))} GNF", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(text = "${numberFormat.format(restToPay.coerceAtLeast(0L))} $currency", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     
                     HorizontalDivider(color = Color(0xFFE5E7EB))
@@ -1563,7 +1630,7 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(text = "1. Caisse Principale (70%)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text(text = "${numberFormat.format((currentBalance * 0.7).toLong())} GNF", color = Color(0xFF1F2937), fontSize = 13.sp)
+                            Text(text = "${numberFormat.format((currentBalance * 0.7).toLong())} $currency", color = Color(0xFF1F2937), fontSize = 13.sp)
                         }
                         LinearProgressIndicator(progress = { 0.7f }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF0F56E3))
                     }
@@ -1575,7 +1642,7 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(text = "2. Mobile Money / Orange (20%)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text(text = "${numberFormat.format((currentBalance * 0.2).toLong())} GNF", color = Color(0xFF1F2937), fontSize = 13.sp)
+                            Text(text = "${numberFormat.format((currentBalance * 0.2).toLong())} $currency", color = Color(0xFF1F2937), fontSize = 13.sp)
                         }
                         LinearProgressIndicator(progress = { 0.2f }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF10B981))
                     }
@@ -1587,7 +1654,7 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(text = "3. Banque / Chèques (10%)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text(text = "${numberFormat.format((currentBalance * 0.1).toLong())} GNF", color = Color(0xFF1F2937), fontSize = 13.sp)
+                            Text(text = "${numberFormat.format((currentBalance * 0.1).toLong())} $currency", color = Color(0xFF1F2937), fontSize = 13.sp)
                         }
                         LinearProgressIndicator(progress = { 0.1f }, modifier = Modifier.fillMaxWidth(), color = Color(0xFFF59E0B))
                     }
@@ -2137,7 +2204,7 @@ fun DashboardScreen(
                                     val classFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
                                     val unpaidBalance = maxOf(0L, classFee - totalPaid)
 
-                                    val finalMessageText = getPersonalizedMessage(commsMessageText, student, unpaidBalance)
+                                    val finalMessageText = getPersonalizedMessage(commsMessageText, student, unpaidBalance, currency)
                                     val phone = student.parentWhatsApp ?: ""
 
                                     Card(
@@ -2165,7 +2232,7 @@ fun DashboardScreen(
                                                         color = Color(0xFF1F2937)
                                                     )
                                                     Text(
-                                                        text = "Classe : ${student.grade} • Frais restants : ${numberFormat.format(unpaidBalance)} GNF",
+                                                        text = "Classe : ${student.grade} • Frais restants : ${numberFormat.format(unpaidBalance)} $currency",
                                                         fontSize = 11.sp,
                                                         color = Color(0xFF4B5563)
                                                     )
@@ -2275,7 +2342,7 @@ fun DashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Profitez de notre offre spéciale à 200 000 GNF/an au lieu de 500 000 GNF.",
+                        text = "Profitez de notre offre spéciale à 200 000 $currency/an au lieu de 500 000 $currency.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF4B5563)
                     )
@@ -2593,21 +2660,21 @@ fun DashboardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text("Attendu :", fontSize = 11.sp, color = Color(0xFF4B5563))
-                                    Text("${numberFormat.format(totalTheorique)} GNF", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    Text("${numberFormat.format(totalTheorique)} $currency", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text("Recouvré :", fontSize = 11.sp, color = Color(0xFF10B981))
-                                    Text("${numberFormat.format(tuitionCollected)} GNF", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    Text("${numberFormat.format(tuitionCollected)} $currency", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text("Reste :", fontSize = 11.sp, color = Color(0xFFEF4444))
-                                    Text("${numberFormat.format(remainingToCollect)} GNF", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    Text("${numberFormat.format(remainingToCollect)} $currency", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(
@@ -2659,7 +2726,7 @@ fun DashboardScreen(
                                             ) {
                                                 Column {
                                                     Text(text = grade, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                                    Text(text = "$count élève(s) • Frais: ${numberFormat.format(fee)} GNF", fontSize = 11.sp, color = Color.Gray)
+                                                    Text(text = "$count élève(s) • Frais: ${numberFormat.format(fee)} $currency", fontSize = 11.sp, color = Color.Gray)
                                                 }
                                                 Text(
                                                     text = "${(progress * 100).toInt()}%",
@@ -2673,15 +2740,15 @@ fun DashboardScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
-                                                Text("Attendu: ${numberFormat.format(expected)} GNF", fontSize = 11.sp, color = Color.Gray)
-                                                Text("Recouvré: ${numberFormat.format(collected)} GNF", fontSize = 11.sp, color = Color(0xFF10B981))
+                                                Text("Attendu: ${numberFormat.format(expected)} $currency", fontSize = 11.sp, color = Color.Gray)
+                                                Text("Recouvré: ${numberFormat.format(collected)} $currency", fontSize = 11.sp, color = Color(0xFF10B981))
                                             }
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Spacer(modifier = Modifier.weight(1f))
-                                                Text("Reste: ${numberFormat.format(remaining)} GNF", fontSize = 11.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.SemiBold)
+                                                Text("Reste: ${numberFormat.format(remaining)} $currency", fontSize = 11.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.SemiBold)
                                             }
 
                                             LinearProgressIndicator(
@@ -2819,7 +2886,7 @@ fun DashboardScreen(
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(text = grade, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                                 Text(
-                                                    text = if (currentFee > 0L) "${numberFormat.format(currentFee)} GNF" else "Non configuré",
+                                                    text = if (currentFee > 0L) "${numberFormat.format(currentFee)} $currency" else "Non configuré",
                                                     color = if (currentFee > 0L) Color(0xFF10B981) else Color(0xFFEF4444),
                                                     fontSize = 12.sp,
                                                     fontWeight = FontWeight.Medium
@@ -2862,11 +2929,11 @@ fun DashboardScreen(
                 title = { Text("Modifier Frais - ${editGradeFeeTarget}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E3A8A)) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Saisissez le montant des frais scolaires pour cette classe (en GNF) :", fontSize = 13.sp, color = Color.Gray)
+                        Text("Saisissez le montant des frais scolaires pour cette classe (en $currency) :", fontSize = 13.sp, color = Color.Gray)
                         OutlinedTextField(
                             value = editFeeAmountString,
                             onValueChange = { editFeeAmountString = it.filter { char -> char.isDigit() } },
-                            label = { Text("Frais (GNF)") },
+                            label = { Text("Frais ($currency)") },
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -3030,8 +3097,8 @@ fun DashboardScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text("Élève sélectionné : ${s.firstName} ${s.lastName}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                        Text("Frais d'inscription configurés : ${numberFormat.format(s.registrationFee)} GNF", fontSize = 11.sp)
-                                        Text("Frais de réinscription configurés : ${numberFormat.format(s.reenrollmentFee)} GNF", fontSize = 11.sp)
+                                        Text("Frais d'inscription configurés : ${numberFormat.format(s.registrationFee)} $currency", fontSize = 11.sp)
+                                        Text("Frais de réinscription configurés : ${numberFormat.format(s.reenrollmentFee)} $currency", fontSize = 11.sp)
                                     }
                                 }
 
@@ -3068,7 +3135,7 @@ fun DashboardScreen(
                                     value = feeAmountInput,
                                     onValueChange = { feeAmountInput = it },
                                     label = { Text("Montant Payé") },
-                                    suffix = { Text("GNF") },
+                                    suffix = { Text(currency) },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
@@ -3155,7 +3222,7 @@ fun DashboardScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp)) {
                                         Text("Inscriptions", fontSize = 10.sp, color = Color(0xFF9D174D))
-                                        Text("${numberFormat.format(totalInsc)} GNF", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF9D174D))
+                                        Text("${numberFormat.format(totalInsc)} $currency", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF9D174D))
                                     }
                                 }
                                 Card(
@@ -3164,7 +3231,7 @@ fun DashboardScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp)) {
                                         Text("Réinscriptions", fontSize = 10.sp, color = Color(0xFF5B21B6))
-                                        Text("${numberFormat.format(totalReinsc)} GNF", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF5B21B6))
+                                        Text("${numberFormat.format(totalReinsc)} $currency", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF5B21B6))
                                     }
                                 }
                             }
@@ -3231,7 +3298,7 @@ fun DashboardScreen(
                                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                         )
                                                     }
-                                                    Text("${numberFormat.format(p.amount)} GNF", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                    Text("${numberFormat.format(p.amount)} $currency", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                                 }
                                             }
                                         }
@@ -3464,7 +3531,7 @@ fun DashboardScreen(
             title = { Text("Avertissement : Supprimer le paiement") },
             text = {
                 val formattedAmount = numberFormat.format(paymentToDelete?.amount ?: 0L)
-                Text("Attention ! Êtes-vous sûr de vouloir supprimer définitivement ce paiement de $formattedAmount GNF (${paymentToDelete?.reason ?: ""}) ? Cette action est irréversible et affectera le solde de l'élève.")
+                Text("Attention ! Êtes-vous sûr de vouloir supprimer définitivement ce paiement de $formattedAmount $currency (${paymentToDelete?.reason ?: ""}) ? Cette action est irréversible et affectera le solde de l'élève.")
             },
             confirmButton = {
                 Button(
@@ -3523,13 +3590,308 @@ fun DashboardScreen(
     }
 
     if (showQrScannerDialog) {
-        QrScannerDialog(
+        QrScannerDialog(currency = currency,
             students = students,
             payments = payments,
             classFees = classFees,
             onDismiss = { showQrScannerDialog = false },
             onStudentSelected = { studentId ->
                 onNavigateToStudentDetail(studentId)
+            }
+        )
+    }
+
+    if (showSettingsDialog) {
+        var settingsTab by remember { mutableIntStateOf(0) }
+        var tempFinancierPass by remember { mutableStateOf("") }
+        var tempPassVisible by remember { mutableStateOf(false) }
+
+        val currencies = listOf(
+            Triple("GNF", "Franc Guinéen", "GNF"),
+            Triple("XOF", "Franc CFA (UEMOA)", "FCFA"),
+            Triple("XAF", "Franc CFA (CEMAC)", "FCFA"),
+            Triple("EUR", "Euro", "€"),
+            Triple("USD", "Dollar Américain", "$"),
+            Triple("CAD", "Dollar Canadien", "$"),
+            Triple("GBP", "Livre Sterling", "£")
+        )
+
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFEFF6FF)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = Color(0xFF0F56E3),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Text(
+                        text = "Paramètres de l'Établissement",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color(0xFF1E3A8A)
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 500.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TabRow(
+                        selectedTabIndex = settingsTab,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Tab(
+                            selected = settingsTab == 0,
+                            onClick = { settingsTab = 0 },
+                            text = { Text("Devise", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        Tab(
+                            selected = settingsTab == 1,
+                            onClick = { settingsTab = 1 },
+                            text = { Text("Logo", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        Tab(
+                            selected = settingsTab == 2,
+                            onClick = { settingsTab = 2 },
+                            text = { Text("Sécurité", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        )
+                    }
+
+                    when (settingsTab) {
+                        0 -> {
+                            // Devise Tab
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Choisissez la devise utilisée pour l'affichage, les reçus et les statistiques :",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF4B5563)
+                                )
+
+                                currencies.forEach { (code, label, symbol) ->
+                                    val isSelected = selectedCurrency == code
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) Color(0xFFEFF6FF) else Color(0xFFF9FAFB)
+                                        ),
+                                        border = BorderStroke(
+                                            if (isSelected) 2.dp else 1.dp,
+                                            if (isSelected) Color(0xFF0F56E3) else Color(0xFFE5E7EB)
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                selectedCurrency = code
+                                                viewModel.updateCurrency(code)
+                                                Toast.makeText(context, "Devise mise à jour : $code ($symbol)", Toast.LENGTH_SHORT).show()
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(if (isSelected) Color(0xFF0F56E3) else Color(0xFFE5E7EB)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = symbol,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isSelected) Color.White else Color(0xFF4B5563),
+                                                        fontSize = 13.sp
+                                                    )
+                                                }
+                                                Column {
+                                                    Text(
+                                                        text = "$code - $label",
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        fontSize = 13.sp,
+                                                        color = if (isSelected) Color(0xFF0F56E3) else Color(0xFF1F2937)
+                                                    )
+                                                }
+                                            }
+                                            if (isSelected) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Actif",
+                                                    tint = Color(0xFF0F56E3),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        1 -> {
+                            // Logo Tab
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Le logo de l'école apparaît sur les reçus de paiement et rapports officiels.",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF4B5563),
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .background(Color(0xFFF3F4F6), shape = RoundedCornerShape(12.dp))
+                                        .border(1.dp, Color(0xFFD1D5DB), shape = RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val logoBase64 = schoolLogoBase64
+                                    if (!logoBase64.isNullOrBlank()) {
+                                        val decodedBytes = remember(logoBase64) {
+                                            try {
+                                                Base64.decode(logoBase64, Base64.DEFAULT)
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                        }
+                                        val bitmap = remember(decodedBytes) {
+                                            decodedBytes?.let {
+                                                BitmapFactory.decodeByteArray(it, 0, it.size)
+                                            }
+                                        }
+                                        if (bitmap != null) {
+                                            Image(
+                                                bitmap = bitmap.asImageBitmap(),
+                                                contentDescription = "Logo",
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .clip(RoundedCornerShape(12.dp))
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.School, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                                        }
+                                    } else {
+                                        Icon(Icons.Default.School, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                                    }
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Button(
+                                        onClick = { pickImageLauncher.launch("image/*") },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F56E3))
+                                    ) {
+                                        Text(if (schoolLogoBase64 != null) "Changer le logo" else "Importer un logo")
+                                    }
+
+                                    if (schoolLogoBase64 != null) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                viewModel.setSchoolLogo(null)
+                                                Toast.makeText(context, "Logo supprimé", Toast.LENGTH_SHORT).show()
+                                            },
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                                            border = BorderStroke(1.dp, Color.Red)
+                                        ) {
+                                            Text("Supprimer")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        2 -> {
+                            // Sécurité Financier Tab
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "Définir ou modifier le mot de passe d'accès pour le compte Financier / Caissier :",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF4B5563)
+                                )
+
+                                OutlinedTextField(
+                                    value = tempFinancierPass,
+                                    onValueChange = { tempFinancierPass = it },
+                                    label = { Text("Nouveau mot de passe financier") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    visualTransformation = if (tempPassVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    trailingIcon = {
+                                        IconButton(onClick = { tempPassVisible = !tempPassVisible }) {
+                                            Icon(
+                                                imageVector = if (tempPassVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    }
+                                )
+
+                                Button(
+                                    onClick = {
+                                        if (tempFinancierPass.length >= 4) {
+                                            viewModel.updateFinancierPassword(tempFinancierPass)
+                                            Toast.makeText(context, "Mot de passe financier mis à jour !", Toast.LENGTH_SHORT).show()
+                                            tempFinancierPass = ""
+                                        } else {
+                                            Toast.makeText(context, "Le mot de passe doit comporter au moins 4 caractères", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                    enabled = tempFinancierPass.isNotBlank()
+                                ) {
+                                    Text("Enregistrer le mot de passe")
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showSettingsDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F56E3))
+                ) {
+                    Text("Fermer")
+                }
             }
         )
     }
@@ -3577,9 +3939,10 @@ fun QuickAccessButton(
 fun getPersonalizedMessage(
     template: String,
     student: com.example.data.models.Student,
-    unpaidBalance: Long
+    unpaidBalance: Long,
+    currency: String = "GNF"
 ): String {
-    val formattedBalance = NumberFormat.getNumberInstance(Locale("fr", "GN")).format(unpaidBalance) + " GNF"
+    val formattedBalance = NumberFormat.getNumberInstance(Locale("fr", "GN")).format(unpaidBalance) + " $currency"
     return template
         .replace("{élève}", "${student.firstName} ${student.lastName}")
         .replace("{prénom}", student.firstName)

@@ -18,5 +18,7 @@ data class SchoolAccount(
     val createdAt: Long = System.currentTimeMillis(),
     val address: String = "",
     val founderPhone: String = "",
-    val subscriptionExpiryDate: Long = 0L
+    val subscriptionExpiryDate: Long = 0L,
+    val currency: String = "GNF",
+    val logoBase64: String? = null
 )

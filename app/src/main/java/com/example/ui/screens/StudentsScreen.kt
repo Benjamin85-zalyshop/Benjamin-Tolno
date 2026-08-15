@@ -41,6 +41,8 @@ fun StudentsScreen(
     val payments by viewModel.payments.collectAsStateWithLifecycle()
     val classFees by viewModel.classFees.collectAsStateWithLifecycle()
     val userRole by viewModel.userRole.collectAsStateWithLifecycle()
+    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val currency = schoolAccount?.currency ?: "GNF"
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedGrade by remember { mutableStateOf<String?>(null) }
@@ -63,7 +65,8 @@ fun StudentsScreen(
             )
         },
         floatingActionButton = {
-            if (userRole == "FINANCIER") {
+            val isAuthorized = userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"
+            if (isAuthorized) {
                 FloatingActionButton(onClick = onAddStudent) {
                     Icon(Icons.Filled.Add, contentDescription = "Ajouter un élève")
                 }
@@ -144,7 +147,7 @@ fun StudentsScreen(
                             val fullName = "${student.firstName} ${student.lastName}"
                             val studentPayments = payments.filter { it.studentId == student.id }
                             val totalPaid = studentPayments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
-                            val formattedTotal = "${numberFormat.format(totalPaid)} GNF"
+                            val formattedTotal = "${numberFormat.format(totalPaid)} $currency"
                                                         val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
                             StudentCard(
                                 name = fullName,
@@ -152,7 +155,7 @@ fun StudentsScreen(
                                 grade = student.grade,
                                 section = student.section,
                                 totalPaid = formattedTotal,
-                                showPaymentAction = (userRole == "FINANCIER"),
+                                showPaymentAction = (userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"),
                                 onAddPaymentClick = { onAddPayment(student.id, fullName) },
                                 onClick = { onStudentClick(student.id) }
                             )
@@ -164,7 +167,7 @@ fun StudentsScreen(
     }
 
     if (showQrScannerDialog) {
-        QrScannerDialog(
+        QrScannerDialog(currency = currency,
             students = students,
             payments = payments,
             classFees = classFees,

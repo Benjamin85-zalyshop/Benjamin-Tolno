@@ -527,7 +527,7 @@ fun SchoolRequestCard(
                         }
                     }
                     if (item.hasActiveSubscription) {
-                        val isExpired = item.subscriptionExpiryDate > 0 && item.subscriptionExpiryDate <= System.currentTimeMillis()
+                        val isExpired = (item.subscriptionExpiryDate ?: 0L) > 0 && (item.subscriptionExpiryDate ?: 0L) <= System.currentTimeMillis()
                         if (isExpired) {
                             Text(
                                 text = "Abonnement expiré",
@@ -535,9 +535,9 @@ fun SchoolRequestCard(
                                 color = Color(0xFFDC2626),
                                 fontWeight = FontWeight.Medium
                             )
-                        } else if (item.subscriptionExpiryDate > 0) {
+                        } else if ((item.subscriptionExpiryDate ?: 0L) > 0) {
                             val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
-                            val expiryStr = dateFormat.format(java.util.Date(item.subscriptionExpiryDate))
+                            val expiryStr = dateFormat.format(java.util.Date(item.subscriptionExpiryDate ?: 0L))
                             Text(
                                 text = "Expire le : $expiryStr",
                                 style = MaterialTheme.typography.labelSmall,
@@ -560,7 +560,7 @@ fun SchoolRequestCard(
                     }
                 }
 
-                val isExpired = item.hasActiveSubscription && item.subscriptionExpiryDate > 0 && item.subscriptionExpiryDate <= System.currentTimeMillis()
+                val isExpired = item.hasActiveSubscription && (item.subscriptionExpiryDate ?: 0L) > 0 && (item.subscriptionExpiryDate ?: 0L) <= System.currentTimeMillis()
 
                 val badgeColor = when {
                     item.isPendingValidation -> Color(0xFFFF9800) // Orange

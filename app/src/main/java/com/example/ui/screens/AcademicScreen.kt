@@ -130,7 +130,7 @@ fun AcademicScreen(
                 context = context,
                 student = student,
                 term = selectedTerm,
-                schoolYear = selectedSchoolYear,
+                schoolYear = selectedSchoolYear ?: "",
                 schoolName = schoolName ?: "",
                 schoolLogoBase64 = schoolLogoBase64,
                 schoolAddress = schoolAccount?.address ?: "",
@@ -760,8 +760,10 @@ private fun GradesEntryTab(
                                             subjectRemoteId = sub.remoteId,
                                             term = selectedTerm,
                                             evaluationScore = eScore,
-                                            examScore = null
+                                            examScore = null,
+                                            comment = null
                                         )
+                                        viewModel.syncStudentAcademicsToRTDB(student.schoolId, student.id, selectedTerm)
                                         Toast.makeText(context, "Note enregistrée pour ${student.firstName}", Toast.LENGTH_SHORT).show()
                                     },
                                     modifier = Modifier

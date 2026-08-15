@@ -2,6 +2,7 @@ package com.example.data.local
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.Update
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.data.models.Expense
@@ -48,6 +49,9 @@ interface SchoolDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGrade(grade: StudentGrade)
 
+    @Query("SELECT * FROM grades WHERE schoolId = :schoolId AND studentId = :studentId AND subjectId = :subjectId AND term = :term LIMIT 1")
+    suspend fun getExistingGrade(schoolId: Int, studentId: Int, subjectId: Int, term: String): StudentGrade?
+
     @Query("DELETE FROM grades WHERE id = :gradeId")
     suspend fun deleteGradeById(gradeId: Int)
 
@@ -72,6 +76,9 @@ interface SchoolDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStudent(student: Student)
+
+    @Update
+    suspend fun updateStudent(student: Student)
 
     @Query("SELECT * FROM payments WHERE studentId = :studentId ORDER BY date DESC")
     fun getPaymentsForStudent(studentId: Int): Flow<List<Payment>>
@@ -109,6 +116,9 @@ interface SchoolDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchoolAccount(account: com.example.data.models.SchoolAccount)
 
+    @Update
+    suspend fun updateSchoolAccount(account: com.example.data.models.SchoolAccount)
+
     @Query("SELECT * FROM school_accounts WHERE schoolName = :name LIMIT 1")
     suspend fun getSchoolAccountByName(name: String): com.example.data.models.SchoolAccount?
     
@@ -130,6 +140,9 @@ interface SchoolDao {
     @Query("DELETE FROM subjects WHERE schoolId = :schoolId")
     suspend fun deleteSubjectsBySchoolId(schoolId: Int)
     
+    @Query("SELECT * FROM school_accounts LIMIT 1")
+    suspend fun getFirstSchoolAccount(): com.example.data.models.SchoolAccount?
+
     @Query("SELECT COUNT(*) FROM school_accounts")
     suspend fun getAccountCount(): Int
     

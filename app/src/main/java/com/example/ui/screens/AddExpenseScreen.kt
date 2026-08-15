@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.SchoolViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -20,6 +21,8 @@ fun AddExpenseScreen(
     viewModel: SchoolViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val currency = schoolAccount?.currency ?: "GNF"
     var amount by remember { mutableStateOf("") }
     var reason by remember { mutableStateOf("") }
     val ALL_SECTIONS = listOf("Général") + SECTIONS.drop(1)
@@ -54,7 +57,7 @@ fun AddExpenseScreen(
                         amount = newValue
                     }
                 },
-                label = { Text("Montant décaissé (GNF)") },
+                label = { Text("Montant décaissé ($currency)") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 singleLine = true

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.SchoolViewModel
 import com.example.ui.components.PhotoSourceDialog
 
@@ -49,6 +50,8 @@ fun AddStudentScreen(
     var gradeExpanded by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val currency = schoolAccount?.currency ?: "GNF"
 
     val gradeSuggestions = remember(section) {
         DEFAULT_CLASSES_BY_SECTION[section] ?: emptyList()
@@ -251,7 +254,7 @@ fun AddStudentScreen(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                suffix = { Text("GNF") }
+                suffix = { Text("$currency") }
             )
 
             OutlinedTextField(
@@ -262,7 +265,7 @@ fun AddStudentScreen(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                suffix = { Text("GNF") }
+                suffix = { Text("$currency") }
             )
 
             Spacer(modifier = Modifier.height(16.dp))

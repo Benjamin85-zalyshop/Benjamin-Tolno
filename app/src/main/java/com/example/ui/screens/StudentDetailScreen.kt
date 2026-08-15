@@ -59,6 +59,8 @@ fun StudentDetailScreen(
     val userRole by viewModel.userRole.collectAsStateWithLifecycle()
     val schoolName by viewModel.schoolName.collectAsStateWithLifecycle()
     val schoolLogoBase64 by viewModel.schoolLogoBase64.collectAsStateWithLifecycle()
+    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val currency = schoolAccount?.currency ?: "GNF"
     val deletionRequests by viewModel.deletionRequests.collectAsStateWithLifecycle()
     val classFees by viewModel.classFees.collectAsStateWithLifecycle()
     val grades by viewModel.grades.collectAsStateWithLifecycle(emptyList())
@@ -93,7 +95,7 @@ fun StudentDetailScreen(
             uri?.let {
                 if (student != null) {
                     val studentClassFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
-                    generatePdf(context, student, studentPayments, schoolName ?: "", studentClassFee, schoolLogoBase64, it)
+                    generatePdf(context, student, studentPayments, schoolName ?: "", studentClassFee, schoolLogoBase64, it, currency)
                     Toast.makeText(context, "PDF généré avec succès", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -184,7 +186,8 @@ fun StudentDetailScreen(
                     }) {
                         Icon(Icons.Filled.Download, contentDescription = "Télécharger Relevé PDF")
                     }
-                    if (userRole == "FOUNDER") {
+                    val isFounderOrAdmin = userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"
+                    if (isFounderOrAdmin) {
                         IconButton(onClick = { showDirectDeleteDialog = true }) {
                             Icon(Icons.Filled.Delete, contentDescription = "Supprimer l'élève", tint = MaterialTheme.colorScheme.error)
                         }
@@ -209,7 +212,8 @@ fun StudentDetailScreen(
             )
         },
         floatingActionButton = {
-            if (userRole == "FINANCIER") {
+            val isAuthorized = userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"
+            if (isAuthorized) {
                 ExtendedFloatingActionButton(
                     onClick = { onAddPayment(studentId, fullName) },
                     icon = { Icon(Icons.Filled.Payment, contentDescription = "Payer") },
@@ -371,10 +375,10 @@ fun StudentDetailScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         if (student.registrationFee > 0L) {
-                            Text("Frais d'inscription : ${numberFormat.format(student.registrationFee)} GNF", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("Frais d'inscription : ${numberFormat.format(student.registrationFee)} $currency", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                         if (student.reenrollmentFee > 0L) {
-                            Text("Frais de réinscription : ${numberFormat.format(student.reenrollmentFee)} GNF", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("Frais de réinscription : ${numberFormat.format(student.reenrollmentFee)} $currency", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                         
                         HorizontalDivider(
@@ -387,12 +391,12 @@ fun StudentDetailScreen(
                         val remainingToPay = (totalToPay - currentTotalPaid).coerceAtLeast(0L)
 
                         Text(
-                            text = "Frais de scolarité total : " + if (studentClassFee > 0L) "${numberFormat.format(totalToPay)} GNF" else "Non défini",
+                            text = "Frais de scolarité total : " + if (studentClassFee > 0L) "${numberFormat.format(totalToPay)} $currency" else "Non défini",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            text = "Total payé : ${numberFormat.format(currentTotalPaid)} GNF",
+                            text = "Total payé : ${numberFormat.format(currentTotalPaid)} $currency",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             fontWeight = FontWeight.Bold
@@ -415,7 +419,7 @@ fun StudentDetailScreen(
                                 }
                             } else {
                                 Text(
-                                    text = "Reste à payer : ${numberFormat.format(remainingToPay)} GNF",
+                                    text = "Reste à payer : ${numberFormat.format(remainingToPay)} $currency",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = Color(0xFFE11D48),
                                     fontWeight = FontWeight.Bold
@@ -453,19 +457,19 @@ fun StudentDetailScreen(
                             "Aucun paiement enregistré."
                         } else {
                             studentPayments.joinToString("\n") { p ->
-                                "- ${sdf.format(Date(p.date))} : ${p.reason} -> ${numberFormat.format(p.amount)} GNF"
+                                "- ${sdf.format(Date(p.date))} : ${p.reason} -> ${numberFormat.format(p.amount)} $currency"
                             }
                         }
                         val finalSchoolName = schoolName?.ifBlank { "ScolaPay" } ?: "ScolaPay"
                         
                         val feesSection = if (studentClassFee > 0L) {
                             """
-                            *Frais Scolaires Totaux :* ${numberFormat.format(studentClassFee)} GNF
-                            *Total Payé :* ${numberFormat.format(totalPaid)} GNF
-                            *Reste à Payer :* ${numberFormat.format(remainingToPay)} GNF ${if (remainingToPay == 0L) "✓ (Scolarité réglée)" else ""}
+                            *Frais Scolaires Totaux :* ${numberFormat.format(studentClassFee)} $currency
+                            *Total Payé :* ${numberFormat.format(totalPaid)} $currency
+                            *Reste à Payer :* ${numberFormat.format(remainingToPay)} $currency ${if (remainingToPay == 0L) "✓ (Scolarité réglée)" else ""}
                             """.trimIndent()
                         } else {
-                            "*Total Payé :* ${numberFormat.format(totalPaid)} GNF"
+                            "*Total Payé :* ${numberFormat.format(totalPaid)} $currency"
                         }
 
                         """
@@ -584,7 +588,8 @@ fun StudentDetailScreen(
                         reason = payment.reason,
                         date = payment.date,
                         paymentMethod = payment.paymentMethod,
-                        showDeleteAction = (userRole == "FINANCIER"),
+                        showDeleteAction = (userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"),
+                        currency = currency,
                         onDelete = { paymentToDelete = payment },
                         onPrint = {
                             if (student != null) {
@@ -594,7 +599,8 @@ fun StudentDetailScreen(
                                     student,
                                     payment,
                                     schoolName ?: "",
-                                    classFee
+                                    classFee,
+                                    currency
                                 )
                             }
                         }
@@ -615,7 +621,7 @@ fun StudentDetailScreen(
         val ticketRemaining = (ticketTotalToPay - ticketTotalPaid).coerceAtLeast(0L)
         val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
         
-        Ticket58mmDialog(
+        Ticket58mmDialog(currency = currency,
             schoolName = schoolName ?: "",
             matricule = matricule,
             studentName = "${student.firstName} ${student.lastName}",
@@ -631,7 +637,8 @@ fun StudentDetailScreen(
                     "${student.firstName} ${student.lastName}",
                     student.grade,
                     ticketTotalPaid,
-                    ticketRemaining
+                    ticketRemaining,
+                    currency
                 )
                 showTicketDialog = false
             }
@@ -710,7 +717,7 @@ fun StudentDetailScreen(
             title = { Text("Avertissement : Supprimer le paiement") },
             text = {
                 val formattedAmount = numberFormat.format(paymentToDelete?.amount ?: 0L)
-                Text("Attention ! Êtes-vous sûr de vouloir supprimer définitivement ce paiement de $formattedAmount GNF (${paymentToDelete?.reason ?: ""}) ? Cette action est irréversible et affectera le solde de l'élève.")
+                Text("Attention ! Êtes-vous sûr de vouloir supprimer définitivement ce paiement de $formattedAmount $currency (${paymentToDelete?.reason ?: ""}) ? Cette action est irréversible et affectera le solde de l'élève.")
             },
             confirmButton = {
                 Button(
@@ -736,7 +743,16 @@ fun StudentDetailScreen(
 }
 
 @Composable
-fun PaymentHistoryItem(amount: Long, reason: String, date: Long, paymentMethod: String, showDeleteAction: Boolean, onDelete: () -> Unit, onPrint: () -> Unit = {}) {
+fun PaymentHistoryItem(
+    amount: Long,
+    reason: String,
+    date: Long,
+    paymentMethod: String,
+    showDeleteAction: Boolean,
+    currency: String = "GNF",
+    onDelete: () -> Unit,
+    onPrint: () -> Unit = {}
+) {
     val numberFormat = NumberFormat.getNumberInstance(Locale("fr", "GN"))
     val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("fr", "GN"))
     
@@ -785,7 +801,7 @@ fun PaymentHistoryItem(amount: Long, reason: String, date: Long, paymentMethod: 
             Spacer(modifier = Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${numberFormat.format(amount)} GNF",
+                    text = "${numberFormat.format(amount)} $currency",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -816,7 +832,8 @@ fun generatePdf(
     schoolName: String,
     studentClassFee: Long,
     schoolLogoBase64: String?,
-    uri: android.net.Uri
+    uri: android.net.Uri,
+    currency: String = "GNF"
 ) {
     val pdfDocument = android.graphics.pdf.PdfDocument()
     val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, 1).create() // A4 size
@@ -927,20 +944,20 @@ fun generatePdf(
     var financialY = 180f
     
     if (student.registrationFee > 0L) {
-        canvas.drawText("Frais d'inscription : ${numberFormat.format(student.registrationFee)} GNF", 320f, financialY, paint)
+        canvas.drawText("Frais d'inscription : ${numberFormat.format(student.registrationFee)} $currency", 320f, financialY, paint)
         financialY += 25f
     }
     if (student.reenrollmentFee > 0L) {
-        canvas.drawText("Frais de réinscription : ${numberFormat.format(student.reenrollmentFee)} GNF", 320f, financialY, paint)
+        canvas.drawText("Frais de réinscription : ${numberFormat.format(student.reenrollmentFee)} $currency", 320f, financialY, paint)
         financialY += 25f
     }
     
-    canvas.drawText("Frais de classe : ${numberFormat.format(studentClassFee)} GNF", 320f, financialY, paint)
+    canvas.drawText("Frais de classe : ${numberFormat.format(studentClassFee)} $currency", 320f, financialY, paint)
     financialY += 25f
     
     val paymentsSum = payments.sumOf { it.amount }
     val pdfTotalPaid = paymentsSum + student.registrationFee + student.reenrollmentFee
-    canvas.drawText("Total payé : ${numberFormat.format(pdfTotalPaid)} GNF", 320f, financialY, paint)
+    canvas.drawText("Total payé : ${numberFormat.format(pdfTotalPaid)} $currency", 320f, financialY, paint)
     
     // Remaining balance Box
     val totalToPay = studentClassFee + student.registrationFee + student.reenrollmentFee
@@ -964,7 +981,7 @@ fun generatePdf(
     canvas.drawText(if (isFullyPaid) "SITUATION : EN RÈGLE" else "RESTE À PAYER", 335f, 242f, paint)
     
     paint.textSize = 14f
-    canvas.drawText("${numberFormat.format(remaining)} GNF", 335f, 263f, paint)
+    canvas.drawText("${numberFormat.format(remaining)} $currency", 335f, 263f, paint)
     
     // Reset paint properties
     paint.color = android.graphics.Color.BLACK
@@ -1061,7 +1078,7 @@ fun generatePdf(
         paint.color = android.graphics.Color.BLACK
         
         val dateStr = sdf.format(java.util.Date(payment.date))
-        val amountStr = "${numberFormat.format(payment.amount)} GNF"
+        val amountStr = "${numberFormat.format(payment.amount)} $currency"
         
         canvas.drawText(dateStr, 60f, currentY + 17f, paint)
         
@@ -1115,7 +1132,7 @@ fun generatePdf(
         paint.color = android.graphics.Color.BLACK
         paint.isFakeBoldText = true
         canvas.drawText("TOTAL PAYÉ", 60f, currentY + 17f, paint)
-        canvas.drawText("${numberFormat.format(pdfTotalPaid)} GNF", 470f, currentY + 17f, paint)
+        canvas.drawText("${numberFormat.format(pdfTotalPaid)} $currency", 470f, currentY + 17f, paint)
     }
     
     // Always draw footer at the very bottom of the page

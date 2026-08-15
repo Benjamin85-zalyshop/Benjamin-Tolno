@@ -54,6 +54,7 @@ import java.util.concurrent.Executors
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QrScannerDialog(
+    currency: String = "GNF",
     students: List<Student>,
     payments: List<Payment>,
     classFees: List<ClassFee>,
@@ -245,12 +246,12 @@ fun QrScannerDialog(
                             ) {
                                 Column {
                                     Text("Total Payé", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
-                                    Text("${numberFormat.format(totalPaid)} GNF", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    Text("${numberFormat.format(totalPaid)} $currency", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text("Reste à Payer", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
                                     Text(
-                                        text = if (remaining == 0L) "Réglé ✓" else "${numberFormat.format(remaining)} GNF",
+                                        text = if (remaining == 0L) "Réglé ✓" else "${numberFormat.format(remaining)} $currency",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = if (remaining == 0L) Color(0xFF10B981) else MaterialTheme.colorScheme.error

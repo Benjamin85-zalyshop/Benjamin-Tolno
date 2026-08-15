@@ -256,10 +256,9 @@ document.addEventListener("DOMContentLoaded", () => {
         onValue(studentRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const formatGNF = (num) => {
-                    if (num === null || num === undefined) return "0 GNF";
-                    // Using French locale and replacing spaces for large numbers
-                    return Number(num).toLocaleString('fr-FR').replace(/,/g, ' ') + " GNF";
+                                const formatCurrency = (num) => {
+                    if (num === null || num === undefined) return "0 " + (window.schoolCurrency || "GNF");
+                    return Number(num).toLocaleString('fr-FR').replace(/,/g, ' ') + " " + (window.schoolCurrency || "GNF");
                 };
 
                 // Override URL data with fresh DB data
@@ -272,7 +271,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     dbPercent = (dbPaid / dbTotal) * 100;
                 }
 
-                updateFinancialUI(formatGNF(dbTotal), formatGNF(dbPaid), formatGNF(dbDue), dbPercent);
+                updateFinancialUI(formatCurrency(dbTotal), formatCurrency(dbPaid), formatCurrency(dbDue), dbPercent);
 
                 if (data.photoBase64) {
                     window.studentPhotoBase64 = data.photoBase64;
@@ -308,6 +307,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 if (data.schoolAddress) {
                     document.getElementById('pdfSchoolContact').textContent = data.schoolAddress;
+                }
+                if (data.currency) {
+                    window.schoolCurrency = data.currency;
                 }
                 if (data.schoolYear) {
                     document.getElementById('schoolYear').textContent = data.schoolYear;
