@@ -93,7 +93,7 @@ fun ExpensesScreen(
             )
         },
         floatingActionButton = {
-            val isAuthorized = userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"
+            val isAuthorized = userRole == "FINANCIER" || userRole == "ADMIN"
             if (isAuthorized) {
                 FloatingActionButton(onClick = onAddExpense) {
                     Icon(Icons.Filled.Add, contentDescription = "Ajouter une dépense")
@@ -163,7 +163,7 @@ fun ExpensesScreen(
                             reason = expense.reason,
                             section = expense.section,
                             date = expense.date,
-                            showDeleteAction = (userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"),
+                            showDeleteAction = (userRole == "FINANCIER" || userRole == "ADMIN"),
                             currency = currency,
                             onDelete = { viewModel.deleteExpense(expense.id) }
                         )

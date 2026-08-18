@@ -41,6 +41,7 @@ fun AdminDashboardScreen(
     var schoolToReject by remember { mutableStateOf<SchoolAdminItem?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var schoolToDelete by remember { mutableStateOf<SchoolAdminItem?>(null) }
+    var showCleanDialog by remember { mutableStateOf(false) }
     var rejectionReason by remember { mutableStateOf("") }
     
     var showWhatsAppDialog by remember { mutableStateOf(false) }
@@ -88,6 +89,14 @@ fun AdminDashboardScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
+                    IconButton(
+                        onClick = { showCleanDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Tout nettoyer"
+                        )
+                    }
                     IconButton(
                         onClick = {
                             viewModel.loadAdminSchools()
@@ -207,7 +216,7 @@ fun AdminDashboardScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filteredSchools, key = { it.email }) { item ->
+                    items(filteredSchools) { item ->
                         SchoolRequestCard(
                             item = item,
                             onApprove = { viewModel.approveSchoolSubscription(item.email) },
@@ -296,6 +305,41 @@ fun AdminDashboardScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showRejectDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
+
+    if (showCleanDialog) {
+        AlertDialog(
+            onDismissRequest = { showCleanDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Tout nettoyer")
+                }
+            },
+            text = { Text("Voulez-vous supprimer toutes les écoles sauf le compte Administrateur ? Cette action est irréversible.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteAllNonAdminSchools()
+                        showCleanDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Oui, nettoyer")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showCleanDialog = false }) {
                     Text("Annuler")
                 }
             }

@@ -80,6 +80,12 @@ interface SchoolDao {
     @Update
     suspend fun updateStudent(student: Student)
 
+    @Update
+    suspend fun updatePayment(payment: Payment)
+
+    @Update
+    suspend fun updateExpense(expense: Expense)
+
     @Query("SELECT * FROM payments WHERE studentId = :studentId ORDER BY date DESC")
     fun getPaymentsForStudent(studentId: Int): Flow<List<Payment>>
 
@@ -94,6 +100,12 @@ interface SchoolDao {
     
     @Query("SELECT SUM(amount) FROM payments WHERE schoolId = :schoolId")
     fun getTotalCollected(schoolId: Int): Flow<Long?>
+
+    @Query("SELECT * FROM payments WHERE id = :paymentId LIMIT 1")
+    suspend fun getPaymentById(paymentId: Int): Payment?
+
+    @Query("SELECT * FROM expenses WHERE id = :expenseId LIMIT 1")
+    suspend fun getExpenseById(expenseId: Int): Expense?
 
     @Query("DELETE FROM payments WHERE id = :paymentId")
     suspend fun deletePaymentById(paymentId: Int)
@@ -119,11 +131,17 @@ interface SchoolDao {
     @Update
     suspend fun updateSchoolAccount(account: com.example.data.models.SchoolAccount)
 
-    @Query("SELECT * FROM school_accounts WHERE schoolName = :name LIMIT 1")
+    @Query("SELECT * FROM school_accounts WHERE LOWER(schoolName) = LOWER(:name) LIMIT 1")
     suspend fun getSchoolAccountByName(name: String): com.example.data.models.SchoolAccount?
+    
+    @Query("SELECT * FROM school_accounts")
+    suspend fun getAllSchoolAccounts(): List<com.example.data.models.SchoolAccount>
     
     @Query("DELETE FROM school_accounts WHERE schoolName = :name")
     suspend fun deleteSchoolAccountByName(name: String)
+
+    @Query("DELETE FROM school_accounts WHERE LOWER(schoolName) != 'benjamintolno7@gmail.com'")
+    suspend fun deleteAllNonAdminSchools()
     
     @Query("DELETE FROM students WHERE schoolId = :schoolId")
     suspend fun deleteStudentsBySchoolId(schoolId: Int)
@@ -169,6 +187,9 @@ interface SchoolDao {
 
     @Query("SELECT id FROM students WHERE remoteId = :remoteId LIMIT 1")
     suspend fun getStudentIdByRemoteId(remoteId: String): Int?
+
+    @Query("SELECT * FROM students WHERE id = :studentId LIMIT 1")
+    suspend fun getStudentById(studentId: Int): Student?
 
     @Query("DELETE FROM students WHERE id = :studentId")
     suspend fun deleteStudentById(studentId: Int)

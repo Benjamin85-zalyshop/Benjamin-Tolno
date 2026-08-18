@@ -49,7 +49,7 @@ object QrCodeUtils {
         val safeGrade = try { java.net.URLEncoder.encode(grade, "UTF-8") } catch (e: Exception) { grade }
         val safeSection = try { java.net.URLEncoder.encode(section, "UTF-8") } catch (e: Exception) { section }
         
-        var url = "$BASE_VERIFY_URL?id=$studentId&mat=$matricule&name=$safeName&grade=$safeGrade&section=$safeSection"
+        var url = "$BASE_VERIFY_URL?id=$studentId&mat=$matricule&rid=$remoteId&name=$safeName&grade=$safeGrade&section=$safeSection"
         if (totalFee.isNotEmpty()) url += "&totalFee=${java.net.URLEncoder.encode(totalFee, "UTF-8")}"
         if (paidFee.isNotEmpty()) url += "&paidFee=${java.net.URLEncoder.encode(paidFee, "UTF-8")}"
         if (dueFee.isNotEmpty()) url += "&dueFee=${java.net.URLEncoder.encode(dueFee, "UTF-8")}"

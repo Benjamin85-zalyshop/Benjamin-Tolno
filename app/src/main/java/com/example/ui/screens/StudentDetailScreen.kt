@@ -212,7 +212,7 @@ fun StudentDetailScreen(
             )
         },
         floatingActionButton = {
-            val isAuthorized = userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"
+            val isAuthorized = userRole == "FINANCIER" || userRole == "ADMIN"
             if (isAuthorized) {
                 ExtendedFloatingActionButton(
                     onClick = { onAddPayment(studentId, fullName) },
@@ -588,7 +588,7 @@ fun StudentDetailScreen(
                         reason = payment.reason,
                         date = payment.date,
                         paymentMethod = payment.paymentMethod,
-                        showDeleteAction = (userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"),
+                        showDeleteAction = (userRole == "FINANCIER" || userRole == "ADMIN"),
                         currency = currency,
                         onDelete = { paymentToDelete = payment },
                         onPrint = {

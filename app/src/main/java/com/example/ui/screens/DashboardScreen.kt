@@ -379,7 +379,7 @@ fun DashboardScreen(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = schoolName ?: "École ScolaPay",
+                                    text = schoolName ?: "Mon École",
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF1F2937),
@@ -1361,7 +1361,7 @@ fun DashboardScreen(
                                             softWrap = false
                                         )
                                         
-                                        if (userRole == "FINANCIER" || userRole == "FOUNDER") {
+                                        if (userRole == "FINANCIER" || userRole == "ADMIN") {
                                             IconButton(
                                                 onClick = { paymentToDelete = payment },
                                                 modifier = Modifier.size(24.dp)

@@ -65,7 +65,7 @@ fun StudentsScreen(
             )
         },
         floatingActionButton = {
-            val isAuthorized = userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"
+            val isAuthorized = userRole == "FINANCIER" || userRole == "ADMIN"
             if (isAuthorized) {
                 FloatingActionButton(onClick = onAddStudent) {
                     Icon(Icons.Filled.Add, contentDescription = "Ajouter un élève")
@@ -155,7 +155,7 @@ fun StudentsScreen(
                                 grade = student.grade,
                                 section = student.section,
                                 totalPaid = formattedTotal,
-                                showPaymentAction = (userRole == "FINANCIER" || userRole == "FOUNDER" || userRole?.equals("FONDATEUR", ignoreCase = true) == true || userRole == "ADMIN"),
+                                showPaymentAction = (userRole == "FINANCIER" || userRole == "ADMIN"),
                                 onAddPaymentClick = { onAddPayment(student.id, fullName) },
                                 onClick = { onStudentClick(student.id) }
                             )

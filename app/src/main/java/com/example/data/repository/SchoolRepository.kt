@@ -76,6 +76,14 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         schoolDao.updateStudent(student)
     }
 
+    suspend fun updatePayment(payment: Payment) {
+        schoolDao.updatePayment(payment)
+    }
+
+    suspend fun updateExpense(expense: Expense) {
+        schoolDao.updateExpense(expense)
+    }
+
     suspend fun insertPayment(payment: Payment) {
         schoolDao.insertPayment(payment)
     }
@@ -104,6 +112,14 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         return schoolDao.getSchoolAccountByName(name)
     }
 
+    suspend fun getAllSchoolAccounts(): List<com.example.data.models.SchoolAccount> {
+        return schoolDao.getAllSchoolAccounts()
+    }
+
+    suspend fun deleteAllNonAdminSchools() {
+        schoolDao.deleteAllNonAdminSchools()
+    }
+
     suspend fun deleteSchoolAccountAndData(name: String) {
         val account = schoolDao.getSchoolAccountByName(name)
         if (account != null) {
@@ -125,6 +141,9 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
         return schoolDao.getAccountCount() > 0
     }
 
+    suspend fun getStudentById(studentId: Int): Student? = schoolDao.getStudentById(studentId)
+    suspend fun getPaymentById(paymentId: Int): Payment? = schoolDao.getPaymentById(paymentId)
+    suspend fun getExpenseById(expenseId: Int): Expense? = schoolDao.getExpenseById(expenseId)
     suspend fun getStudentByRemoteId(remoteId: String): Student? = schoolDao.getStudentByRemoteId(remoteId)
     suspend fun getPaymentByRemoteId(remoteId: String): Payment? = schoolDao.getPaymentByRemoteId(remoteId)
     suspend fun getExpenseByRemoteId(remoteId: String): Expense? = schoolDao.getExpenseByRemoteId(remoteId)

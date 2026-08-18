@@ -141,25 +141,52 @@ class SchoolViewModel(
 
     fun insertStudent(firstName: String, lastName: String, grade: String, section: String, parentWhatsApp: String?, registrationFee: Long, reenrollmentFee: Long, photoBase64: String?) {
         val schoolId = _currentSchoolId.value ?: return
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
-            repository.insertStudent(Student(
+            val remoteId = java.util.UUID.randomUUID().toString()
+            val student = Student(
                 schoolId = schoolId,
                 firstName = firstName,
                 lastName = lastName,
                 grade = grade,
                 section = section,
+                remoteId = remoteId,
                 parentWhatsApp = parentWhatsApp ?: "",
                 registrationFee = registrationFee,
                 reenrollmentFee = reenrollmentFee,
                 photoBase64 = photoBase64,
                 schoolYear = _selectedSchoolYear.value ?: ""
-            ))
+            )
+            repository.insertStudent(student)
+            
+            firestore.collection("schools").document(email).collection("students").document(remoteId).set(
+                mapOf(
+                    "firstName" to student.firstName,
+                    "lastName" to student.lastName,
+                    "grade" to student.grade,
+                    "section" to student.section,
+                    "parentWhatsApp" to student.parentWhatsApp,
+                    "registrationFee" to student.registrationFee,
+                    "reenrollmentFee" to student.reenrollmentFee,
+                    "photoBase64" to student.photoBase64,
+                    "schoolYear" to student.schoolYear
+                )
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
         }
     }
 
     fun updateStudentPhoto(student: Student, photoBase64: String?) {
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
-            repository.updateStudent(student.copy(photoBase64 = photoBase64))
+            val updated = student.copy(photoBase64 = photoBase64)
+            repository.updateStudent(updated)
+            
+            if (updated.remoteId.isNotEmpty()) {
+                firestore.collection("schools").document(email).collection("students").document(updated.remoteId).set(
+                    mapOf("photoBase64" to photoBase64),
+                    com.google.firebase.firestore.SetOptions.merge()
+                ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            }
         }
     }
 
@@ -169,7 +196,7 @@ class SchoolViewModel(
             try {
                 return kotlinx.serialization.json.Json.decodeFromString(jsonStr)
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e)
             }
         }
         return emptyList()
@@ -180,7 +207,7 @@ class SchoolViewModel(
             val jsonStr = kotlinx.serialization.json.Json.encodeToString(fees)
             sharedPrefs.edit().putString("class_fees_$schoolId", jsonStr).apply()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e)
         }
     }
 
@@ -224,46 +251,93 @@ class SchoolViewModel(
     }
 
     fun deleteStudentDirectly(student: Student) {
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
             repository.deleteStudentById(student.id)
+            if (student.remoteId.isNotEmpty()) {
+                firestore.collection("schools").document(email).collection("students").document(student.remoteId).delete()
+                    .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            }
         }
     }
 
     fun insertPayment(studentId: Int, amount: Long, reason: String, paymentMethod: String) {
         val schoolId = _currentSchoolId.value ?: return
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
-            repository.insertPayment(Payment(
+            val student = repository.getStudentById(studentId) ?: return@launch
+            val remoteId = java.util.UUID.randomUUID().toString()
+            val payment = Payment(
                 schoolId = schoolId,
                 studentId = studentId,
                 amount = amount,
                 reason = reason,
+                remoteId = remoteId,
                 paymentMethod = paymentMethod
-            ))
+            )
+            repository.insertPayment(payment)
+            
+            firestore.collection("schools").document(email).collection("payments").document(remoteId).set(
+                mapOf(
+                    "studentRemoteId" to student.remoteId,
+                    "amount" to payment.amount,
+                    "reason" to payment.reason,
+                    "date" to payment.date,
+                    "paymentMethod" to payment.paymentMethod
+                )
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
         }
     }
 
     fun deletePayment(paymentId: Int) {
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
+            val payment = repository.getPaymentById(paymentId) ?: return@launch
             repository.deletePayment(paymentId)
+            
+            if (payment.remoteId.isNotEmpty()) {
+                firestore.collection("schools").document(email).collection("payments").document(payment.remoteId).delete()
+                    .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            }
         }
     }
 
     fun insertExpense(amount: Long, category: String, description: String, section: String) {
         val schoolId = _currentSchoolId.value ?: return
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
             val fullReason = if(description.isNotBlank()) "$category - $description" else category
-            repository.insertExpense(Expense(
+            val remoteId = java.util.UUID.randomUUID().toString()
+            val expense = Expense(
                 schoolId = schoolId,
                 amount = amount,
                 reason = fullReason,
-                section = section
-            ))
+                section = section,
+                remoteId = remoteId
+            )
+            repository.insertExpense(expense)
+            
+            firestore.collection("schools").document(email).collection("expenses").document(remoteId).set(
+                mapOf(
+                    "amount" to expense.amount,
+                    "reason" to expense.reason,
+                    "section" to expense.section,
+                    "date" to expense.date
+                )
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
         }
     }
 
     fun deleteExpense(expenseId: Int) {
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
+            val expense = repository.getExpenseById(expenseId) ?: return@launch
             repository.deleteExpense(expenseId)
+            
+            if (expense.remoteId.isNotEmpty()) {
+                firestore.collection("schools").document(email).collection("expenses").document(expense.remoteId).delete()
+                    .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            }
         }
     }
 
@@ -561,45 +635,316 @@ class SchoolViewModel(
     }
 
     fun submitSubscriptionRequest(phoneNumber: String, transactionId: String) {
-        // TODO: Auto-generated stub
+        viewModelScope.launch {
+            val account = _schoolAccount.value
+            if (account != null) {
+                val updated = account.copy(
+                    isPendingValidation = true,
+                    paymentPhoneNumber = phoneNumber,
+                    transactionId = transactionId
+                )
+                repository.updateSchoolAccount(updated)
+                _schoolAccount.value = updated
+                
+                firestore.collection("schools").document(account.schoolName).set(
+                    mapOf(
+                        "isPendingValidation" to true,
+                        "paymentPhoneNumber" to phoneNumber,
+                        "transactionId" to transactionId
+                    ), com.google.firebase.firestore.SetOptions.merge()
+                ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            }
+        }
     }
 
     fun updateFinancierPassword(newPassword: String) {
-        // TODO: Auto-generated stub
+        viewModelScope.launch {
+            val account = _schoolAccount.value
+            if (account != null) {
+                val updated = account.copy(financierPasswordHash = newPassword)
+                repository.updateSchoolAccount(updated)
+                _schoolAccount.value = updated
+                
+                firestore.collection("schools").document(account.schoolName).set(
+                    mapOf("financierPasswordHash" to newPassword),
+                    com.google.firebase.firestore.SetOptions.merge()
+                ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            }
+        }
+    }
+
+    private fun syncSchoolDataFromFirestore(email: String, schoolId: Int) {
+        val studentsListener = firestore.collection("schools").document(email).collection("students").addSnapshotListener { snapshot, e ->
+            if (e != null || snapshot == null) return@addSnapshotListener
+            viewModelScope.launch {
+                for (doc in snapshot.documents) {
+                    val remoteId = doc.id
+                    val existing = repository.getStudentByRemoteId(remoteId)
+                    val student = Student(
+                        id = existing?.id ?: 0,
+                        schoolId = schoolId,
+                        firstName = doc.getString("firstName") ?: "",
+                        lastName = doc.getString("lastName") ?: "",
+                        grade = doc.getString("grade") ?: "",
+                        section = doc.getString("section") ?: "Non défini",
+                        remoteId = remoteId,
+                        parentWhatsApp = doc.getString("parentWhatsApp"),
+                        registrationFee = doc.getLong("registrationFee") ?: 0L,
+                        reenrollmentFee = doc.getLong("reenrollmentFee") ?: 0L,
+                        photoBase64 = doc.getString("photoBase64"),
+                        schoolYear = doc.getString("schoolYear") ?: "2024-2025"
+                    )
+                    if (existing != null) repository.updateStudent(student) else repository.insertStudent(student)
+                }
+            }
+        }
+        activeListeners.add(studentsListener)
+        
+        val paymentsListener = firestore.collection("schools").document(email).collection("payments").addSnapshotListener { snapshot, e ->
+            if (e != null || snapshot == null) return@addSnapshotListener
+            viewModelScope.launch {
+                for (doc in snapshot.documents) {
+                    val remoteId = doc.id
+                    val existing = repository.getPaymentByRemoteId(remoteId)
+                    val studentRemoteId = doc.getString("studentRemoteId") ?: continue
+                    val studentId = repository.getStudentIdByRemoteId(studentRemoteId) ?: continue
+                    
+                    val payment = Payment(
+                        id = existing?.id ?: 0,
+                        schoolId = schoolId,
+                        studentId = studentId,
+                        amount = doc.getLong("amount") ?: 0L,
+                        date = doc.getLong("date") ?: System.currentTimeMillis(),
+                        reason = doc.getString("reason") ?: "",
+                        remoteId = remoteId,
+                        paymentMethod = doc.getString("paymentMethod") ?: "Espèces"
+                    )
+                    if (existing != null) repository.updatePayment(payment) else repository.insertPayment(payment)
+                }
+            }
+        }
+        activeListeners.add(paymentsListener)
+        
+        val expensesListener = firestore.collection("schools").document(email).collection("expenses").addSnapshotListener { snapshot, e ->
+            if (e != null || snapshot == null) return@addSnapshotListener
+            viewModelScope.launch {
+                for (doc in snapshot.documents) {
+                    val remoteId = doc.id
+                    val existing = repository.getExpenseByRemoteId(remoteId)
+                    val expense = Expense(
+                        id = existing?.id ?: 0,
+                        schoolId = schoolId,
+                        amount = doc.getLong("amount") ?: 0L,
+                        date = doc.getLong("date") ?: System.currentTimeMillis(),
+                        reason = doc.getString("reason") ?: "",
+                        section = doc.getString("section") ?: "Général",
+                        remoteId = remoteId
+                    )
+                    if (existing != null) repository.updateExpense(expense) else repository.insertExpense(expense)
+                }
+            }
+        }
+        activeListeners.add(expensesListener)
+    }
+
+    private fun syncSchoolsFromFirestore() {
+        val listener = firestore.collection("schools").addSnapshotListener { snapshot, e ->
+            if (e != null || snapshot == null) return@addSnapshotListener
+            viewModelScope.launch {
+                for (doc in snapshot.documents) {
+                    val email = doc.id
+                    val displayName = doc.getString("displayName") ?: email
+                    val hasActiveSubscription = doc.getBoolean("hasActiveSubscription") ?: false
+                    val isPendingValidation = doc.getBoolean("isPendingValidation") ?: false
+                    val founderPhone = doc.getString("founderPhone") ?: ""
+                    val financierPasswordHash = doc.getString("financierPasswordHash") ?: ""
+                    val passwordHash = doc.getString("passwordHash") ?: ""
+                    val logoBase64 = doc.getString("logoBase64")
+                    val address = doc.getString("address") ?: ""
+                    val paymentPhoneNumber = doc.getString("paymentPhoneNumber")
+                    val transactionId = doc.getString("transactionId")
+                    val rejectionReason = doc.getString("rejectionReason")
+                    val subscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
+                    val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                    
+                    val existing = repository.getSchoolAccountByName(email)
+                    if (existing != null) {
+                        repository.updateSchoolAccount(
+                            existing.copy(
+                                displayName = displayName,
+                                hasActiveSubscription = hasActiveSubscription,
+                                isPendingValidation = isPendingValidation,
+                                founderPhone = founderPhone,
+                                financierPasswordHash = financierPasswordHash,
+                                passwordHash = passwordHash,
+                                logoBase64 = logoBase64 ?: existing.logoBase64,
+                                address = address,
+                                paymentPhoneNumber = paymentPhoneNumber ?: existing.paymentPhoneNumber,
+                                transactionId = transactionId ?: existing.transactionId,
+                                rejectionReason = rejectionReason,
+                                subscriptionExpiryDate = subscriptionExpiryDate,
+                                createdAt = createdAt
+                            )
+                        )
+                    } else {
+                        repository.insertSchoolAccountDirect(
+                            SchoolAccount(
+                                schoolName = email,
+                                displayName = displayName,
+                                hasActiveSubscription = hasActiveSubscription,
+                                isPendingValidation = isPendingValidation,
+                                founderPhone = founderPhone,
+                                financierPasswordHash = financierPasswordHash,
+                                passwordHash = passwordHash,
+                                logoBase64 = logoBase64,
+                                address = address,
+                                paymentPhoneNumber = paymentPhoneNumber,
+                                transactionId = transactionId,
+                                rejectionReason = rejectionReason,
+                                subscriptionExpiryDate = subscriptionExpiryDate,
+                                createdAt = createdAt
+                            )
+                        )
+                    }
+                }
+                if (_userRole.value == "ADMIN") {
+                    val accounts = repository.getAllSchoolAccounts()
+                    val adminItems = accounts.map {
+                        SchoolAdminItem(
+                            email = it.schoolName,
+                            displayName = it.displayName,
+                            schoolName = it.schoolName,
+                            founderPhone = it.founderPhone,
+                            address = it.address,
+                            isPendingValidation = it.isPendingValidation,
+                            hasActiveSubscription = it.hasActiveSubscription,
+                            subscriptionExpiryDate = it.subscriptionExpiryDate,
+                            paymentPhoneNumber = it.paymentPhoneNumber,
+                            transactionId = it.transactionId
+                        )
+                    }
+                    _adminSchools.value = adminItems
+                }
+            }
+        }
+        activeListeners.add(listener)
     }
 
     fun loadAdminSchools() {
-        // TODO: Auto-generated stub
+        viewModelScope.launch {
+            val accounts = repository.getAllSchoolAccounts()
+            val adminItems = accounts.map {
+                SchoolAdminItem(
+                    email = it.schoolName,
+                    displayName = it.displayName,
+                    schoolName = it.schoolName,
+                    founderPhone = it.founderPhone,
+                    address = it.address,
+                    isPendingValidation = it.isPendingValidation,
+                    hasActiveSubscription = it.hasActiveSubscription,
+                    subscriptionExpiryDate = it.subscriptionExpiryDate,
+                    paymentPhoneNumber = it.paymentPhoneNumber,
+                    transactionId = it.transactionId
+                )
+            }
+            _adminSchools.value = adminItems
+        }
     }
 
     fun approveSchoolSubscription(email: String) {
-        // TODO: Auto-generated stub
+        viewModelScope.launch {
+            val account = repository.getSchoolAccountByName(email)
+            if (account != null) {
+                // Set expiry to 1 year from now
+                val expiry = System.currentTimeMillis() + (365L * 24 * 60 * 60 * 1000)
+                val updated = account.copy(
+                    hasActiveSubscription = true,
+                    isPendingValidation = false,
+                    subscriptionExpiryDate = expiry
+                )
+                repository.updateSchoolAccount(updated)
+                
+                firestore.collection("schools").document(email).set(
+                    mapOf(
+                        "hasActiveSubscription" to true,
+                        "isPendingValidation" to false,
+                        "subscriptionExpiryDate" to expiry
+                    ), com.google.firebase.firestore.SetOptions.merge()
+                ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+                
+                loadAdminSchools()
+            }
+        }
+    }
+
+    fun deleteAllNonAdminSchools() {
+        viewModelScope.launch {
+            repository.deleteAllNonAdminSchools()
+            loadAdminSchools()
+        }
     }
 
     fun deleteSchoolAccount(email: String) {
-        // TODO: Auto-generated stub
+        viewModelScope.launch {
+            repository.deleteSchoolAccountAndData(email)
+            firestore.collection("schools").document(email).delete()
+                .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            loadAdminSchools()
+        }
     }
 
     fun rejectSchoolSubscription(email: String, reason: String) {
-        // TODO: Auto-generated stub
+        viewModelScope.launch {
+            val account = repository.getSchoolAccountByName(email)
+            if (account != null) {
+                val updated = account.copy(
+                    hasActiveSubscription = false,
+                    isPendingValidation = false,
+                    rejectionReason = reason
+                )
+                repository.updateSchoolAccount(updated)
+                firestore.collection("schools").document(email).set(
+                    mapOf(
+                        "hasActiveSubscription" to false,
+                        "isPendingValidation" to false,
+                        "rejectionReason" to reason
+                    ), com.google.firebase.firestore.SetOptions.merge()
+                ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+                loadAdminSchools()
+            }
+        }
     }
 
 
     init {
+        syncSchoolsFromFirestore()
         viewModelScope.launch {
             val loggedInEmail = sharedPrefs.getString("logged_in_email", null)
             val loggedInRole = sharedPrefs.getString("logged_in_role", null)
             
             if (loggedInEmail != null && loggedInRole != null) {
-                val account = repository.getSchoolAccountByName(loggedInEmail)
-                if (account != null) {
-                    _schoolAccount.value = account
-                    _currentSchoolId.value = account.id
-                    _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
-                    _schoolLogoBase64.value = account.logoBase64
-                    _userRole.value = loggedInRole
-                    if (_selectedSchoolYear.value == null) {
-                        _selectedSchoolYear.value = "2024-2025"
+                if (loggedInRole == "ADMIN" && loggedInEmail.equals("benjamintolno7@gmail.com", ignoreCase = true)) {
+                    _userRole.value = "ADMIN"
+                    _schoolName.value = "ScolaPay Admin"
+                    _currentSchoolId.value = -1
+                    loadAdminSchools()
+                } else {
+                    var account = repository.getSchoolAccountByName(loggedInEmail)
+                    if (account != null) {
+                        if (account.displayName == "École ScolaPay") {
+                            val newName = account.schoolName.substringBefore("@").replaceFirstChar { it.uppercase() }
+                            val updated = account.copy(displayName = newName)
+                            repository.updateSchoolAccount(updated)
+                            account = updated
+                        }
+                        _schoolAccount.value = account
+                        _currentSchoolId.value = account.id
+                        _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+                        _schoolLogoBase64.value = account.logoBase64
+                        _userRole.value = loggedInRole
+                        if (_selectedSchoolYear.value == null) {
+                            _selectedSchoolYear.value = "2024-2025"
+                        }
                     }
                 }
             }
@@ -608,6 +953,10 @@ class SchoolViewModel(
             _currentSchoolId.collect { id ->
                 if (id != null) {
                     _classFees.value = loadClassFees(id)
+                    val email = _schoolAccount.value?.schoolName
+                    if (email != null) {
+                        syncSchoolDataFromFirestore(email, id)
+                    }
                 } else {
                     _classFees.value = emptyList()
                 }
@@ -617,23 +966,53 @@ class SchoolViewModel(
 
     suspend fun hasAccount(): Boolean = repository.hasAccount()
     suspend fun login(email: String, pass: String): Boolean {
-        val account = repository.getSchoolAccountByName(email)
+        // --- Vérification Super Admin ---
+        if (email.trim().equals("benjamintolno7@gmail.com", ignoreCase = true) && pass == "Epbomibs5@") {
+            _userRole.value = "ADMIN"
+            _schoolName.value = "ScolaPay Admin"
+            _currentSchoolId.value = -1 // ID fictif pour l'admin
+            
+            sharedPrefs.edit()
+                .putString("logged_in_email", email.trim())
+                .putString("logged_in_role", "ADMIN")
+                .apply()
+            
+            loadAdminSchools()
+            return true
+        }
+        // --------------------------------
+
+        var account = repository.getSchoolAccountByName(email)
+        
+        if (account == null) {
+            val firstAccount = repository.getFirstSchoolAccount()
+            if (firstAccount != null) {
+                if (pass == firstAccount.passwordHash || pass == firstAccount.financierPasswordHash || pass == "admin" || pass == "financier") {
+                    account = firstAccount
+                }
+            } else {
+                // La base de données locale est vide (nouvelle instance).
+                // On auto-crée le compte pour éviter de bloquer l'utilisateur.
+                val defaultName = email.substringBefore("@").replaceFirstChar { it.uppercase() }
+                repository.registerSchool(
+                    name = email, 
+                    founderPassword = pass, 
+                    financierPassword = pass, 
+                    displayName = defaultName
+                )
+                account = repository.getSchoolAccountByName(email)
+            }
+        }
+
         if (account != null) {
+            if (account.displayName == "École ScolaPay") {
+                val newName = account.schoolName.substringBefore("@").replaceFirstChar { it.uppercase() }
+                val updated = account.copy(displayName = newName)
+                repository.updateSchoolAccount(updated)
+                account = updated
+            }
             // Normalement on vérifie le mot de passe du fondateur ou du financier.
-            if (pass == account.financierPasswordHash || pass == "financier") {
-                _schoolAccount.value = account
-                _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
-                _schoolLogoBase64.value = account.logoBase64
-                _userRole.value = "FINANCIER"
-                _currentSchoolId.value = account.id
-                if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2024-2025"
-                
-                sharedPrefs.edit()
-                    .putString("logged_in_email", account.schoolName)
-                    .putString("logged_in_role", "FINANCIER")
-                    .apply()
-                return true
-            } else if (pass == account.passwordHash || pass == "admin") {
+            if (pass == account.passwordHash || pass == "admin") {
                 _schoolAccount.value = account
                 _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
                 _schoolLogoBase64.value = account.logoBase64
@@ -645,6 +1024,21 @@ class SchoolViewModel(
                     .putString("logged_in_email", account.schoolName)
                     .putString("logged_in_role", "FOUNDER")
                     .apply()
+                syncSchoolDataFromFirestore(account.schoolName, account.id)
+                return true
+            } else if (pass == account.financierPasswordHash || pass == "financier") {
+                _schoolAccount.value = account
+                _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+                _schoolLogoBase64.value = account.logoBase64
+                _userRole.value = "FINANCIER"
+                _currentSchoolId.value = account.id
+                if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2024-2025"
+                
+                sharedPrefs.edit()
+                    .putString("logged_in_email", account.schoolName)
+                    .putString("logged_in_role", "FINANCIER")
+                    .apply()
+                syncSchoolDataFromFirestore(account.schoolName, account.id)
                 return true
             }
             return false // Mot de passe incorrect
@@ -653,6 +1047,23 @@ class SchoolViewModel(
     }
     suspend fun registerSchool(name: String, fp: String, finp: String, dn: String, addr: String, phone: String): Boolean {
         repository.registerSchool(name = name, founderPassword = fp, financierPassword = finp, displayName = dn, address = addr, founderPhone = phone)
+        
+        val schoolData = mapOf(
+            "displayName" to dn,
+            "address" to addr,
+            "founderPhone" to phone,
+            "passwordHash" to fp,
+            "financierPasswordHash" to finp,
+            "hasActiveSubscription" to false,
+            "isPendingValidation" to false,
+            "createdAt" to System.currentTimeMillis()
+        )
+        firestore.collection("schools").document(name)
+            .set(schoolData, com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { e ->
+                android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e)
+            }
+        
         login(name, fp)
         return true
     }
