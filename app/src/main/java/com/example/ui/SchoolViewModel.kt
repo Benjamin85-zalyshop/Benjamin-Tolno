@@ -286,6 +286,8 @@ class SchoolViewModel(
                     "paymentMethod" to payment.paymentMethod
                 )
             ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            
+            updateStudentFinancialsInRTDB(schoolId, studentId)
         }
     }
 
@@ -299,6 +301,8 @@ class SchoolViewModel(
                 firestore.collection("schools").document(email).collection("payments").document(payment.remoteId).delete()
                     .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
             }
+            
+            updateStudentFinancialsInRTDB(payment.schoolId, payment.studentId)
         }
     }
 
@@ -521,7 +525,34 @@ class SchoolViewModel(
     }
 
     fun updateStudentFinancialsInRTDB(schoolId: Int, studentId: Int) {
-        // TODO: Auto-generated stub
+        viewModelScope.launch {
+            val student = repository.getStudentById(studentId) ?: return@launch
+            if (student.remoteId.isEmpty()) return@launch
+            
+            val payments = repository.getAllPaymentsDirect(schoolId).filter { it.studentId == studentId }
+            val totalPaid = payments.sumOf { it.amount }
+            val fees = loadClassFees(schoolId)
+            val classFeeAmount = fees.find { it.grade == student.grade }?.feeAmount ?: 0L
+            val totalFee = student.registrationFee + student.reenrollmentFee + classFeeAmount
+            
+            val updateData = mutableMapOf<String, Any>(
+                "totalFee" to totalFee,
+                "paidFee" to totalPaid
+            )
+            
+            com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                .getReference("students").child(student.remoteId)
+                .updateChildren(updateData)
+                .addOnSuccessListener {
+                    println("Successfully synced financials to RTDB for student ${student.id}")
+                }
+                .addOnFailureListener { e ->
+                    println("Failed to sync financials to RTDB: ${e.message}")
+                }
+                
+            firestore.collection("students").document(student.remoteId)
+                .set(updateData, com.google.firebase.firestore.SetOptions.merge())
+        }
     }
 
     fun syncStudentAcademicsToRTDB(schoolId: Int, studentId: Int, term: String) {
