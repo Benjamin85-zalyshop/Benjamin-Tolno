@@ -224,7 +224,7 @@ object ReportCardPdfUtils {
         try {
             val qrData = QrCodeUtils.buildReportCardQrData(
                 studentId = student.id,
-                remoteId = matricule,
+                remoteId = student.remoteId,
                 name = "${student.firstName} ${student.lastName}",
                 grade = student.grade,
                 section = student.section,

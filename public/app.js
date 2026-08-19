@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCFzxiVtMxfbFmnl9nXdg9JOLBjqAedqK0",
@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const firestore = getFirestore(app);
+const database = getDatabase(app);
 
 // Make functions available globally for HTML onclick attributes
 window.toggleSection = function(id) {
@@ -250,10 +250,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Connect to Firestore
     if (rid) {
-        const studentRef = doc(firestore, 'students', rid);
-        onSnapshot(studentRef, (snapshot) => {
+        const studentRef = ref(database, 'students/' + rid);
+        onValue(studentRef, (snapshot) => {
             if (snapshot.exists()) {
-                const data = snapshot.data();
+                const data = snapshot.val();
                                 const formatCurrency = (num) => {
                     if (num === null || num === undefined) return "0 " + (window.schoolCurrency || "GNF");
                     return Number(num).toLocaleString('fr-FR').replace(/,/g, ' ') + " " + (window.schoolCurrency || "GNF");
@@ -285,8 +285,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         photoContainer.innerHTML = '<img src="data:image/jpeg;base64,' + data.photoBase64 + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" crossorigin="anonymous">';
                     }
                 }
-                if (data.schoolLogo) {
-                    window.schoolLogoBase64 = data.schoolLogo;
+                if (data.logoBase64) {
+                    window.schoolLogoBase64 = data.logoBase64;
                     let logoContainer = document.getElementById('pdfSchoolLogoContainer');
                     if (!logoContainer) {
                         const placeholder = document.getElementById('pdfSchoolLogoInitial');
@@ -296,7 +296,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     }
                     if (logoContainer) {
-                        logoContainer.innerHTML = '<img src="data:image/png;base64,' + data.schoolLogo + '" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" crossorigin="anonymous">';
+                        logoContainer.innerHTML = '<img src="data:image/png;base64,' + data.logoBase64 + '" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" crossorigin="anonymous">';
                     }
                 }
                 if (data.schoolName) {
@@ -352,19 +352,19 @@ document.addEventListener("DOMContentLoaded", () => {
                             
                             const tdEval = document.createElement('td');
                             tdEval.style.padding = "0.75rem";
-                            tdEval.textContent = subjData['Éval.'] || '-';
+                            tdEval.textContent = subjData['Eval'] || '-';
                             
                             const tdAvg = document.createElement('td');
                             tdAvg.style.padding = "0.75rem";
                             tdAvg.style.fontWeight = "600";
-                            tdAvg.textContent = subjData['Moy.'] || '-';
+                            tdAvg.textContent = subjData['Moy'] || '-';
                             
-                            const avgScore = parseFloat(subjData['Moy.']);
+                            const avgScore = parseFloat(subjData['Moy']);
                             if (!isNaN(avgScore) && avgScore < maxScore / 2) {
                                 tdAvg.style.color = "var(--danger)";
                             }
                             
-                            const evalScore = parseFloat(subjData['Éval.']);
+                            const evalScore = parseFloat(subjData['Eval']);
                             if (!isNaN(evalScore) && evalScore < maxScore / 2) {
                                 tdEval.style.color = "var(--danger)";
                             }

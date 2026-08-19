@@ -91,7 +91,7 @@ object QrCodeUtils {
         val safeYear = try { java.net.URLEncoder.encode(schoolYear, "UTF-8") } catch (e: Exception) { schoolYear }
         val avgStr = String.format(java.util.Locale.US, "%.2f", average)
         
-        var url = "$BASE_VERIFY_URL?id=$studentId&mat=$matricule&name=$safeName&grade=$safeGrade&section=$safeSection&term=$safeTerm&avg=$avgStr&rank=$rank&size=$classSize&mention=$safeMention&school=$safeSchool&year=$safeYear"
+        var url = "$BASE_VERIFY_URL?id=$studentId&mat=$matricule&rid=$remoteId&name=$safeName&grade=$safeGrade&section=$safeSection&term=$safeTerm&avg=$avgStr&rank=$rank&size=$classSize&mention=$safeMention&school=$safeSchool&year=$safeYear"
         if (totalFee.isNotEmpty()) url += "&totalFee=${java.net.URLEncoder.encode(totalFee, "UTF-8")}"
         if (paidFee.isNotEmpty()) url += "&paidFee=${java.net.URLEncoder.encode(paidFee, "UTF-8")}"
         if (dueFee.isNotEmpty()) url += "&dueFee=${java.net.URLEncoder.encode(dueFee, "UTF-8")}"
