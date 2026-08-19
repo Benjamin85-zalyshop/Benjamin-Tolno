@@ -539,6 +539,14 @@ class SchoolViewModel(
                 "totalFee" to totalFee,
                 "paidFee" to totalPaid
             )
+            val account = _schoolAccount.value
+            if (account != null) {
+                updateData["schoolName"] = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+                updateData["schoolAddress"] = account.address
+                if (account.logoBase64 != null) {
+                    updateData["logoBase64"] = account.logoBase64!!
+                }
+            }
             
             com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
                 .getReference("students").child(student.remoteId)
@@ -572,7 +580,7 @@ class SchoolViewModel(
                 val grade = studentGrades.find { it.subjectId == subject.id }
                 val score = grade?.evaluationScore ?: 0f
                 totalCoef += subject.coefficient
-                totalPoints += (score / subject.maxScore * 20f) * subject.coefficient
+                totalPoints += score * subject.coefficient
                 
                 detailsList.add(mapOf(
                     "Matière" to subject.name,
@@ -595,7 +603,7 @@ class SchoolViewModel(
                     val g = otherGrades.find { it.subjectId == subject.id }
                     if (g != null && g.evaluationScore != null) {
                         otherTotalCoef += subject.coefficient
-                        otherTotalPoints += (g.evaluationScore) / subject.maxScore * 20f * subject.coefficient
+                        otherTotalPoints += g.evaluationScore * subject.coefficient
                     }
                 }
                 if (otherTotalCoef > 0) otherTotalPoints / otherTotalCoef else 0f
@@ -642,6 +650,7 @@ class SchoolViewModel(
                 val account = _schoolAccount.value
                 if (account != null) {
                     finalUpdateData["schoolName"] = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+                    finalUpdateData["schoolAddress"] = account.address
                     if (account.logoBase64 != null) {
                         finalUpdateData["logoBase64"] = account.logoBase64!!
                     }
@@ -762,9 +771,16 @@ class SchoolViewModel(
         val paymentsListener = firestore.collection("schools").document(email).collection("payments").addSnapshotListener { snapshot, e ->
             if (e != null || snapshot == null) return@addSnapshotListener
             viewModelScope.launch {
-                for (doc in snapshot.documents) {
+                for (change in snapshot.documentChanges) {
+                    val doc = change.document
                     val remoteId = doc.id
                     val existing = repository.getPaymentByRemoteId(remoteId)
+                    
+                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) {
+                        if (existing != null) repository.deletePayment(existing.id)
+                        continue
+                    }
+                    
                     val studentRemoteId = doc.getString("studentRemoteId") ?: continue
                     val studentId = repository.getStudentIdByRemoteId(studentRemoteId) ?: continue
                     
@@ -787,9 +803,16 @@ class SchoolViewModel(
         val expensesListener = firestore.collection("schools").document(email).collection("expenses").addSnapshotListener { snapshot, e ->
             if (e != null || snapshot == null) return@addSnapshotListener
             viewModelScope.launch {
-                for (doc in snapshot.documents) {
+                for (change in snapshot.documentChanges) {
+                    val doc = change.document
                     val remoteId = doc.id
                     val existing = repository.getExpenseByRemoteId(remoteId)
+                    
+                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) {
+                        if (existing != null) repository.deleteExpense(existing.id)
+                        continue
+                    }
+                    
                     val expense = Expense(
                         id = existing?.id ?: 0,
                         schoolId = schoolId,

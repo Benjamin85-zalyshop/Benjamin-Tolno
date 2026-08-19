@@ -305,6 +305,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 if (data.schoolAddress) {
                     document.getElementById('pdfSchoolContact').textContent = data.schoolAddress;
+                } else if (data.schoolName) {
+                    // Fallback to old contact string from Android if needed, but Android now sends schoolAddress
                 }
                 if (data.currency) {
                     window.schoolCurrency = data.currency;
