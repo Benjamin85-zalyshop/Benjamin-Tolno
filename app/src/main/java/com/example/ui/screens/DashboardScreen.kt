@@ -883,6 +883,29 @@ fun DashboardScreen(
                     
                     val pendingRequests = deletionRequests.filter { it.status == "PENDING" }
                     val isUserFounder = userRole == null || userRole.equals("FOUNDER", ignoreCase = true) || userRole.equals("FONDATEUR", ignoreCase = true) || userRole.equals("ADMIN", ignoreCase = true)
+                    val cancelledPayments = payments.filter { it.isCancelled }
+                    if (isUserFounder && cancelledPayments.isNotEmpty()) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .shadow(2.dp, RoundedCornerShape(24.dp))
+                                    .background(Color(0xFFFFFBEB))
+                                    .border(BorderStroke(1.dp, Color(0xFFFCD34D)), RoundedCornerShape(24.dp))
+                                    .padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(24.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text("Alerte de sécurité", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFFB45309))
+                                }
+                                Text("Il y a ${cancelledPayments.size} paiement(s) annulé(s) par vos financiers. Veuillez vérifier l'historique des élèves concernés pour éviter tout litige.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF92400E))
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+                    
                     if (isUserFounder && pendingRequests.isNotEmpty()) {
                         item {
                             Column(
@@ -976,6 +999,7 @@ fun DashboardScreen(
                                                     onClick = { 
                                                         requestToReject = request
                                                         rejectDialogReason = ""
+                                                        showRejectDialog = true
                                                     },
                                                     colors = ButtonDefaults.buttonColors(
                                                         containerColor = Color(0xFFF3F4F6),
@@ -1156,7 +1180,7 @@ fun DashboardScreen(
                         val paymentsByClass = payments.groupBy { payment ->
                             students.find { it.id == payment.studentId }?.grade ?: "Inconnu"
                         }.mapValues { (_, classPayments) ->
-                            classPayments.sumOf { it.amount }
+                            classPayments.filter { !it.isCancelled }.sumOf { it.amount }
                         }.toList().sortedByDescending { it.second }
 
                         if (paymentsByClass.isEmpty()) {
@@ -1353,22 +1377,23 @@ fun DashboardScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Text(
-                                            text = "+${numberFormat.format(payment.amount)} $currency",
+                                            text = if (payment.isCancelled) "Annulé" else "+${numberFormat.format(payment.amount)} $currency",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF10B981),
+                                            color = if (payment.isCancelled) Color.Red else Color(0xFF10B981),
                                             maxLines = 1,
-                                            softWrap = false
+                                            softWrap = false,
+                                            textDecoration = if (payment.isCancelled) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
                                         )
                                         
-                                        if (userRole == "FINANCIER" || userRole == "ADMIN") {
+                                        if ((userRole == "FINANCIER" || userRole == "ADMIN") && !payment.isCancelled) {
                                             IconButton(
                                                 onClick = { paymentToDelete = payment },
                                                 modifier = Modifier.size(24.dp)
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Delete,
-                                                    contentDescription = "Supprimer",
+                                                    contentDescription = "Annuler",
                                                     tint = Color(0xFFEF4444),
                                                     modifier = Modifier.size(16.dp)
                                                 )
@@ -1578,7 +1603,7 @@ fun DashboardScreen(
                         Text(text = "$formattedCollected $currency", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     
-                    val currentTuitionCollected = payments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+                    val currentTuitionCollected = payments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                     val restToPay = totalTheorique - currentTuitionCollected
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2200,7 +2225,7 @@ fun DashboardScreen(
                                 items(targetStudents) { student ->
                                     // Calculate due balance for student
                                     val studentPayments = payments.filter { it.studentId == student.id }
-                                    val totalPaid = studentPayments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+                                    val totalPaid = studentPayments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                                     val classFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
                                     val unpaidBalance = maxOf(0L, classFee - totalPaid)
 
@@ -2321,7 +2346,7 @@ fun DashboardScreen(
         var subPhoneNumber by remember { mutableStateOf("") }
         var subTransactionId by remember { mutableStateOf("") }
         var subErrorMessage by remember { mutableStateOf<String?>(null) }
-        var selectedPaymentMethod by remember { mutableStateOf("CHAP_CHAP") }
+        var selectedPaymentMethod by remember { mutableStateOf("MOBILE_MONEY") }
         var isLoadingChapChap by remember { mutableStateOf(false) }
 
         AlertDialog(
@@ -2346,22 +2371,6 @@ fun DashboardScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF4B5563)
                     )
-                    
-                    androidx.compose.material3.TabRow(
-                        selectedTabIndex = if (selectedPaymentMethod == "CHAP_CHAP") 0 else 1,
-                        containerColor = Color.Transparent
-                    ) {
-                        androidx.compose.material3.Tab(
-                            selected = selectedPaymentMethod == "CHAP_CHAP",
-                            onClick = { selectedPaymentMethod = "CHAP_CHAP" },
-                            text = { Text("Chap Chap Pay") }
-                        )
-                        androidx.compose.material3.Tab(
-                            selected = selectedPaymentMethod == "MOBILE_MONEY",
-                            onClick = { selectedPaymentMethod = "MOBILE_MONEY" },
-                            text = { Text("Mobile Money") }
-                        )
-                    }
 
                     if (selectedPaymentMethod == "MOBILE_MONEY") {
                         Card(
@@ -2514,7 +2523,7 @@ fun DashboardScreen(
                 val schoolYears = remember(endYear) {
                     mutableListOf("Toutes les années").apply {
                         for (y in startYear..endYear) {
-                            add("$y - ${y + 1}")
+                            add("$y-${y + 1}")
                         }
                     }
                 }
@@ -2640,7 +2649,7 @@ fun DashboardScreen(
                     if (scolariteTab == 0) {
                         // RECOUVREMENT TAB CONTENT
                         // 1. Overall stats
-                        val tuitionCollected = payments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+                        val tuitionCollected = payments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                         val remainingToCollect = (totalTheorique - tuitionCollected).coerceAtLeast(0L)
                         val totalProgress = if (totalTheorique > 0) tuitionCollected.toFloat() / totalTheorique else 0f
 
@@ -2709,7 +2718,7 @@ fun DashboardScreen(
                                     val count = gradeStudents.size
                                     val fee = classFees.find { it.grade == grade }?.feeAmount ?: 0L
                                     val expected = count * fee
-                                    val collected = payments.filter { p -> p.reason != "Inscription" && p.reason != "Réinscription" && gradeStudents.any { s -> s.id == p.studentId } }.sumOf { it.amount }
+                                    val collected = payments.filter { p -> !p.isCancelled && p.reason != "Inscription" && p.reason != "Réinscription" && gradeStudents.any { s -> s.id == p.studentId } }.sumOf { it.amount }
                                     val remaining = (expected - collected).coerceAtLeast(0L)
                                     val progress = if (expected > 0) collected.toFloat() / expected else 0f
 
@@ -3200,11 +3209,11 @@ fun DashboardScreen(
                         }
                         
                         val totalInsc = remember(inscriptionPayments) {
-                            inscriptionPayments.filter { it.reason == "Inscription" }.sumOf { it.amount }
+                            inscriptionPayments.filter { !it.isCancelled && it.reason == "Inscription" }.sumOf { it.amount }
                         }
                         
                         val totalReinsc = remember(inscriptionPayments) {
-                            inscriptionPayments.filter { it.reason == "Réinscription" }.sumOf { it.amount }
+                            inscriptionPayments.filter { !it.isCancelled && it.reason == "Réinscription" }.sumOf { it.amount }
                         }
 
                         Column(
@@ -3526,30 +3535,44 @@ fun DashboardScreen(
 
     if (paymentToDelete != null) {
         val numberFormat = remember { NumberFormat.getNumberInstance(Locale("fr", "GN")) }
+        var cancelReason by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { paymentToDelete = null },
-            title = { Text("Avertissement : Supprimer le paiement") },
+            title = { Text("Avertissement : Annuler le paiement") },
             text = {
-                val formattedAmount = numberFormat.format(paymentToDelete?.amount ?: 0L)
-                Text("Attention ! Êtes-vous sûr de vouloir supprimer définitivement ce paiement de $formattedAmount $currency (${paymentToDelete?.reason ?: ""}) ? Cette action est irréversible et affectera le solde de l'élève.")
+                Column {
+                    val formattedAmount = numberFormat.format(paymentToDelete?.amount ?: 0L)
+                    Text("Attention ! Êtes-vous sûr de vouloir annuler ce paiement de $formattedAmount $currency (${paymentToDelete?.reason ?: ""}) ? Le montant sera déduit et l'action sera tracée.")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = cancelReason,
+                        onValueChange = { cancelReason = it },
+                        label = { Text("Motif de l'annulation") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             },
             confirmButton = {
                 Button(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     onClick = {
-                        paymentToDelete?.let {
-                            viewModel.deletePayment(it.id)
-                            Toast.makeText(context, "Paiement supprimé", Toast.LENGTH_SHORT).show()
+                        if (cancelReason.isNotBlank()) {
+                            paymentToDelete?.let {
+                                viewModel.cancelPayment(it.id, cancelReason)
+                                Toast.makeText(context, "Paiement annulé", Toast.LENGTH_SHORT).show()
+                            }
+                            paymentToDelete = null
+                        } else {
+                            Toast.makeText(context, "Le motif est requis", Toast.LENGTH_SHORT).show()
                         }
-                        paymentToDelete = null
                     }
                 ) {
-                    Text("Supprimer définitivement")
+                    Text("Annuler le paiement")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { paymentToDelete = null }) {
-                    Text("Annuler")
+                    Text("Fermer")
                 }
             }
         )

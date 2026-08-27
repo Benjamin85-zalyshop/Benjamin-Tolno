@@ -115,8 +115,8 @@ fun AcademicScreen(
             // Financial data for QR
             val studentPayments = payments.filter { it.studentId == student.id }
             val studentClassFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
-            val totalPaid = studentPayments.sumOf { it.amount } + student.registrationFee
-            val totalToPay = studentClassFee + student.registrationFee
+            val totalPaid = studentPayments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+            val totalToPay = studentClassFee
             val due = (totalToPay - totalPaid).coerceAtLeast(0L)
             val percent = if (totalToPay > 0) (totalPaid.toDouble() / totalToPay.toDouble() * 100).toInt() else 100
             

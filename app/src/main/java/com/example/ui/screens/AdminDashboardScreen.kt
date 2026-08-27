@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +45,7 @@ fun AdminDashboardScreen(
     var showCleanDialog by remember { mutableStateOf(false) }
     var rejectionReason by remember { mutableStateOf("") }
     
+    val localContext = androidx.compose.ui.platform.LocalContext.current
     var showWhatsAppDialog by remember { mutableStateOf(false) }
     var schoolForWhatsApp by remember { mutableStateOf<SchoolAdminItem?>(null) }
     var whatsappMessage by remember { mutableStateOf("") }
@@ -64,7 +66,7 @@ fun AdminDashboardScreen(
     )
 
     LaunchedEffect(Unit) {
-        viewModel.loadAdminSchools()
+        viewModel.forceSyncSchools()
     }
 
     val filteredSchools = remember(schools, selectedTab) {
@@ -99,7 +101,7 @@ fun AdminDashboardScreen(
                     }
                     IconButton(
                         onClick = {
-                            viewModel.loadAdminSchools()
+                            viewModel.forceSyncSchools()
                             Toast.makeText(context, "Mise à jour des écoles...", Toast.LENGTH_SHORT).show()
                         }
                     ) {
@@ -233,6 +235,10 @@ fun AdminDashboardScreen(
                                 schoolForWhatsApp = item
                                 whatsappMessage = whatsappSuggestions.first()
                                 showWhatsAppDialog = true
+                            },
+                            onForceExpireClick = {
+                                viewModel.forceExpireSchool(item.email)
+                                android.widget.Toast.makeText(localContext, "Expiration simulée pour ${item.email}", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         )
                     }
@@ -475,7 +481,8 @@ fun SchoolRequestCard(
     onApprove: () -> Unit,
     onRejectClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onWhatsAppClick: () -> Unit
+    onWhatsAppClick: () -> Unit,
+    onForceExpireClick: () -> Unit = {}
 ) {
     val localContext = LocalContext.current
     Card(
@@ -774,6 +781,8 @@ fun SchoolRequestCard(
                         Icon(Icons.Filled.Delete, contentDescription = "Supprimer", tint = MaterialTheme.colorScheme.error)
                     }
                 }
+                
+
             }
         }
     }

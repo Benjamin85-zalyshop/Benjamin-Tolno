@@ -11,5 +11,6 @@ data class Expense(
     val date: Long = System.currentTimeMillis(),
     val reason: String,
     val section: String = "Général",
-    val remoteId: String = ""
+    val remoteId: String = "",
+    val schoolYear: String = "2025-2026"
 )

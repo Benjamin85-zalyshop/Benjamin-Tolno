@@ -42,7 +42,8 @@ object QrCodeUtils {
         avg: String = "",
         rank: String = "",
         size: String = "",
-        mention: String = ""
+        mention: String = "",
+        schoolName: String = ""
     ): String {
         val matricule = if (remoteId.length >= 5) remoteId.take(5).uppercase() else studentId.toString()
         val safeName = try { java.net.URLEncoder.encode(name, "UTF-8") } catch (e: Exception) { name }
@@ -59,6 +60,7 @@ object QrCodeUtils {
         if (rank.isNotEmpty()) url += "&rank=${java.net.URLEncoder.encode(rank, "UTF-8")}"
         if (size.isNotEmpty()) url += "&size=${java.net.URLEncoder.encode(size, "UTF-8")}"
         if (mention.isNotEmpty()) url += "&mention=${java.net.URLEncoder.encode(mention, "UTF-8")}"
+        if (schoolName.isNotEmpty()) url += "&school=${java.net.URLEncoder.encode(schoolName, "UTF-8")}"
         
         return url
     }

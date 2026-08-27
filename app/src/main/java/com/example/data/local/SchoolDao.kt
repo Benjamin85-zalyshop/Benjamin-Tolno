@@ -33,6 +33,10 @@ interface SchoolDao {
     @Query("SELECT * FROM subjects WHERE remoteId = :remoteId LIMIT 1")
     suspend fun getSubjectByRemoteId(remoteId: String): Subject?
 
+    @Query("SELECT id FROM subjects WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getSubjectIdByRemoteId(remoteId: String): Int?
+
+
     // Grades
     @Query("SELECT * FROM grades WHERE schoolId = :schoolId AND studentId = :studentId AND term = :term")
     fun getGradesForStudentAndTerm(schoolId: Int, studentId: Int, term: String): Flow<List<StudentGrade>>
@@ -98,7 +102,7 @@ interface SchoolDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPayment(payment: Payment)
     
-    @Query("SELECT SUM(amount) FROM payments WHERE schoolId = :schoolId")
+    @Query("SELECT SUM(amount) FROM payments WHERE schoolId = :schoolId AND isCancelled = 0")
     fun getTotalCollected(schoolId: Int): Flow<Long?>
 
     @Query("SELECT * FROM payments WHERE id = :paymentId LIMIT 1")
@@ -202,4 +206,21 @@ interface SchoolDao {
 
     @Query("DELETE FROM expenses WHERE remoteId = :remoteId")
     suspend fun deleteExpenseByRemoteId(remoteId: String)
+
+    @Query("DELETE FROM payments WHERE remoteId != '' AND id NOT IN (SELECT MIN(id) FROM payments WHERE remoteId != '' GROUP BY remoteId)")
+    suspend fun deduplicatePayments()
+
+    @Query("DELETE FROM expenses WHERE remoteId != '' AND id NOT IN (SELECT MIN(id) FROM expenses WHERE remoteId != '' GROUP BY remoteId)")
+    suspend fun deduplicateExpenses()
+
+    @Query("DELETE FROM students WHERE remoteId != '' AND id NOT IN (SELECT MIN(id) FROM students WHERE remoteId != '' GROUP BY remoteId)")
+    suspend fun deduplicateStudents()
+
+    @Query("DELETE FROM subjects WHERE remoteId != '' AND id NOT IN (SELECT MIN(id) FROM subjects WHERE remoteId != '' GROUP BY remoteId)")
+    suspend fun deduplicateSubjects()
+
+    @Query("DELETE FROM grades WHERE remoteId != '' AND id NOT IN (SELECT MIN(id) FROM grades WHERE remoteId != '' GROUP BY remoteId)")
+    suspend fun deduplicateGrades()
+
+
 }

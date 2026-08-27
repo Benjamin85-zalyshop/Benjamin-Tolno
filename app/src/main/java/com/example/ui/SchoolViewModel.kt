@@ -53,7 +53,7 @@ class SchoolViewModel(
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError
 
-    private val _pendingOrderId = MutableStateFlow<String?>(null)
+    private val _pendingOrderId = MutableStateFlow<String?>(sharedPrefs.getString("pending_order_id", null))
     val pendingOrderId: StateFlow<String?> = _pendingOrderId
 
     private val _schoolAccount = MutableStateFlow<SchoolAccount?>(null)
@@ -77,39 +77,58 @@ class SchoolViewModel(
 
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val students: StateFlow<List<Student>> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getAllStudents(id) else flowOf(emptyList())
+    val students: StateFlow<List<Student>> = combine(
+        _currentSchoolId.flatMapLatest { id -> if (id != null) repository.getAllStudents(id) else flowOf(emptyList()) },
+        _selectedSchoolYear,
+        _selectedSection
+    ) { list, year, section ->
+        list.filter { 
+            (year == null || year == "Toutes les années" || it.schoolYear == year) &&
+            (section == null || section == "Toutes les sections" || it.section == section)
+        }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val payments: StateFlow<List<Payment>> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getAllPayments(id) else flowOf(emptyList())
+    val payments: StateFlow<List<Payment>> = combine(
+        _currentSchoolId.flatMapLatest { id -> if (id != null) repository.getAllPayments(id) else flowOf(emptyList()) },
+        students
+    ) { allPayments, filteredStudents ->
+        val studentIds = filteredStudents.map { it.id }.toSet()
+        allPayments.filter { it.studentId in studentIds }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val expenses: StateFlow<List<Expense>> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getAllExpenses(id) else flowOf(emptyList())
+    val expenses: StateFlow<List<Expense>> = combine(
+        _currentSchoolId.flatMapLatest { id -> if (id != null) repository.getAllExpenses(id) else flowOf(emptyList()) },
+        _selectedSchoolYear,
+        _selectedSection
+    ) { allExpenses, year, section ->
+        allExpenses.filter { 
+            (year == null || year == "Toutes les années" || it.schoolYear == year) &&
+            (section == null || section == "Toutes les sections" || it.section == section)
+        }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val subjects: StateFlow<List<Subject>> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getAllSubjects(id) else flowOf(emptyList())
+    val subjects: StateFlow<List<Subject>> = combine(
+        _currentSchoolId.flatMapLatest { id -> if (id != null) repository.getAllSubjects(id) else flowOf(emptyList()) },
+        _selectedSection
+    ) { list, section ->
+        list.filter { section == null || section == "Toutes les sections" || it.section == section }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val grades: StateFlow<List<StudentGrade>> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getAllGrades(id) else flowOf(emptyList())
+    val grades: StateFlow<List<StudentGrade>> = combine(
+        _currentSchoolId.flatMapLatest { id -> if (id != null) repository.getAllGrades(id) else flowOf(emptyList()) },
+        students
+    ) { allGrades, filteredStudents ->
+        val studentIds = filteredStudents.map { it.id }.toSet()
+        allGrades.filter { it.studentId in studentIds }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val totalCollected: StateFlow<Long> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getTotalCollected(id).map { it ?: 0L } else flowOf(0L)
-    }.stateIn(viewModelScope, SharingStarted.Lazily, 0L)
+    val totalCollected: StateFlow<Long> = payments.map { list -> list.filter { !it.isCancelled }.sumOf { it.amount } }.stateIn(viewModelScope, SharingStarted.Lazily, 0L)
     
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val totalExpenses: StateFlow<Long> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getTotalExpenses(id).map { it ?: 0L } else flowOf(0L)
-    }.stateIn(viewModelScope, SharingStarted.Lazily, 0L)
+    val totalExpenses: StateFlow<Long> = expenses.map { list -> list.sumOf { it.amount } }.stateIn(viewModelScope, SharingStarted.Lazily, 0L)
     
     val balance: StateFlow<Long> = combine(totalCollected, totalExpenses) { col, exp -> col - exp }.stateIn(viewModelScope, SharingStarted.Lazily, 0L)
     
@@ -122,13 +141,37 @@ class SchoolViewModel(
     val isPendingValidation: StateFlow<Boolean> = _currentSchoolId.flatMapLatest { id ->
         if (id != null) repository.getPendingValidationStatus(id) else flowOf(false)
     }.stateIn(viewModelScope, SharingStarted.Lazily, false)
-    val trialDaysRemaining: StateFlow<Long> = MutableStateFlow(30L)
-    val isTrialActive: StateFlow<Boolean> = MutableStateFlow(true)
-    val isAppAccessGranted: StateFlow<Boolean> = MutableStateFlow(true)
+    val trialDaysRemaining: StateFlow<Long> = _schoolAccount.map { account ->
+        if (account == null) return@map 0L
+        val elapsed = System.currentTimeMillis() - account.createdAt
+        val trialDuration = 90L * 24L * 60L * 60L * 1000L
+        ((trialDuration - elapsed) / (24L * 60L * 60L * 1000L)).coerceAtLeast(0L)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, 0L)
+
+    val isTrialActive: StateFlow<Boolean> = _schoolAccount.map { account ->
+        if (account == null) return@map false
+        val elapsed = System.currentTimeMillis() - account.createdAt
+        val trialDuration = 90L * 24L * 60L * 60L * 1000L
+        elapsed < trialDuration
+    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+
+    val isAppAccessGranted: StateFlow<Boolean> = _schoolAccount.map { account ->
+        if (account == null) return@map false
+        val elapsed = System.currentTimeMillis() - account.createdAt
+        val trialDuration = 90L * 24L * 60L * 60L * 1000L
+        val trialActive = elapsed < trialDuration
+        
+        val isExpired = account.hasActiveSubscription && account.subscriptionExpiryDate > 0 && account.subscriptionExpiryDate <= System.currentTimeMillis()
+        val subActive = account.hasActiveSubscription && !isExpired
+
+        val granted = trialActive || subActive
+        android.util.Log.d("ScolaPay_Access", "account: ${account.schoolName}, createdAt: ${account.createdAt}, elapsed: $elapsed, trialActive: $trialActive, subActive: $subActive, granted: $granted")
+        granted
+    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
     
     fun getPendingOrderId(): String? = _pendingOrderId.value
     fun setSelectedSchoolYear(year: String) {
-        // TODO: Auto-generated stub
+        _selectedSchoolYear.value = year
     }
 
     fun clearSession() {
@@ -136,7 +179,7 @@ class SchoolViewModel(
     }
 
     fun setSection(section: String) {
-        // TODO: Auto-generated stub
+        _selectedSection.value = section
     }
 
     fun insertStudent(firstName: String, lastName: String, grade: String, section: String, parentWhatsApp: String?, registrationFee: Long, reenrollmentFee: Long, photoBase64: String?) {
@@ -206,6 +249,14 @@ class SchoolViewModel(
         try {
             val jsonStr = kotlinx.serialization.json.Json.encodeToString(fees)
             sharedPrefs.edit().putString("class_fees_$schoolId", jsonStr).apply()
+            
+            val email = _schoolAccount.value?.schoolName
+            if (email != null) {
+                firestore.collection("schools").document(email).set(
+                    mapOf("classFeesStr" to jsonStr),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+            }
         } catch (e: Exception) {
             android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e)
         }
@@ -235,19 +286,55 @@ class SchoolViewModel(
     }
 
     fun createDeletionRequest(student: Student, reason: String) {
-        // TODO: Auto-generated stub
+        val email = _schoolAccount.value?.schoolName ?: return
+        val remoteId = java.util.UUID.randomUUID().toString()
+        val request = DeletionRequest(
+            id = remoteId,
+            studentRemoteId = student.remoteId,
+            studentName = "${student.firstName} ${student.lastName}",
+            grade = student.grade,
+            section = student.section,
+            reason = reason,
+            requestedBy = "Financier",
+            requestedAt = System.currentTimeMillis(),
+            status = "PENDING"
+        )
+        firestore.collection("schools").document(email).collection("deletionRequests").document(remoteId).set(request)
+            .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error creating deletion request", e) }
     }
 
     fun approveDeletionRequest(request: DeletionRequest) {
-        // TODO: Auto-generated stub
+        val email = _schoolAccount.value?.schoolName ?: return
+        viewModelScope.launch {
+            // Delete the student locally and remotely
+            val student = repository.getStudentByRemoteId(request.studentRemoteId)
+            if (student != null) {
+                repository.deleteStudentById(student.id)
+            }
+            firestore.collection("schools").document(email).collection("students").document(request.studentRemoteId).delete()
+            
+            // Mark request as APPROVED
+            firestore.collection("schools").document(email).collection("deletionRequests").document(request.id).update("status", "APPROVED")
+                .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error approving deletion request", e) }
+        }
     }
 
     fun rejectDeletionRequest(request: DeletionRequest, reason: String) {
-        // TODO: Auto-generated stub
+        val email = _schoolAccount.value?.schoolName ?: return
+        firestore.collection("schools").document(email).collection("deletionRequests").document(request.id)
+            .update(
+                mapOf(
+                    "status" to "REJECTED",
+                    "rejectionReason" to reason
+                )
+            )
+            .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error rejecting deletion request", e) }
     }
 
     fun dismissDeletionRequest(request: DeletionRequest) {
-        // TODO: Auto-generated stub
+        val email = _schoolAccount.value?.schoolName ?: return
+        firestore.collection("schools").document(email).collection("deletionRequests").document(request.id).delete()
+            .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error dismissing deletion request", e) }
     }
 
     fun deleteStudentDirectly(student: Student) {
@@ -291,24 +378,39 @@ class SchoolViewModel(
         }
     }
 
-    fun deletePayment(paymentId: Int) {
+    fun cancelPayment(paymentId: Int, reason: String) {
         val email = _schoolAccount.value?.schoolName ?: return
+        val currentRole = _userRole.value ?: "INCONNU"
         viewModelScope.launch {
             val payment = repository.getPaymentById(paymentId) ?: return@launch
-            repository.deletePayment(paymentId)
+            val cancelledPayment = payment.copy(
+                isCancelled = true,
+                cancellationReason = reason,
+                cancelledBy = currentRole,
+                cancelledAt = System.currentTimeMillis()
+            )
+            repository.updatePayment(cancelledPayment)
             
-            if (payment.remoteId.isNotEmpty()) {
-                firestore.collection("schools").document(email).collection("payments").document(payment.remoteId).delete()
-                    .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            if (cancelledPayment.remoteId.isNotEmpty()) {
+                val updates = mapOf<String, Any>(
+                    "isCancelled" to true,
+                    "cancellationReason" to reason,
+                    "cancelledBy" to currentRole,
+                    "cancelledAt" to (cancelledPayment.cancelledAt ?: 0L)
+                )
+                firestore.collection("schools").document(email).collection("payments").document(cancelledPayment.remoteId)
+                    .update(updates)
+                    .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing cancel to Firebase", e) }
             }
             
-            updateStudentFinancialsInRTDB(payment.schoolId, payment.studentId)
+            updateStudentFinancialsInRTDB(cancelledPayment.schoolId, cancelledPayment.studentId)
         }
     }
 
     fun insertExpense(amount: Long, category: String, description: String, section: String) {
         val schoolId = _currentSchoolId.value ?: return
         val email = _schoolAccount.value?.schoolName ?: return
+        val year = _selectedSchoolYear.value ?: "2026-2027"
         viewModelScope.launch {
             val fullReason = if(description.isNotBlank()) "$category - $description" else category
             val remoteId = java.util.UUID.randomUUID().toString()
@@ -317,7 +419,8 @@ class SchoolViewModel(
                 amount = amount,
                 reason = fullReason,
                 section = section,
-                remoteId = remoteId
+                remoteId = remoteId,
+                schoolYear = year
             )
             repository.insertExpense(expense)
             
@@ -326,7 +429,8 @@ class SchoolViewModel(
                     "amount" to expense.amount,
                     "reason" to expense.reason,
                     "section" to expense.section,
-                    "date" to expense.date
+                    "date" to expense.date,
+                    "schoolYear" to year
                 )
             ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
         }
@@ -347,21 +451,40 @@ class SchoolViewModel(
 
     fun insertSubject(section: String, grade: String, name: String, coefficient: Int, maxScore: Float) {
         val schoolId = _currentSchoolId.value ?: return
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
-            repository.insertSubject(Subject(
+            val remoteId = java.util.UUID.randomUUID().toString()
+            val subject = Subject(
                 schoolId = schoolId,
                 section = section,
                 grade = grade,
                 name = name,
                 coefficient = coefficient,
-                maxScore = maxScore
-            ))
+                maxScore = maxScore,
+                remoteId = remoteId
+            )
+            repository.insertSubject(subject)
+            
+            firestore.collection("schools").document(email).collection("subjects").document(remoteId).set(
+                mapOf(
+                    "section" to subject.section,
+                    "grade" to subject.grade,
+                    "name" to subject.name,
+                    "coefficient" to subject.coefficient,
+                    "maxScore" to subject.maxScore
+                )
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
         }
     }
 
     fun deleteSubject(subject: Subject) {
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
             repository.deleteSubjectById(subject.id)
+            if (subject.remoteId.isNotEmpty()) {
+                firestore.collection("schools").document(email).collection("subjects").document(subject.remoteId).delete()
+                    .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            }
         }
     }
 
@@ -483,29 +606,47 @@ class SchoolViewModel(
             )
         }
 
+        val email = _schoolAccount.value?.schoolName
         viewModelScope.launch {
             defaultSubjects.forEach { (name, coeff, maxScore) ->
-                repository.insertSubject(Subject(
+                val remoteId = java.util.UUID.randomUUID().toString()
+                val subject = Subject(
                     schoolId = schoolId,
                     section = section,
                     grade = grade,
                     name = name,
                     coefficient = coeff,
-                    maxScore = maxScore
-                ))
+                    maxScore = maxScore,
+                    remoteId = remoteId
+                )
+                repository.insertSubject(subject)
+                if (email != null) {
+                    firestore.collection("schools").document(email).collection("subjects").document(remoteId).set(
+                        mapOf(
+                            "section" to subject.section,
+                            "grade" to subject.grade,
+                            "name" to subject.name,
+                            "coefficient" to subject.coefficient,
+                            "maxScore" to subject.maxScore
+                        )
+                    ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+                }
             }
         }
     }
 
     fun saveGrade(studentId: Int, studentRemoteId: String, subjectId: Int, subjectRemoteId: String, term: String, evaluationScore: Float?, examScore: Float?, comment: String?) {
         val schoolId = _currentSchoolId.value ?: return
+        val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
             val existing = repository.getExistingGrade(schoolId, studentId, subjectId, term)
+            val remoteId = existing?.remoteId?.takeIf { it.isNotEmpty() } ?: java.util.UUID.randomUUID().toString()
             val gradeToSave = if (existing != null) {
                 existing.copy(
                     evaluationScore = evaluationScore,
                     examScore = examScore,
-                    teacherComment = comment
+                    teacherComment = comment,
+                    remoteId = remoteId
                 )
             } else {
                 StudentGrade(
@@ -517,10 +658,22 @@ class SchoolViewModel(
                     term = term,
                     evaluationScore = evaluationScore,
                     examScore = examScore,
-                    teacherComment = comment
+                    teacherComment = comment,
+                    remoteId = remoteId
                 )
             }
             repository.insertGrade(gradeToSave)
+            
+            firestore.collection("schools").document(email).collection("grades").document(remoteId).set(
+                mapOf(
+                    "studentRemoteId" to studentRemoteId,
+                    "subjectRemoteId" to subjectRemoteId,
+                    "term" to term,
+                    "evaluationScore" to evaluationScore,
+                    "examScore" to examScore,
+                    "teacherComment" to comment
+                )
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
         }
     }
 
@@ -530,10 +683,10 @@ class SchoolViewModel(
             if (student.remoteId.isEmpty()) return@launch
             
             val payments = repository.getAllPaymentsDirect(schoolId).filter { it.studentId == studentId }
-            val totalPaid = payments.sumOf { it.amount }
+            val totalPaid = payments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
             val fees = loadClassFees(schoolId)
             val classFeeAmount = fees.find { it.grade == student.grade }?.feeAmount ?: 0L
-            val totalFee = student.registrationFee + student.reenrollmentFee + classFeeAmount
+            val totalFee = classFeeAmount
             
             val updateData = mutableMapOf<String, Any>(
                 "totalFee" to totalFee,
@@ -611,13 +764,17 @@ class SchoolViewModel(
             
             val rank = averages.indexOfFirst { it <= average }.takeIf { it >= 0 }?.plus(1) ?: 1
             
+            val isPrimary = student.section.contains("PRIMAIRE", ignoreCase = true)
+            val baseScale = if (isPrimary) 10f else 20f
+            val ratio = average / baseScale
             val mention = when {
-                average >= 18 -> "Excellent"
-                average >= 16 -> "Très Bien"
-                average >= 14 -> "Bien"
-                average >= 12 -> "Assez Bien"
-                average >= 10 -> "Passable"
-                average >= 8 -> "Insuffisant"
+                ratio >= 0.9f -> "Excellent"
+                ratio >= 0.8f -> "Très Bien"
+                ratio >= 0.7f -> "Bien"
+                ratio >= 0.6f -> "Assez Bien"
+                ratio >= 0.5f -> "Passable"
+                ratio >= 0.4f -> "Insuffisant"
+                ratio >= 0.3f -> "Faible"
                 else -> "Médiocre"
             }
             
@@ -635,10 +792,10 @@ class SchoolViewModel(
             if (student.remoteId.isNotEmpty()) {
                 // Fetch financials
                 val payments = repository.getAllPaymentsDirect(schoolId).filter { it.studentId == studentId }
-                val totalPaid = payments.sumOf { it.amount }
+                val totalPaid = payments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                 val fees = loadClassFees(schoolId)
                 val classFeeAmount = fees.find { it.grade == student.grade }?.feeAmount ?: 0L
-                val totalFee = student.registrationFee + student.reenrollmentFee + classFeeAmount
+                val totalFee = classFeeAmount
                 
                 val finalUpdateData = mutableMapOf<String, Any>()
                 finalUpdateData.putAll(updateData)
@@ -648,8 +805,14 @@ class SchoolViewModel(
                     finalUpdateData["photoBase64"] = student.photoBase64!!
                 }
                 val account = _schoolAccount.value
+                val sName = _schoolName.value
+                if (sName != null && sName.isNotBlank()) {
+                    finalUpdateData["schoolName"] = sName
+                }
                 if (account != null) {
-                    finalUpdateData["schoolName"] = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+                    if (!finalUpdateData.containsKey("schoolName")) {
+                        finalUpdateData["schoolName"] = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+                    }
                     finalUpdateData["schoolAddress"] = account.address
                     if (account.logoBase64 != null) {
                         finalUpdateData["logoBase64"] = account.logoBase64!!
@@ -687,19 +850,56 @@ class SchoolViewModel(
     }
 
     fun activateSubscription() {
-        // TODO: Auto-generated stub
+        val account = _schoolAccount.value ?: return
+        viewModelScope.launch {
+            val updated = account.copy(
+                hasActiveSubscription = true,
+                isPendingValidation = false,
+                subscriptionExpiryDate = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000 // +1 year
+            )
+            repository.updateSchoolAccount(updated)
+            _schoolAccount.value = updated
+            
+            firestore.collection("schools").document(account.schoolName).update(
+                mapOf(
+                    "hasActiveSubscription" to true,
+                    "isPendingValidation" to false,
+                    "subscriptionExpiryDate" to updated.subscriptionExpiryDate
+                )
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error updating subscription", e) }
+        }
     }
 
     fun savePendingOrderId(orderId: String) {
-        // TODO: Auto-generated stub
+        _pendingOrderId.value = orderId
+        sharedPrefs.edit().putString("pending_order_id", orderId).apply()
     }
 
     fun clearPendingOrderId() {
-        // TODO: Auto-generated stub
+        _pendingOrderId.value = null
+        sharedPrefs.edit().remove("pending_order_id").apply()
     }
 
     fun checkPendingPaymentStatus(onResult: (String) -> Unit) {
-        // TODO: Auto-generated stub
+        val orderId = _pendingOrderId.value
+        if (orderId == null) {
+            return
+        }
+        viewModelScope.launch {
+            val status = com.example.utils.ChapChapPayApi.checkOrderStatus(orderId)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                if (status == "SUCCESS") {
+                    activateSubscription()
+                    clearPendingOrderId()
+                    onResult("SUCCESS")
+                } else if (status == "FAILED") {
+                    clearPendingOrderId()
+                    onResult("FAILED")
+                } else {
+                    onResult("PENDING")
+                }
+            }
+        }
     }
 
     fun submitSubscriptionRequest(phoneNumber: String, transactionId: String) {
@@ -742,6 +942,29 @@ class SchoolViewModel(
     }
 
     private fun syncSchoolDataFromFirestore(email: String, schoolId: Int) {
+        for (listener in activeListeners) {
+            listener.remove()
+        }
+        activeListeners.clear()
+        viewModelScope.launch {
+            repository.deduplicateData()
+        }
+
+        val schoolDocListener = firestore.collection("schools").document(email).addSnapshotListener { snapshot, e ->
+            if (e != null || snapshot == null) return@addSnapshotListener
+            val classFeesStr = snapshot.getString("classFeesStr")
+            if (classFeesStr != null) {
+                try {
+                    val fees = kotlinx.serialization.json.Json.decodeFromString<List<ClassFee>>(classFeesStr)
+                    _classFees.value = fees
+                    sharedPrefs.edit().putString("class_fees_$schoolId", classFeesStr).apply()
+                } catch (e: Exception) {
+                    android.util.Log.e("ScolaPay-Firebase", "Error syncing class fees", e)
+                }
+            }
+        }
+        activeListeners.add(schoolDocListener)
+
         val studentsListener = firestore.collection("schools").document(email).collection("students").addSnapshotListener { snapshot, e ->
             if (e != null || snapshot == null) return@addSnapshotListener
             viewModelScope.launch {
@@ -760,7 +983,7 @@ class SchoolViewModel(
                         registrationFee = doc.getLong("registrationFee") ?: 0L,
                         reenrollmentFee = doc.getLong("reenrollmentFee") ?: 0L,
                         photoBase64 = doc.getString("photoBase64"),
-                        schoolYear = doc.getString("schoolYear") ?: "2024-2025"
+                        schoolYear = doc.getString("schoolYear") ?: "2026-2027"
                     )
                     if (existing != null) repository.updateStudent(student) else repository.insertStudent(student)
                 }
@@ -792,7 +1015,11 @@ class SchoolViewModel(
                         date = doc.getLong("date") ?: System.currentTimeMillis(),
                         reason = doc.getString("reason") ?: "",
                         remoteId = remoteId,
-                        paymentMethod = doc.getString("paymentMethod") ?: "Espèces"
+                        paymentMethod = doc.getString("paymentMethod") ?: "Espèces",
+                        isCancelled = doc.getBoolean("isCancelled") ?: false,
+                        cancellationReason = doc.getString("cancellationReason"),
+                        cancelledBy = doc.getString("cancelledBy"),
+                        cancelledAt = doc.getLong("cancelledAt")
                     )
                     if (existing != null) repository.updatePayment(payment) else repository.insertPayment(payment)
                 }
@@ -820,13 +1047,111 @@ class SchoolViewModel(
                         date = doc.getLong("date") ?: System.currentTimeMillis(),
                         reason = doc.getString("reason") ?: "",
                         section = doc.getString("section") ?: "Général",
-                        remoteId = remoteId
+                        remoteId = remoteId,
+                        schoolYear = doc.getString("schoolYear") ?: "2025-2026"
                     )
                     if (existing != null) repository.updateExpense(expense) else repository.insertExpense(expense)
                 }
             }
         }
+                val subjectsListener = firestore.collection("schools").document(email).collection("subjects").addSnapshotListener { snapshot, e ->
+            if (e != null || snapshot == null) return@addSnapshotListener
+            viewModelScope.launch {
+                for (change in snapshot.documentChanges) {
+                    val doc = change.document
+                    val remoteId = doc.id
+                    val existing = repository.getSubjectByRemoteId(remoteId)
+                    
+                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) {
+                        if (existing != null) repository.deleteSubjectById(existing.id)
+                        continue
+                    }
+                    
+                    val subject = Subject(
+                        id = existing?.id ?: 0,
+                        schoolId = schoolId,
+                        section = doc.getString("section") ?: "",
+                        grade = doc.getString("grade") ?: "",
+                        name = doc.getString("name") ?: "",
+                        coefficient = doc.getLong("coefficient")?.toInt() ?: 1,
+                        maxScore = doc.getDouble("maxScore")?.toFloat() ?: 20f,
+                        remoteId = remoteId
+                    )
+                    if (existing != null) {
+                        repository.insertSubject(subject.copy(id = existing.id))
+                    } else {
+                        repository.insertSubject(subject)
+                    }
+                }
+            }
+        }
+        activeListeners.add(subjectsListener)
+
+        val gradesListener = firestore.collection("schools").document(email).collection("grades").addSnapshotListener { snapshot, e ->
+            if (e != null || snapshot == null) return@addSnapshotListener
+            viewModelScope.launch {
+                for (change in snapshot.documentChanges) {
+                    val doc = change.document
+                    val remoteId = doc.id
+                    val existing = repository.getGradeByRemoteId(remoteId)
+                    
+                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) {
+                        if (existing != null) repository.deleteGradeById(existing.id)
+                        continue
+                    }
+                    
+                    val studentRemoteId = doc.getString("studentRemoteId") ?: continue
+                    val subjectRemoteId = doc.getString("subjectRemoteId") ?: continue
+                    
+                    val studentId = repository.getStudentIdByRemoteId(studentRemoteId) ?: continue
+                    val subjectId = repository.getSubjectIdByRemoteId(subjectRemoteId) ?: continue
+                    
+                    val grade = StudentGrade(
+                        id = existing?.id ?: 0,
+                        schoolId = schoolId,
+                        studentId = studentId,
+                        studentRemoteId = studentRemoteId,
+                        subjectId = subjectId,
+                        subjectRemoteId = subjectRemoteId,
+                        term = doc.getString("term") ?: "1er Trimestre",
+                        evaluationScore = doc.getDouble("evaluationScore")?.toFloat(),
+                        examScore = doc.getDouble("examScore")?.toFloat(),
+                        teacherComment = doc.getString("teacherComment"),
+                        remoteId = remoteId
+                    )
+                    if (existing != null) {
+                        repository.insertGrade(grade.copy(id = existing.id))
+                    } else {
+                        repository.insertGrade(grade)
+                    }
+                }
+            }
+        }
+        activeListeners.add(gradesListener)
+
+        val deletionRequestsListener = firestore.collection("schools").document(email).collection("deletionRequests").addSnapshotListener { snapshot, e ->
+            if (e != null || snapshot == null) return@addSnapshotListener
+            val requests = mutableListOf<DeletionRequest>()
+            for (doc in snapshot.documents) {
+                requests.add(
+                    DeletionRequest(
+                        id = doc.id,
+                        studentRemoteId = doc.getString("studentRemoteId") ?: "",
+                        studentName = doc.getString("studentName") ?: "",
+                        grade = doc.getString("grade") ?: "",
+                        section = doc.getString("section") ?: "",
+                        reason = doc.getString("reason") ?: "",
+                        requestedBy = doc.getString("requestedBy") ?: "",
+                        requestedAt = doc.getLong("requestedAt") ?: 0L,
+                        status = doc.getString("status") ?: "PENDING",
+                        rejectionReason = doc.getString("rejectionReason") ?: ""
+                    )
+                )
+            }
+            _deletionRequests.value = requests.sortedByDescending { it.requestedAt }
+        }
         activeListeners.add(expensesListener)
+        activeListeners.add(deletionRequestsListener)
     }
 
     private fun syncSchoolsFromFirestore() {
@@ -902,7 +1227,8 @@ class SchoolViewModel(
                             hasActiveSubscription = it.hasActiveSubscription,
                             subscriptionExpiryDate = it.subscriptionExpiryDate,
                             paymentPhoneNumber = it.paymentPhoneNumber,
-                            transactionId = it.transactionId
+                            transactionId = it.transactionId,
+                            createdAt = it.createdAt
                         )
                     }
                     _adminSchools.value = adminItems
@@ -910,6 +1236,72 @@ class SchoolViewModel(
             }
         }
         activeListeners.add(listener)
+    }
+
+    fun forceSyncSchools() {
+        firestore.collection("schools").get().addOnSuccessListener { snapshot ->
+            viewModelScope.launch {
+                for (doc in snapshot.documents) {
+                    val email = doc.id
+                    val displayName = doc.getString("displayName") ?: email
+                    val hasActiveSubscription = doc.getBoolean("hasActiveSubscription") ?: false
+                    val isPendingValidation = doc.getBoolean("isPendingValidation") ?: false
+                    val founderPhone = doc.getString("founderPhone") ?: ""
+                    val financierPasswordHash = doc.getString("financierPasswordHash") ?: ""
+                    val passwordHash = doc.getString("passwordHash") ?: ""
+                    val logoBase64 = doc.getString("logoBase64")
+                    val address = doc.getString("address") ?: ""
+                    val paymentPhoneNumber = doc.getString("paymentPhoneNumber")
+                    val transactionId = doc.getString("transactionId")
+                    val rejectionReason = doc.getString("rejectionReason")
+                    val subscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
+                    val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                    
+                    val existing = repository.getSchoolAccountByName(email)
+                    if (existing != null) {
+                        repository.updateSchoolAccount(
+                            existing.copy(
+                                displayName = displayName,
+                                hasActiveSubscription = hasActiveSubscription,
+                                isPendingValidation = isPendingValidation,
+                                founderPhone = founderPhone,
+                                financierPasswordHash = financierPasswordHash,
+                                passwordHash = passwordHash,
+                                logoBase64 = logoBase64 ?: existing.logoBase64,
+                                address = address,
+                                paymentPhoneNumber = paymentPhoneNumber ?: existing.paymentPhoneNumber,
+                                transactionId = transactionId ?: existing.transactionId,
+                                rejectionReason = rejectionReason,
+                                subscriptionExpiryDate = subscriptionExpiryDate,
+                                createdAt = createdAt
+                            )
+                        )
+                    } else {
+                        repository.insertSchoolAccountDirect(
+                            SchoolAccount(
+                                schoolName = email,
+                                displayName = displayName,
+                                hasActiveSubscription = hasActiveSubscription,
+                                isPendingValidation = isPendingValidation,
+                                founderPhone = founderPhone,
+                                financierPasswordHash = financierPasswordHash,
+                                passwordHash = passwordHash,
+                                logoBase64 = logoBase64,
+                                address = address,
+                                paymentPhoneNumber = paymentPhoneNumber,
+                                transactionId = transactionId,
+                                rejectionReason = rejectionReason,
+                                subscriptionExpiryDate = subscriptionExpiryDate,
+                                createdAt = createdAt
+                            )
+                        )
+                    }
+                }
+                loadAdminSchools()
+            }
+        }.addOnFailureListener { e ->
+            _adminError.value = "Erreur de synchronisation: ${e.message}"
+        }
     }
 
     fun loadAdminSchools() {
@@ -926,10 +1318,42 @@ class SchoolViewModel(
                     hasActiveSubscription = it.hasActiveSubscription,
                     subscriptionExpiryDate = it.subscriptionExpiryDate,
                     paymentPhoneNumber = it.paymentPhoneNumber,
-                    transactionId = it.transactionId
+                    transactionId = it.transactionId,
+                    createdAt = it.createdAt
                 )
             }
             _adminSchools.value = adminItems
+        }
+    }
+
+    
+    fun forceExpireSchool(email: String) {
+        viewModelScope.launch {
+            val account = repository.getSchoolAccountByName(email)
+            if (account == null) {
+                android.util.Log.e("ScolaPay", "forceExpireSchool: account not found for $email")
+                return@launch
+            }
+            android.util.Log.d("ScolaPay", "forceExpireSchool: found account for $email, expiring now!")
+            val expiredDate = System.currentTimeMillis() - 100L * 24 * 60 * 60 * 1000 // 100 days ago
+            val updated = account.copy(
+                createdAt = expiredDate,
+                hasActiveSubscription = false,
+                subscriptionExpiryDate = 0L,
+                isPendingValidation = false
+            )
+            repository.updateSchoolAccount(updated)
+            
+            firestore.collection("schools").document(email).set(
+                mapOf(
+                    "createdAt" to expiredDate,
+                    "hasActiveSubscription" to false,
+                    "subscriptionExpiryDate" to 0L,
+                    "isPendingValidation" to false
+                ), com.google.firebase.firestore.SetOptions.merge()
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay", "Error force expiring", e) }
+            
+            loadAdminSchools()
         }
     }
 
@@ -1025,7 +1449,7 @@ class SchoolViewModel(
                         _schoolLogoBase64.value = account.logoBase64
                         _userRole.value = loggedInRole
                         if (_selectedSchoolYear.value == null) {
-                            _selectedSchoolYear.value = "2024-2025"
+                            _selectedSchoolYear.value = "2026-2027"
                         }
                     }
                 }
@@ -1100,13 +1524,13 @@ class SchoolViewModel(
                 _schoolLogoBase64.value = account.logoBase64
                 _userRole.value = "FOUNDER"
                 _currentSchoolId.value = account.id
-                if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2024-2025"
+                if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2026-2027"
                 
                 sharedPrefs.edit()
                     .putString("logged_in_email", account.schoolName)
                     .putString("logged_in_role", "FOUNDER")
                     .apply()
-                syncSchoolDataFromFirestore(account.schoolName, account.id)
+                // syncSchoolDataFromFirestore automatically called by _currentSchoolId observer
                 return true
             } else if (pass == account.financierPasswordHash || pass == "financier") {
                 _schoolAccount.value = account
@@ -1114,13 +1538,13 @@ class SchoolViewModel(
                 _schoolLogoBase64.value = account.logoBase64
                 _userRole.value = "FINANCIER"
                 _currentSchoolId.value = account.id
-                if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2024-2025"
+                if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2026-2027"
                 
                 sharedPrefs.edit()
                     .putString("logged_in_email", account.schoolName)
                     .putString("logged_in_role", "FINANCIER")
                     .apply()
-                syncSchoolDataFromFirestore(account.schoolName, account.id)
+                // syncSchoolDataFromFirestore automatically called by _currentSchoolId observer
                 return true
             }
             return false // Mot de passe incorrect

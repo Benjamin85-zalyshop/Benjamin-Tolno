@@ -1,9 +1,7 @@
-import re
-
-with open('app/src/main/java/com/example/ui/screens/AddPaymentScreen.kt', 'r', encoding='utf-8') as f:
-    content = f.read()
-
-content = content.replace('    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()\n    val currency = schoolAccount?.currency ?: "GNF"\n    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()\n    val currency = schoolAccount?.currency ?: "GNF"', '    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()\n    val currency = schoolAccount?.currency ?: "GNF"')
-
-with open('app/src/main/java/com/example/ui/screens/AddPaymentScreen.kt', 'w', encoding='utf-8') as f:
-    f.write(content)
+# Cleanup scripts
+import os
+files_to_remove = ["patch_dao.py", "patch_repo.py", "patch_dedup.py", "patch_login.py", "patch_dao_fix.py", "patch_years.py", "patch_format.py", "patch_pending_order.py", "patch_chapchap_status.py"]
+for f in files_to_remove:
+    if os.path.exists(f):
+        os.remove(f)
+print("Cleanup done")

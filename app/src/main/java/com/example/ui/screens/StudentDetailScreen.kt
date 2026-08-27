@@ -70,7 +70,7 @@ fun StudentDetailScreen(
     val studentPayments = allPayments.filter { it.studentId == studentId }.sortedByDescending { it.date }
     
     val numberFormat = NumberFormat.getNumberInstance(Locale("fr", "GN"))
-    val totalPaid = studentPayments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+    val totalPaid = studentPayments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
 
     val context = LocalContext.current
     
@@ -386,17 +386,16 @@ fun StudentDetailScreen(
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
                         )
 
-                        val totalToPay = studentClassFee + student.registrationFee + student.reenrollmentFee
-                        val currentTotalPaid = studentPayments.sumOf { it.amount } + student.registrationFee + student.reenrollmentFee
-                        val remainingToPay = (totalToPay - currentTotalPaid).coerceAtLeast(0L)
+                        val tuitionPaid = studentPayments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+                        val remainingToPay = (studentClassFee - tuitionPaid).coerceAtLeast(0L)
 
                         Text(
-                            text = "Frais de scolarité total : " + if (studentClassFee > 0L) "${numberFormat.format(totalToPay)} $currency" else "Non défini",
+                            text = "Frais de scolarité total : " + if (studentClassFee > 0L) "${numberFormat.format(studentClassFee)} $currency" else "Non défini",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            text = "Total payé : ${numberFormat.format(currentTotalPaid)} $currency",
+                            text = "Scolarité payée : ${numberFormat.format(tuitionPaid)} $currency",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             fontWeight = FontWeight.Bold
@@ -404,7 +403,7 @@ fun StudentDetailScreen(
                         
                         if (studentClassFee > 0L) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            if (currentTotalPaid >= totalToPay) {
+                            if (tuitionPaid >= studentClassFee) {
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = Color(0xFFD1FAE5)),
                                     modifier = Modifier.padding(top = 4.dp)
@@ -588,6 +587,9 @@ fun StudentDetailScreen(
                         reason = payment.reason,
                         date = payment.date,
                         paymentMethod = payment.paymentMethod,
+                        isCancelled = payment.isCancelled,
+                        cancellationReason = payment.cancellationReason,
+                        cancelledBy = payment.cancelledBy,
                         showDeleteAction = (userRole == "FINANCIER" || userRole == "ADMIN"),
                         currency = currency,
                         onDelete = { paymentToDelete = payment },
@@ -616,9 +618,8 @@ fun StudentDetailScreen(
 
     if (showTicketDialog) {
         val studentClassFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
-        val ticketTotalToPay = studentClassFee + student.registrationFee + student.reenrollmentFee
-        val ticketTotalPaid = studentPayments.sumOf { it.amount } + student.registrationFee + student.reenrollmentFee
-        val ticketRemaining = (ticketTotalToPay - ticketTotalPaid).coerceAtLeast(0L)
+        val ticketTotalPaid = studentPayments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+        val ticketRemaining = (studentClassFee - ticketTotalPaid).coerceAtLeast(0L)
         val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
         
         Ticket58mmDialog(currency = currency,
@@ -712,30 +713,44 @@ fun StudentDetailScreen(
     }
 
     if (paymentToDelete != null) {
+        var cancelReason by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { paymentToDelete = null },
-            title = { Text("Avertissement : Supprimer le paiement") },
+            title = { Text("Avertissement : Annuler le paiement") },
             text = {
-                val formattedAmount = numberFormat.format(paymentToDelete?.amount ?: 0L)
-                Text("Attention ! Êtes-vous sûr de vouloir supprimer définitivement ce paiement de $formattedAmount $currency (${paymentToDelete?.reason ?: ""}) ? Cette action est irréversible et affectera le solde de l'élève.")
+                Column {
+                    val formattedAmount = numberFormat.format(paymentToDelete?.amount ?: 0L)
+                    Text("Attention ! Êtes-vous sûr de vouloir annuler ce paiement de $formattedAmount $currency (${paymentToDelete?.reason ?: ""}) ? Le montant sera déduit et l'action sera tracée.")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = cancelReason,
+                        onValueChange = { cancelReason = it },
+                        label = { Text("Motif de l'annulation") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             },
             confirmButton = {
                 Button(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     onClick = {
-                        paymentToDelete?.let {
-                            viewModel.deletePayment(it.id)
-                            Toast.makeText(context, "Paiement supprimé", Toast.LENGTH_SHORT).show()
+                        if (cancelReason.isNotBlank()) {
+                            paymentToDelete?.let {
+                                viewModel.cancelPayment(it.id, cancelReason)
+                                Toast.makeText(context, "Paiement annulé", Toast.LENGTH_SHORT).show()
+                            }
+                            paymentToDelete = null
+                        } else {
+                            Toast.makeText(context, "Le motif est requis", Toast.LENGTH_SHORT).show()
                         }
-                        paymentToDelete = null
                     }
                 ) {
-                    Text("Supprimer définitivement")
+                    Text("Annuler le paiement")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { paymentToDelete = null }) {
-                    Text("Annuler")
+                    Text("Fermer")
                 }
             }
         )
@@ -748,6 +763,9 @@ fun PaymentHistoryItem(
     reason: String,
     date: Long,
     paymentMethod: String,
+    isCancelled: Boolean = false,
+    cancellationReason: String? = null,
+    cancelledBy: String? = null,
     showDeleteAction: Boolean,
     currency: String = "GNF",
     onDelete: () -> Unit,
@@ -766,9 +784,11 @@ fun PaymentHistoryItem(
         else -> Color(0xFF6B7280)
     }
 
+    val isActuallyCancelled = isCancelled
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = if (isActuallyCancelled) Color(0xFFFEE2E2) else MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isActuallyCancelled) 0.dp else 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -776,7 +796,13 @@ fun PaymentHistoryItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = reason, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    text = reason, 
+                    style = MaterialTheme.typography.titleMedium, 
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = if (isActuallyCancelled) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
+                    color = if (isActuallyCancelled) Color.Red else Color.Unspecified
+                )
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -786,16 +812,25 @@ fun PaymentHistoryItem(
                     
                     Box(
                         modifier = Modifier
-                            .background(methodColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                            .background(if (isActuallyCancelled) Color.Red.copy(alpha=0.12f) else methodColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = paymentMethod,
+                            text = if (isActuallyCancelled) "Annulé" else paymentMethod,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = methodColor
+                            color = if (isActuallyCancelled) Color.Red else methodColor
                         )
                     }
+                }
+                if (isActuallyCancelled && cancellationReason != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Motif: $cancellationReason",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Red,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
@@ -804,13 +839,14 @@ fun PaymentHistoryItem(
                     text = "${numberFormat.format(amount)} $currency",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (isActuallyCancelled) Color.Red else MaterialTheme.colorScheme.primary,
+                    textDecoration = if (isActuallyCancelled) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onPrint) {
                         Icon(imageVector = Icons.Filled.Print, contentDescription = "Imprimer", tint = MaterialTheme.colorScheme.secondary)
                     }
-                    if (showDeleteAction) {
+                    if (showDeleteAction && !isActuallyCancelled) {
                     IconButton(onClick = onDelete) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
@@ -845,8 +881,8 @@ fun generatePdf(
     val sdf = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale("fr", "GN"))
     
     // Financial data for QR
-    val qrTotalPaid = payments.sumOf { it.amount } + student.registrationFee
-    val qrTotalToPay = studentClassFee + student.registrationFee
+    val qrTotalPaid = payments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+    val qrTotalToPay = studentClassFee
     val qrDue = (qrTotalToPay - qrTotalPaid).coerceAtLeast(0L)
     val qrPercent = if (qrTotalToPay > 0) (qrTotalPaid.toDouble() / qrTotalToPay.toDouble() * 100).toInt() else 100
     
@@ -882,14 +918,15 @@ fun generatePdf(
         val mat = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
         val qrData = com.example.ui.util.QrCodeUtils.buildStudentQrData(
             studentId = student.id,
-            remoteId = mat,
+            remoteId = student.remoteId,
             name = "${student.firstName} ${student.lastName}",
             grade = student.grade,
             section = student.section,
             totalFee = formattedTotal,
             paidFee = formattedPaid,
             dueFee = formattedDue,
-            percent = qrPercent.toString()
+            percent = qrPercent.toString(),
+            schoolName = schoolName ?: ""
         )
         val qrBmp = com.example.ui.util.QrCodeUtils.generateQrBitmap(qrData, 200)
         if (qrBmp != null) {
@@ -955,13 +992,11 @@ fun generatePdf(
     canvas.drawText("Frais de classe : ${numberFormat.format(studentClassFee)} $currency", 320f, financialY, paint)
     financialY += 25f
     
-    val paymentsSum = payments.sumOf { it.amount }
-    val pdfTotalPaid = paymentsSum + student.registrationFee + student.reenrollmentFee
-    canvas.drawText("Total payé : ${numberFormat.format(pdfTotalPaid)} $currency", 320f, financialY, paint)
+    val pdfTotalPaid = payments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+    canvas.drawText("Scolarité payée : ${numberFormat.format(pdfTotalPaid)} $currency", 320f, financialY, paint)
     
     // Remaining balance Box
-    val totalToPay = studentClassFee + student.registrationFee + student.reenrollmentFee
-    val remaining = (totalToPay - pdfTotalPaid).coerceAtLeast(0L)
+    val remaining = (studentClassFee - pdfTotalPaid).coerceAtLeast(0L)
     val isFullyPaid = remaining <= 0L
     val boxColor = if (isFullyPaid) "#10B981" else "#E11D48" // Green or Red-rose
     val boxBgColor = if (isFullyPaid) "#ECFDF5" else "#FFF1F2"
@@ -1293,8 +1328,8 @@ fun generateStudentIdCardPdf(
     // Permanent QR Code (Right Side)
     try {
         val idCardNumberFormat = java.text.NumberFormat.getNumberInstance(java.util.Locale("fr", "GN"))
-        val idCardTotalPaid = payments.sumOf { it.amount } + student.registrationFee + student.reenrollmentFee
-        val idCardTotalToPay = studentClassFee + student.registrationFee + student.reenrollmentFee
+        val idCardTotalPaid = payments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+        val idCardTotalToPay = studentClassFee
         val idCardDue = (idCardTotalToPay - idCardTotalPaid).coerceAtLeast(0L)
         val idCardPercent = if (idCardTotalToPay > 0) (idCardTotalPaid.toDouble() / idCardTotalToPay.toDouble() * 100).toInt() else 100
 
@@ -1352,18 +1387,21 @@ fun generateStudentIdCardPdf(
                 val baseScale = if (student.section.contains("PRIMAIRE", true)) 10.0 else 20.0
                 val ratio = myAvg / baseScale
                 mentionStr = when {
-                    ratio >= 0.8 -> "Félicitations"
-                    ratio >= 0.7 -> "Tableau d'Honneur"
-                    ratio >= 0.6 -> "Encouragements"
+                    ratio >= 0.9 -> "Excellent"
+                    ratio >= 0.8 -> "Très Bien"
+                    ratio >= 0.7 -> "Bien"
+                    ratio >= 0.6 -> "Assez Bien"
                     ratio >= 0.5 -> "Passable"
-                    else -> "Insuffisant"
+                    ratio >= 0.4 -> "Insuffisant"
+                    ratio >= 0.3 -> "Faible"
+                    else -> "Médiocre"
                 }
             }
         }
 
         val qrData = com.example.ui.util.QrCodeUtils.buildStudentQrData(
             studentId = student.id,
-            remoteId = matricule,
+            remoteId = student.remoteId,
             name = "${student.firstName} ${student.lastName}",
             grade = student.grade,
             section = student.section,
@@ -1375,7 +1413,8 @@ fun generateStudentIdCardPdf(
             avg = avgStr,
             rank = rankStr,
             size = sizeStr,
-            mention = mentionStr
+            mention = mentionStr,
+            schoolName = schoolName ?: ""
         )
         val qrBmp = com.example.ui.util.QrCodeUtils.generateQrBitmap(qrData, 200)
         if (qrBmp != null) {

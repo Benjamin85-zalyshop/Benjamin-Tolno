@@ -64,14 +64,18 @@ object ReportCardPdfUtils {
         val rank = (sortedAverages.indexOf(myAvg) + 1).coerceAtLeast(1)
         val classAvg = if (studentAverages.isNotEmpty()) studentAverages.values.average().toFloat() else 0f
 
-        val scaledAvg = if (student.section.equals("LE PRIMAIRE", ignoreCase = true)) myAvg * 2f else myAvg
+        val isPrimaryScale = student.section.contains("PRIMAIRE", ignoreCase = true)
+        val baseScale = if (isPrimaryScale) 10f else 20f
+        val ratio = myAvg / baseScale
         val mention = when {
-            scaledAvg >= 16f -> "Félicitations du Conseil"
-            scaledAvg >= 14f -> "Encouragements"
-            scaledAvg >= 12f -> "Tableau d'Honneur"
-            scaledAvg >= 10f -> "Passable"
-            scaledAvg >= 8f -> "Travail Insuffisant"
-            else -> "Avertissement"
+            ratio >= 0.9f -> "Excellent"
+            ratio >= 0.8f -> "Très Bien"
+            ratio >= 0.7f -> "Bien"
+            ratio >= 0.6f -> "Assez Bien"
+            ratio >= 0.5f -> "Passable"
+            ratio >= 0.4f -> "Insuffisant"
+            ratio >= 0.3f -> "Faible"
+            else -> "Médiocre"
         }
 
         val myGrades = allGradesForClassAndTerm.filter { it.studentId == student.id }
@@ -300,7 +304,7 @@ object ReportCardPdfUtils {
 
             val avgStr = if (subAvg != null) String.format(Locale.US, "%.2f", subAvg) else "-"
 
-            val scaledSubAvg = if (isPrimary && subAvg != null) subAvg * 2f else subAvg
+            val subRatio = if (subAvg != null) subAvg / sub.maxScore else 0f
             paint.isFakeBoldText = true
             paint.color = if (subAvg != null && subAvg < (sub.maxScore / 2f)) Color.parseColor("#DC2626") else Color.parseColor("#0F56E3")
             canvas.drawText(avgStr, tableLeft + 290f, startY + 15f, paint)
@@ -309,11 +313,14 @@ object ReportCardPdfUtils {
             paint.color = Color.parseColor("#475569")
             val comment = grade?.teacherComment?.ifBlank { null } ?: when {
                 subAvg == null -> "Non évalué"
-                scaledSubAvg!! >= 16f -> "Très bien"
-                scaledSubAvg >= 14f -> "Bien"
-                scaledSubAvg >= 12f -> "Assez bien"
-                scaledSubAvg >= 10f -> "Passable"
-                else -> "Insuffisant"
+                subRatio >= 0.9f -> "Excellent"
+                subRatio >= 0.8f -> "Très Bien"
+                subRatio >= 0.7f -> "Bien"
+                subRatio >= 0.6f -> "Assez Bien"
+                subRatio >= 0.5f -> "Passable"
+                subRatio >= 0.4f -> "Insuffisant"
+                subRatio >= 0.3f -> "Faible"
+                else -> "Médiocre"
             }
             val commTruncated = if (comment.length > 22) comment.take(20) + "..." else comment
             canvas.drawText(commTruncated, tableLeft + 380f, startY + 15f, paint)

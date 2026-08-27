@@ -33,6 +33,9 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
 
     suspend fun getSubjectByRemoteId(remoteId: String): Subject? = schoolDao.getSubjectByRemoteId(remoteId)
 
+    suspend fun getSubjectIdByRemoteId(remoteId: String): Int? = schoolDao.getSubjectIdByRemoteId(remoteId)
+
+
     // Grades
     fun getGradesForStudentAndTerm(schoolId: Int, studentId: Int, term: String): Flow<List<StudentGrade>> =
         schoolDao.getGradesForStudentAndTerm(schoolId, studentId, term)
@@ -62,63 +65,198 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
 
     suspend fun submitSubscriptionRequest(schoolId: Int, phoneNumber: String, transactionId: String) {
         schoolDao.submitSubscriptionRequest(schoolId, phoneNumber, transactionId)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun activateSubscription(schoolId: Int, expiryDate: Long) {
         schoolDao.activateSubscription(schoolId, expiryDate)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun insertStudent(student: Student) {
         schoolDao.insertStudent(student)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun updateStudent(student: Student) {
         schoolDao.updateStudent(student)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun updatePayment(payment: Payment) {
         schoolDao.updatePayment(payment)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun updateExpense(expense: Expense) {
         schoolDao.updateExpense(expense)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun insertPayment(payment: Payment) {
         schoolDao.insertPayment(payment)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun deletePayment(paymentId: Int) {
         schoolDao.deletePaymentById(paymentId)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
     
     suspend fun insertExpense(expense: Expense) {
         schoolDao.insertExpense(expense)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun deleteExpense(expenseId: Int) {
         schoolDao.deleteExpenseById(expenseId)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun registerSchool(name: String, founderPassword: String, financierPassword: String, displayName: String = "", address: String = "", founderPhone: String = "", currency: String = "GNF") {
         schoolDao.insertSchoolAccount(com.example.data.models.SchoolAccount(schoolName = name, passwordHash = founderPassword, financierPasswordHash = financierPassword, displayName = displayName, address = address, founderPhone = founderPhone))
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun updateSchoolAccount(account: com.example.data.models.SchoolAccount) {
         schoolDao.updateSchoolAccount(account)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun getSchoolAccountByName(name: String): com.example.data.models.SchoolAccount? {
         return schoolDao.getSchoolAccountByName(name)
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun getAllSchoolAccounts(): List<com.example.data.models.SchoolAccount> {
         return schoolDao.getAllSchoolAccounts()
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun deleteAllNonAdminSchools() {
         schoolDao.deleteAllNonAdminSchools()
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun deleteSchoolAccountAndData(name: String) {
         val account = schoolDao.getSchoolAccountByName(name)
@@ -130,16 +268,52 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
             schoolDao.deleteGradesBySchoolId(schoolId)
             schoolDao.deleteSubjectsBySchoolId(schoolId)
             schoolDao.deleteSchoolAccountByName(name)
-        }
+        
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
+    }
+
+}
 
     suspend fun getFirstSchoolAccount(): com.example.data.models.SchoolAccount? {
         return schoolDao.getFirstSchoolAccount()
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun hasAccount(): Boolean {
         return schoolDao.getAccountCount() > 0
+    
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
     }
+
+}
 
     suspend fun getStudentById(studentId: Int): Student? = schoolDao.getStudentById(studentId)
     suspend fun getPaymentById(paymentId: Int): Payment? = schoolDao.getPaymentById(paymentId)
@@ -161,4 +335,13 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
 
     suspend fun getAllPaymentsDirect(schoolId: Int): List<Payment> = schoolDao.getAllPaymentsDirect(schoolId)
     suspend fun getAllExpensesDirect(schoolId: Int): List<Expense> = schoolDao.getAllExpensesDirect(schoolId)
+
+    suspend fun deduplicateData() {
+        schoolDao.deduplicatePayments()
+        schoolDao.deduplicateExpenses()
+        schoolDao.deduplicateStudents()
+        schoolDao.deduplicateSubjects()
+        schoolDao.deduplicateGrades()
+    }
+
 }

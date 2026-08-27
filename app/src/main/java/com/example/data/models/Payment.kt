@@ -25,5 +25,9 @@ data class Payment(
     val date: Long = System.currentTimeMillis(),
     val reason: String,
     val remoteId: String = "",
-    val paymentMethod: String = "Espèces"
+    val paymentMethod: String = "Espèces",
+    val isCancelled: Boolean = false,
+    val cancellationReason: String? = null,
+    val cancelledBy: String? = null,
+    val cancelledAt: Long? = null
 )

@@ -177,7 +177,7 @@ fun QrScannerDialog(
                     val student = matchedStudent!!
                     val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
                     val studentPayments = payments.filter { it.studentId == student.id }
-                    val totalPaid = studentPayments.filter { it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+                    val totalPaid = studentPayments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                     val classFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
                     val remaining = (classFee - totalPaid).coerceAtLeast(0L)
                     val numberFormat = NumberFormat.getNumberInstance(Locale("fr", "GN"))

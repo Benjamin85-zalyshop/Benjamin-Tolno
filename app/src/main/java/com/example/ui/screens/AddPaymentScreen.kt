@@ -70,8 +70,8 @@ fun AddPaymentScreen(
                     val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
                     val studentPayments = payments.filter { it.studentId == student.id }
                     val studentClassFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
-                    val totalToPay = studentClassFee + student.registrationFee + student.reenrollmentFee
-                    val currentTotalPaid = studentPayments.sumOf { it.amount } + student.registrationFee + student.reenrollmentFee
+                    val totalToPay = studentClassFee
+                    val currentTotalPaid = studentPayments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
                     val due = (totalToPay - currentTotalPaid).coerceAtLeast(0L)
                     val percent = if (totalToPay > 0) (currentTotalPaid.toDouble() / totalToPay.toDouble() * 100).toInt() else 100
                     
@@ -83,6 +83,7 @@ fun AddPaymentScreen(
                         context = context,
                         studentId = student.id,
                         matricule = matricule,
+                        remoteId = student.remoteId,
                         studentName = "${student.firstName} ${student.lastName}",
                         grade = student.grade,
                         section = student.section,
@@ -110,7 +111,7 @@ fun AddPaymentScreen(
     }
 
     val totalPaid = remember(payments, studentId) {
-        payments.filter { it.studentId == studentId && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
+        payments.filter { !it.isCancelled && it.studentId == studentId && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
     }
 
     val remainingToPay = remember(classFee, totalPaid) {
@@ -558,6 +559,7 @@ fun generateReceiptPdf(
     context: android.content.Context,
     studentId: Int,
     matricule: String,
+    remoteId: String,
     studentName: String,
     grade: String,
     section: String,
@@ -610,14 +612,15 @@ fun generateReceiptPdf(
     try {
         val qrData = com.example.ui.util.QrCodeUtils.buildStudentQrData(
             studentId = studentId,
-            remoteId = matricule,
+            remoteId = remoteId,
             name = studentName,
             grade = grade,
             section = section,
             totalFee = totalFee,
             paidFee = paidFee,
             dueFee = dueFee,
-            percent = percent
+            percent = percent,
+            schoolName = schoolName
         )
         val qrBmp = com.example.ui.util.QrCodeUtils.generateQrBitmap(qrData, 200)
         if (qrBmp != null) {

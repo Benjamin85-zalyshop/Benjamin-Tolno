@@ -25,13 +25,14 @@ object ChapChapPayApi {
                 jsonParam.put("order_id", orderId)
             }
             
-            // Utilisation de l'URL Firebase Hosting pour le deep linking
-            jsonParam.put("success_url", "https://scolapay-b6289.web.app/paiement/return")
-            jsonParam.put("return_url", "https://scolapay-b6289.web.app/paiement/return")
-            jsonParam.put("cancel_url", "https://scolapay-b6289.web.app/paiement/return")
+            // Utilisation de l'URL web par défaut
+            val returnUrl = "https://scolapay-b6289.web.app/paiement/return"
+            jsonParam.put("success_url", returnUrl)
+            jsonParam.put("return_url", returnUrl)
+            jsonParam.put("cancel_url", returnUrl)
             
             val options = JSONObject()
-            options.put("return_url", "https://scolapay-b6289.web.app/paiement/return")
+            options.put("return_url", returnUrl)
             jsonParam.put("options", options)
 
             val outputStreamWriter = OutputStreamWriter(connection.outputStream)
@@ -64,16 +65,25 @@ object ChapChapPayApi {
             if (connection.responseCode in 200..299) {
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
                 val jsonObject = JSONObject(response)
-                if (jsonObject.has("status")) {
-                    val statusObj = jsonObject.getJSONObject("status")
-                    val code = statusObj.optString("code")
-                    if (code == "completed" || code == "successful" || code == "success" || code == "approved" || code == "paid") {
-                        return@withContext "SUCCESS"
-                    } else if (code == "failed" || code == "cancelled" || code == "canceled" || code == "expired" || code == "rejected") {
-                        return@withContext "FAILED"
-                    } else {
-                        return@withContext "PENDING"
-                    }
+                android.util.Log.d("ChapChapPayApi", "Order status response: $response")
+                val code = if (jsonObject.has("status")) {
+                    val status = jsonObject.get("status")
+                    if (status is JSONObject) status.optString("code", "").lowercase()
+                    else status.toString().lowercase()
+                } else if (jsonObject.has("code")) {
+                    jsonObject.getString("code").lowercase()
+                } else {
+                    ""
+                }
+                
+                if (code == "completed" || code == "successful" || code == "success" || code == "approved" || code == "paid" || code == "1" || code == "ok") {
+                    return@withContext "SUCCESS"
+                } else if (code == "failed" || code == "cancelled" || code == "canceled" || code == "expired" || code == "rejected" || code == "0") {
+                    return@withContext "FAILED"
+                } else {
+                    // Try to guess from other fields if status wasn't explicit enough
+                    if (response.lowercase().contains("success") || response.lowercase().contains("approved")) return@withContext "SUCCESS"
+                    return@withContext "PENDING"
                 }
             }
         } catch (e: Exception) {
