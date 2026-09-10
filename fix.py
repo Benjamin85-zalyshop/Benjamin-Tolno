@@ -1,14 +1,12 @@
-import sys
-with open("app/src/main/java/com/example/ui/SchoolViewModel.kt") as f:
-    text = f.read()
+with open('app/src/main/java/com/example/ui/SchoolViewModel.kt', 'r') as f:
+    lines = f.readlines()
 
-new_text = text.replace("category: String, description: String", "reason: String")
-new_text = new_text.replace("category = category, description = description", "reason = reason")
+for i, line in enumerate(lines):
+    if i >= 1150 and i <= 1160:
+        if "val parsedSection =" in line:
+            lines[i] = '                    val parsedSection = doc.getString("section") ?: ""\n'
+        elif "val parsedMaxScore =" in line:
+            lines[i] = '                    val parsedMaxScore = if (parsedSection == "LE PRIMAIRE" || parsedSection == "LA MATERNELLE") 10f else ((doc.get("maxScore") as? Number)?.toFloat() ?: 20f)\n'
 
-with open("app/src/main/java/com/example/ui/SchoolViewModel.kt", "w") as f:
-    f.write(new_text)
-
-if text != new_text:
-    print("Replaced!")
-else:
-    print("No replacement occurred!")
+with open('app/src/main/java/com/example/ui/SchoolViewModel.kt', 'w') as f:
+    f.writelines(lines)

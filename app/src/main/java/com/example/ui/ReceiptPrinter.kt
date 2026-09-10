@@ -1,15 +1,29 @@
 package com.example.ui
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.pdf.PdfDocument
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
 import android.widget.Toast
 import com.example.data.models.Payment
 import com.example.data.models.Student
-import com.sr.SrPrinter
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 object ReceiptPrinter {
+
     fun printReceipt(
         context: Context,
         student: Student,
@@ -18,85 +32,266 @@ object ReceiptPrinter {
         classFee: Long,
         currency: String = "GNF"
     ) {
-        try {
-            val printer = SrPrinter.getInstance(context.applicationContext)
-            printer.setAlignment(1) // 1 = Center
-            printer.setTextBold(true)
-            printer.setTextSize(24f)
-            printer.printText(schoolName + "\n")
-            
-            printer.setTextSize(18f)
-            printer.setTextBold(false)
-            printer.printText("RECU DE PAIEMENT\n\n")
-            
-            printer.setAlignment(0) // 0 = Left
-            val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-            val dateStr = dateFormat.format(Date(payment.date))
-            
-            printer.printText("Date: $dateStr\n")
-            val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
-            printer.printText("Matricule: #$matricule\n")
-            printer.printText("Eleve: ${student.firstName} ${student.lastName}\n")
-            printer.printText("Classe: ${student.grade}\n\n")
-            
-            val fmt = java.text.NumberFormat.getInstance(java.util.Locale("fr", "GN"))
-            printer.printText("Montant: ${fmt.format(payment.amount)} $currency\n")
-            printer.printText("Motif: ${payment.reason}\n")
-            printer.printText("Mode: ${payment.paymentMethod}\n\n")
-            
-            printer.setAlignment(1)
-            printer.printText("Merci de votre confiance.\n")
-            printer.nextLine(3)
-            
-            Toast.makeText(context, "Impression en cours...", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(context, "Erreur d'impression: ${e.message}", Toast.LENGTH_SHORT).show()
+        val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+        val jobName = "Reçu_${student.firstName}_${student.lastName}"
+        
+        printManager.print(jobName, object : PrintDocumentAdapter() {
+            private var pdfDocument: PdfDocument? = null
+            private val pageHeight = 750
+            private val pageWidth = 250 // Approx 58mm in 1/72 inch points
+
+            override fun onLayout(
+                oldAttributes: PrintAttributes?,
+                newAttributes: PrintAttributes,
+                cancellationSignal: CancellationSignal?,
+                callback: LayoutResultCallback,
+                extras: Bundle?
+            ) {
+                pdfDocument = PdfDocument()
+                val info = PrintDocumentInfo.Builder(jobName)
+                    .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                    .setPageCount(1)
+                    .build()
+                callback.onLayoutFinished(info, true)
+            }
+
+            override fun onWrite(
+                pages: Array<out PageRange>?,
+                destination: ParcelFileDescriptor,
+                cancellationSignal: CancellationSignal?,
+                callback: WriteResultCallback?
+            ) {
+                val doc = pdfDocument ?: return
+                
+                // Set paper size for thermal printer (approx 58mm = ~164 points, but let's use what attributes gave us, or fixed 250x600 for safe rendering)
+                val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
+                val page = doc.startPage(pageInfo)
+                val canvas = page.canvas
+                
+                drawReceiptContent(canvas, student, payment, schoolName, currency)
+                
+                doc.finishPage(page)
+                
+                try {
+                    doc.writeTo(FileOutputStream(destination.fileDescriptor))
+                    callback?.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                } catch (e: Exception) {
+                    callback?.onWriteFailed(e.toString())
+                } finally {
+                    doc.close()
+                    pdfDocument = null
+                }
+            }
+        }, null)
+    }
+
+    private fun drawReceiptContent(
+        canvas: Canvas,
+        student: Student,
+        payment: Payment,
+        schoolName: String,
+        currency: String
+    ) {
+        val paint = Paint().apply {
+            color = Color.BLACK
+            textSize = 12f
+            isAntiAlias = true
+        }
+        
+        var y = 30f
+        val centerX = 125f // half of 250
+        
+        // School Name
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        paint.textSize = 16f
+        paint.textAlign = Paint.Align.CENTER
+        canvas.drawText(schoolName, centerX, y, paint)
+        y += 25f
+        
+        // Title
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        paint.textSize = 14f
+        canvas.drawText("REÇU DE PAIEMENT", centerX, y, paint)
+        y += 30f
+        
+        // Left aligned content
+        paint.textAlign = Paint.Align.LEFT
+        paint.textSize = 12f
+        
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        val dateStr = dateFormat.format(Date(payment.date))
+        
+        canvas.drawText("Date: $dateStr", 10f, y, paint)
+        y += 20f
+        
+        val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
+        canvas.drawText("Matricule: #$matricule", 10f, y, paint)
+        y += 20f
+        
+        canvas.drawText("Élève: ${student.firstName} ${student.lastName}", 10f, y, paint)
+        y += 20f
+        
+        canvas.drawText("Classe: ${student.grade}", 10f, y, paint)
+        y += 30f
+        
+        val fmt = java.text.NumberFormat.getInstance(java.util.Locale("fr", "GN"))
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        canvas.drawText("Montant: ${fmt.format(payment.amount)} $currency", 10f, y, paint)
+        y += 20f
+        
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        canvas.drawText("Motif: ${payment.reason}", 10f, y, paint)
+        y += 20f
+        
+        canvas.drawText("Mode: ${payment.paymentMethod}", 10f, y, paint)
+        y += 40f
+        
+        paint.textAlign = Paint.Align.CENTER
+        canvas.drawText("Merci de votre confiance.", centerX, y, paint)
+        
+        y += 20f
+        val qrData = com.example.ui.util.QrCodeUtils.buildStudentQrData(
+            studentId = student.id,
+            remoteId = student.remoteId,
+            name = "${student.firstName} ${student.lastName}",
+            grade = student.grade,
+            section = student.section,
+            paidFee = fmt.format(payment.amount),
+            schoolName = schoolName
+        )
+        // Increase QR code size from 120 to 200 for better scannability
+        val qrBitmap = com.example.ui.util.QrCodeUtils.generateQrBitmap(qrData, 200)
+        if (qrBitmap != null) {
+            val qrX = centerX - 100f
+            canvas.drawBitmap(qrBitmap, qrX, y, null)
         }
     }
 
     fun printSummaryTicket(
         context: Context,
         schoolName: String,
-        matricule: String,
-        studentName: String,
-        studentGrade: String,
+        student: Student,
         totalPaid: Long,
         remaining: Long,
         currency: String = "GNF"
     ) {
-        try {
-            val printer = SrPrinter.getInstance(context.applicationContext)
-            printer.setAlignment(1)
-            printer.setTextBold(true)
-            printer.setTextSize(24f)
-            printer.printText(schoolName + "\n")
-            
-            printer.setTextSize(18f)
-            printer.setTextBold(false)
-            printer.printText("RECU DE PAIEMENT\n\n")
-            
-            printer.setAlignment(0)
-            val sdf = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale("fr", "GN"))
-            val dateStr = sdf.format(java.util.Date())
-            
-            printer.printText("Date: $dateStr\n")
-            printer.printText("Matricule: #$matricule\n")
-            printer.printText("Eleve: $studentName\n")
-            printer.printText("Classe: $studentGrade\n\n")
-            
-            val fmt = java.text.NumberFormat.getInstance(java.util.Locale("fr", "GN"))
-            printer.printText("TOTAL PAYE: ${fmt.format(totalPaid)} $currency\n")
-            printer.printText("RESTE: ${fmt.format(remaining)} $currency\n\n")
-            
-            printer.setAlignment(1)
-            printer.printText("Merci de votre confiance.\n")
-            printer.nextLine(3)
-            
-            Toast.makeText(context, "Impression en cours...", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(context, "Erreur d'impression: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
+        val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+        val jobName = "Recap_${student.firstName}_${student.lastName}"
+        
+        printManager.print(jobName, object : PrintDocumentAdapter() {
+            private var pdfDocument: PdfDocument? = null
+            private val pageHeight = 750
+            private val pageWidth = 250 
+
+            override fun onLayout(
+                oldAttributes: PrintAttributes?,
+                newAttributes: PrintAttributes,
+                cancellationSignal: CancellationSignal?,
+                callback: LayoutResultCallback,
+                extras: Bundle?
+            ) {
+                pdfDocument = PdfDocument()
+                val info = PrintDocumentInfo.Builder(jobName)
+                    .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                    .setPageCount(1)
+                    .build()
+                callback.onLayoutFinished(info, true)
+            }
+
+            override fun onWrite(
+                pages: Array<out PageRange>?,
+                destination: ParcelFileDescriptor,
+                cancellationSignal: CancellationSignal?,
+                callback: WriteResultCallback?
+            ) {
+                val doc = pdfDocument ?: return
+                val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
+                val page = doc.startPage(pageInfo)
+                val canvas = page.canvas
+                
+                // Draw content
+                val paint = Paint().apply {
+                    color = Color.BLACK
+                    textSize = 12f
+                    isAntiAlias = true
+                }
+                
+                var y = 30f
+                val centerX = 125f
+                
+                paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                paint.textSize = 16f
+                paint.textAlign = Paint.Align.CENTER
+                canvas.drawText(schoolName, centerX, y, paint)
+                y += 25f
+                
+                paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                paint.textSize = 14f
+                canvas.drawText("RÉCAPITULATIF FINANCIER", centerX, y, paint)
+                y += 30f
+                
+                paint.textAlign = Paint.Align.LEFT
+                paint.textSize = 12f
+                
+                val sdf = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale("fr", "GN"))
+                val dateStr = sdf.format(java.util.Date())
+                
+                canvas.drawText("Date: $dateStr", 10f, y, paint)
+                y += 20f
+                
+                val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
+                canvas.drawText("Matricule: #$matricule", 10f, y, paint)
+                y += 20f
+                
+                canvas.drawText("Élève: ${student.firstName} ${student.lastName}", 10f, y, paint)
+                y += 20f
+                
+                canvas.drawText("Classe: ${student.grade}", 10f, y, paint)
+                y += 30f
+                
+                val fmt = java.text.NumberFormat.getInstance(java.util.Locale("fr", "GN"))
+                paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                canvas.drawText("TOTAL PAYÉ: ${fmt.format(totalPaid)} $currency", 10f, y, paint)
+                y += 20f
+                
+                canvas.drawText("RESTE: ${fmt.format(remaining)} $currency", 10f, y, paint)
+                y += 40f
+                
+                paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                paint.textAlign = Paint.Align.CENTER
+                canvas.drawText("Merci de votre confiance.", centerX, y, paint)
+                
+                y += 20f
+                val qrData = com.example.ui.util.QrCodeUtils.buildStudentQrData(
+                    studentId = student.id,
+                    remoteId = student.remoteId,
+                    name = "${student.firstName} ${student.lastName}",
+                    grade = student.grade,
+                    section = student.section,
+                    totalFee = fmt.format(totalPaid + remaining),
+                    paidFee = fmt.format(totalPaid),
+                    dueFee = fmt.format(remaining),
+                    schoolName = schoolName
+                )
+                // Increase QR code size from 120 to 200 for better scannability
+                val qrBitmap = com.example.ui.util.QrCodeUtils.generateQrBitmap(qrData, 200)
+                if (qrBitmap != null) {
+                    val qrX = centerX - 100f
+                    canvas.drawBitmap(qrBitmap, qrX, y, null)
+                }
+                
+                doc.finishPage(page)
+                
+                try {
+                    doc.writeTo(FileOutputStream(destination.fileDescriptor))
+                    callback?.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                } catch (e: Exception) {
+                    callback?.onWriteFailed(e.toString())
+                } finally {
+                    doc.close()
+                    pdfDocument = null
+                }
+            }
+        }, null)
     }
 }

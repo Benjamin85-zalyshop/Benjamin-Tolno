@@ -21,7 +21,12 @@ interface SchoolDao {
     @Query("SELECT * FROM subjects WHERE schoolId = :schoolId ORDER BY section ASC, grade ASC, name ASC")
     fun getAllSubjects(schoolId: Int): Flow<List<Subject>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    
+    @Update
+    
+    suspend fun updateSubject(subject: Subject)
+
+        @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSubject(subject: Subject)
 
     @Query("DELETE FROM subjects WHERE id = :subjectId")
@@ -50,7 +55,8 @@ interface SchoolDao {
     @Query("SELECT * FROM grades WHERE schoolId = :schoolId")
     fun getAllGrades(schoolId: Int): Flow<List<StudentGrade>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    
+        @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGrade(grade: StudentGrade)
 
     @Query("SELECT * FROM grades WHERE schoolId = :schoolId AND studentId = :studentId AND subjectId = :subjectId AND term = :term LIMIT 1")
@@ -78,7 +84,8 @@ interface SchoolDao {
     suspend fun getAllGradesDirect(schoolId: Int): List<StudentGrade>
 
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    
+        @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStudent(student: Student)
 
     @Update
@@ -99,7 +106,8 @@ interface SchoolDao {
     @Query("SELECT * FROM payments WHERE schoolId = :schoolId")
     suspend fun getAllPaymentsDirect(schoolId: Int): List<Payment>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    
+        @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPayment(payment: Payment)
     
     @Query("SELECT SUM(amount) FROM payments WHERE schoolId = :schoolId AND isCancelled = 0")
@@ -120,7 +128,8 @@ interface SchoolDao {
     @Query("SELECT * FROM expenses WHERE schoolId = :schoolId")
     suspend fun getAllExpensesDirect(schoolId: Int): List<Expense>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    
+        @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExpense(expense: Expense)
     
     @Query("SELECT SUM(amount) FROM expenses WHERE schoolId = :schoolId")
@@ -129,7 +138,8 @@ interface SchoolDao {
     @Query("DELETE FROM expenses WHERE id = :expenseId")
     suspend fun deleteExpenseById(expenseId: Int)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    
+        @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchoolAccount(account: com.example.data.models.SchoolAccount)
 
     @Update

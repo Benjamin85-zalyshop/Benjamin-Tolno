@@ -181,7 +181,7 @@ object UserManualGenerator {
         canvas = page.canvas
         paint = Paint().apply { isAntiAlias = true }
         
-        drawPageHeader(canvas, "2. CONFIGURATION & IMPORTATION DU LOGO", primaryColor, paint)
+        drawPageHeader(canvas, "2. CONFIGURATION : LOGO ET DEVISE", primaryColor, paint)
         
         paint.color = textColorDark
         paint.textSize = 14f
@@ -193,7 +193,7 @@ object UserManualGenerator {
         paint.color = textColorLight
         canvas.drawText("Pour que vos documents de facturation soient officiels et professionnels,", 50f, 135f, paint)
         canvas.drawText("vous pouvez importer le logo de votre école directement dans ScolaPay.", 50f, 155f, paint)
-        canvas.drawText("Il sera automatiquement inséré sur toutes les factures générées.", 50f, 175f, paint)
+        canvas.drawText("Vous pouvez également y définir la devise officielle de votre école.", 50f, 175f, paint)
         
         // Draw Logo Upload block mockup on the right side
         drawLogoUploadMockup(canvas, 310f, 210f, primaryColor, paint)
@@ -203,7 +203,7 @@ object UserManualGenerator {
         paint.color = primaryColor
         paint.textSize = 13f
         paint.isFakeBoldText = true
-        canvas.drawText("Comment importer votre logo :", 50f, yPos, paint)
+        canvas.drawText("Comment configurer le logo et la devise :", 50f, yPos, paint)
         yPos += 25f
         
         paint.color = textColorDark
@@ -214,14 +214,15 @@ object UserManualGenerator {
             "1. Rendez-vous dans l'onglet d'accueil ScolaPay.",
             "2. Faites défiler vers le bas jusqu'au bloc",
             "   \"Configuration\" (accessible par le Fondateur).",
-            "3. Dans l'encadré \"Logo de l'école\", cliquez",
-            "   sur le bouton bleu \"Importer\".",
-            "4. Choisissez le fichier d'image (.png ou .jpg)",
-            "   de votre logo dans la galerie de votre appareil.",
-            "5. ScolaPay compresse automatiquement l'image",
-            "   et met à jour la base de données cloud.",
-            "6. Pour remplacer ou effacer le logo,",
-            "   cliquez sur \"Changer\" ou \"Supprimer\"."
+            "3. Logo : Cliquez sur le bouton bleu \"Importer\",",
+            "   choisissez votre fichier (.png ou .jpg).",
+            "4. Devise : Cliquez sur le menu de devise",
+            "   pour choisir l'unité monétaire de votre école",
+            "   (ex: GNF, FCFA, USD, EUR, etc.).",
+            "5. La devise s'appliquera instantanément à",
+            "   tous les montants, reçus et statistiques.",
+            "6. Les modifications sont enregistrées",
+            "   automatiquement et partagées sur le réseau."
         )
         for (step in logoSteps) {
             canvas.drawText(step, 50f, yPos, paint)
@@ -240,9 +241,9 @@ object UserManualGenerator {
         paint.color = textColorDark
         paint.isFakeBoldText = false
         paint.textSize = 11f
-        canvas.drawText("Une fois configuré, le logo de l'école est intégré de manière dynamique", 70f, 595f, paint)
-        canvas.drawText("en haut à droite de l'en-tête de chaque reçu de paiement et de chaque", 70f, 615f, paint)
-        canvas.drawText("facture PDF de scolarité que vous partagez avec les parents.", 70f, 635f, paint)
+        canvas.drawText("Une fois configurés, le logo et la devise de l'école sont intégrés", 70f, 595f, paint)
+        canvas.drawText("dynamiquement sur chaque reçu de paiement, rapport de dépenses", 70f, 615f, paint)
+        canvas.drawText("et facture PDF de scolarité que vous partagez avec les parents.", 70f, 635f, paint)
         
         drawFooter(canvas, 3, paint, textColorLight)
         pdfDocument.finishPage(page)
@@ -318,9 +319,9 @@ object UserManualGenerator {
         paint.textSize = 12f
         paint.isFakeBoldText = false
         paint.color = textColorLight
-        canvas.drawText("Pour garantir une comptabilité infaillible, ScolaPay sécurise les actions de", 50f, 135f, paint)
-        canvas.drawText("suppression de paiements. Seuls les comptes autorisés (Financier, Fondateur)", 50f, 155f, paint)
-        canvas.drawText("peuvent initier cette action, qui fait l'objet d'un avertissement strict.", 50f, 175f, paint)
+        canvas.drawText("Pour une comptabilité infaillible, ScolaPay trace strictement chaque suppression.", 50f, 135f, paint)
+        canvas.drawText("Lorsqu'un Financier supprime un paiement, il doit insérer un motif. Ce montant", 50f, 155f, paint)
+        canvas.drawText("restera visible mais barré en rouge, et le Fondateur en sera alerté.", 50f, 175f, paint)
         
         // Draw Alert Dialog Mockup on the right
         drawAlertDialogMockup(canvas, 310f, 210f, primaryColor, paint)
@@ -341,13 +342,13 @@ object UserManualGenerator {
             "1. Rendez-vous dans la fiche de l'élève ou",
             "   dans l'historique général des paiements.",
             "2. Cliquez sur l'icône de corbeille rouge (🗑).",
-            "3. Une boîte d'alerte de sécurité apparaît.",
-            "4. L'avertissement affiche les détails du paiement",
-            "   (élève, montant exact, mode, date).",
-            "5. Il rappelle explicitement que cette action",
-            "   est définitive et impactera le solde dû.",
-            "6. Cliquez sur \"Supprimer définitivement\" pour",
-            "   confirmer, ou sur \"Annuler\" pour renoncer."
+            "3. Saisissez obligatoirement le motif de la",
+            "   suppression pour justifier l'action.",
+            "4. Confirmez l'alerte de sécurité.",
+            "5. Le paiement supprimé restera visible mais",
+            "   barré en rouge dans l'historique.",
+            "6. L'action et le motif sont transmis au",
+            "   Fondateur qui recevra un avertissement."
         )
         for (step in deleteSteps) {
             canvas.drawText(step, 50f, yPos, paint)
@@ -367,8 +368,8 @@ object UserManualGenerator {
         paint.isFakeBoldText = false
         paint.textSize = 11f
         canvas.drawText("Ne supprimez un versement qu'en cas d'erreur de saisie flagrante.", 70f, 595f, paint)
-        canvas.drawText("Chaque suppression recalculera immédiatement en temps réel le solde", 70f, 615f, paint)
-        canvas.drawText("restant à payer de l'élève ainsi que les totaux des bilans de l'école.", 70f, 635f, paint)
+        canvas.drawText("Chaque suppression est notifiée au Fondateur. Le solde est recalculé", 70f, 615f, paint)
+        canvas.drawText("et le montant reste tracé (barré en rouge) pour une transparence totale.", 70f, 635f, paint)
         
         drawFooter(canvas, 5, paint, textColorLight)
         pdfDocument.finishPage(page)
@@ -518,6 +519,76 @@ object UserManualGenerator {
             canvas.drawText(feature, 50f, yPos, paint)
             yPos += 19f
         }
+        
+        // --- PROMOTIONAL BANNER FOR POS TERMINAL ---
+        val bannerY = yPos + 30f
+        
+        // Banner Background (Soft Blue)
+        paint.color = 0xFFEFF6FF.toInt()
+        val bannerRect = android.graphics.RectF(50f, bannerY, 545f, bannerY + 160f)
+        canvas.drawRoundRect(bannerRect, 12f, 12f, paint)
+        
+        // Banner Border
+        paint.style = android.graphics.Paint.Style.STROKE
+        paint.strokeWidth = 2f
+        paint.color = 0xFF93C5FD.toInt()
+        canvas.drawRoundRect(bannerRect, 12f, 12f, paint)
+        paint.style = android.graphics.Paint.Style.FILL
+        
+        // Draw POS Terminal Mockup
+        val posX = 430f
+        val posY = bannerY + 20f
+        
+        // Receipt paper
+        paint.color = 0xFFFFFFFF.toInt()
+        canvas.drawRect(posX + 15f, posY - 15f, posX + 65f, posY + 20f, paint)
+        // Receipt lines
+        paint.color = 0xFFD1D5DB.toInt()
+        paint.strokeWidth = 1f
+        canvas.drawLine(posX + 20f, posY - 5f, posX + 60f, posY - 5f, paint)
+        canvas.drawLine(posX + 20f, posY, posX + 60f, posY, paint)
+        canvas.drawLine(posX + 20f, posY + 5f, posX + 50f, posY + 5f, paint)
+        
+        // Terminal Body
+        paint.color = 0xFF374151.toInt() // Dark Gray
+        val posBody = android.graphics.RectF(posX, posY + 10f, posX + 80f, posY + 130f)
+        canvas.drawRoundRect(posBody, 10f, 10f, paint)
+        
+        // Printer head (top bump)
+        val printerHead = android.graphics.RectF(posX - 5f, posY + 5f, posX + 85f, posY + 30f)
+        canvas.drawRoundRect(printerHead, 8f, 8f, paint)
+        
+        // Screen
+        paint.color = 0xFFE5E7EB.toInt() // Light gray screen
+        val posScreen = android.graphics.RectF(posX + 8f, posY + 35f, posX + 72f, posY + 105f)
+        canvas.drawRoundRect(posScreen, 4f, 4f, paint)
+        
+        // ScolaPay logo on screen
+        paint.color = primaryColor
+        paint.textSize = 9f
+        paint.isFakeBoldText = true
+        canvas.drawText("ScolaPay", posX + 16f, posY + 65f, paint)
+        
+        // Text Content
+        paint.color = primaryColor
+        paint.textSize = 14f
+        paint.isFakeBoldText = true
+        canvas.drawText("Équipez votre école avec nos Terminaux Android !", 70f, bannerY + 35f, paint)
+        
+        paint.color = textColorDark
+        paint.textSize = 11f
+        paint.isFakeBoldText = false
+        canvas.drawText("ScolaPay vend des terminaux Android professionnels", 70f, bannerY + 65f, paint)
+        canvas.drawText("avec imprimante thermique intégrée pour l'impression", 70f, bannerY + 85f, paint)
+        canvas.drawText("directe et instantanée des tickets de caisse.", 70f, bannerY + 105f, paint)
+        
+        paint.color = 0xFF059669.toInt() // Success Green
+        paint.textSize = 11.5f
+        paint.isFakeBoldText = true
+        canvas.drawText("Contactez-nous pour commander votre terminal :", 70f, bannerY + 135f, paint)
+        
+        paint.color = primaryColor
+        canvas.drawText("+224 628 37 65 66", 70f, bannerY + 152f, paint)
         
         drawFooter(canvas, 7, paint, textColorLight)
         pdfDocument.finishPage(page)

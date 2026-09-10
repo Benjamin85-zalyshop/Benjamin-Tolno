@@ -47,8 +47,11 @@ window.downloadPdf = function() {
     
     const avg = document.getElementById('academicAvg').textContent;
     document.getElementById('pdfAvg').textContent = avg;
-    const rank = document.getElementById('academicRank').textContent;
-    document.getElementById('pdfRank').textContent = rank + 'er sur 1 élèves';
+    const rawRank = urlParams.get('rank') || '1';
+    const rawSize = urlParams.get('size') || '1';
+    const rankSuffix = rawRank === '1' ? 'er' : 'ème';
+    const plural = parseInt(rawSize) > 1 ? 's' : '';
+    document.getElementById('pdfRank').textContent = rawRank + rankSuffix + ' sur ' + rawSize + ' élève' + plural;
     const apprec = document.getElementById('academicAppreciation');
     document.getElementById('pdfAppreciation').textContent = apprec ? apprec.textContent.replace('Appréciation : ', '') : 'Encouragements';
     

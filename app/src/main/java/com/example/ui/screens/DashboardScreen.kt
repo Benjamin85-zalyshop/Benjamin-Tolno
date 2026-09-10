@@ -531,7 +531,7 @@ fun DashboardScreen(
                                     }
                                     
                                     Text(
-                                        text = "Vous bénéficiez de 3 mois d'essai gratuit. Profitez de notre offre spéciale de lancement : abonnez-vous maintenant pour seulement 200 000 $currency/an au lieu de 500 000 $currency !",
+                                        text = "Vous bénéficiez de 3 mois d'essai gratuit. Profitez de notre offre spéciale de lancement : abonnez-vous maintenant pour seulement 230 000 $currency/an au lieu de 500 000 $currency !",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = Color(0xFF4F46E5), // Elegant indigo/blue text for promotional info
                                         fontSize = 13.5.sp
@@ -598,7 +598,7 @@ fun DashboardScreen(
                                                     tint = Color.White
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (200 000 $currency)", fontWeight = FontWeight.Bold, color = Color.White)
+                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (230 000 $currency)", fontWeight = FontWeight.Bold, color = Color.White)
                                             }
                                         }
                                     }
@@ -2342,11 +2342,6 @@ fun DashboardScreen(
     }
 
     if (showDirectSubscriptionDialog) {
-        var subSchoolName by remember { mutableStateOf(schoolName ?: "") }
-        var subPhoneNumber by remember { mutableStateOf("") }
-        var subTransactionId by remember { mutableStateOf("") }
-        var subErrorMessage by remember { mutableStateOf<String?>(null) }
-        var selectedPaymentMethod by remember { mutableStateOf("MOBILE_MONEY") }
         var isLoadingChapChap by remember { mutableStateOf(false) }
 
         AlertDialog(
@@ -2367,133 +2362,65 @@ fun DashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Profitez de notre offre spéciale à 200 000 $currency/an au lieu de 500 000 $currency.",
+                        text = "Profitez de notre offre spéciale à 230 000 $currency/an au lieu de 500 000 $currency.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF4B5563)
                     )
 
-                    if (selectedPaymentMethod == "MOBILE_MONEY") {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F4F6))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text("Instructions de paiement :", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF374151))
-                                Text("Orange Money : 628 37 65 66", fontWeight = FontWeight.Bold, color = Color(0xFFFF6600), fontSize = 14.sp)
-                                Text("MTN MoMo : 660 37 78 87", fontWeight = FontWeight.Bold, color = Color(0xFFCC9900), fontSize = 14.sp)
-                            }
-                        }
-
-                        if (subErrorMessage != null) {
                             Text(
-                                text = subErrorMessage!!,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(vertical = 4.dp)
+                                text = "Paiement Rapide avec Chap Chap Pay",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFD946EF)
                             )
-                        }
-
-                        OutlinedTextField(
-                            value = subSchoolName,
-                            onValueChange = { subSchoolName = it },
-                            label = { Text("Nom de l'école") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = subPhoneNumber,
-                            onValueChange = { subPhoneNumber = it },
-                            label = { Text("Numéro de téléphone de paiement") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = subTransactionId,
-                            onValueChange = { subTransactionId = it },
-                            label = { Text("Identifiant de transaction (ID)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                    } else {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "Paiement Rapide avec Chap Chap Pay",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFD946EF)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "Vous serez redirigé vers Chap Chap Pay pour payer en toute sécurité via Orange Money, MTN MoMo ou carte bancaire.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Vous serez redirigé vers Chap Chap Pay pour payer en toute sécurité via Orange Money, MTN MoMo ou carte bancaire.",
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
             },
             confirmButton = {
-                if (selectedPaymentMethod == "MOBILE_MONEY") {
-                    Button(
-                        onClick = {
-                            if (subSchoolName.isBlank() || subPhoneNumber.isBlank() || subTransactionId.isBlank()) {
-                                subErrorMessage = "Veuillez remplir tous les champs"
+                Button(
+                    onClick = {
+                        isLoadingChapChap = true
+                        coroutineScope.launch {
+                            val orderId = "SUB_${System.currentTimeMillis()}"
+                            val chapChapUrl = com.example.utils.ChapChapPayApi.createPaymentOperation(230000.0, "Abonnement Annuel ScolaPay", orderId)
+                            isLoadingChapChap = false
+                            if (chapChapUrl != null) {
+                                viewModel.savePendingOrderId(orderId)
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(chapChapUrl))
+                                context.startActivity(intent)
                             } else {
-                                subErrorMessage = null
-                                viewModel.submitSubscriptionRequest(subPhoneNumber, subTransactionId)
-                                showDirectSubscriptionDialog = false
-                                Toast.makeText(context, "Demande d'abonnement soumise avec succès", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Erreur lors de la création du lien de paiement Chap Chap Pay.", Toast.LENGTH_LONG).show()
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                    ) {
-                        Text("Soumettre", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Button(
-                        onClick = {
-                            isLoadingChapChap = true
-                            coroutineScope.launch {
-                                val orderId = "SUB_${System.currentTimeMillis()}"
-                                val chapChapUrl = com.example.utils.ChapChapPayApi.createPaymentOperation(200000.0, "Abonnement Annuel ScolaPay", orderId)
-                                isLoadingChapChap = false
-                                if (chapChapUrl != null) {
-                                    viewModel.savePendingOrderId(orderId)
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(chapChapUrl))
-                                    context.startActivity(intent)
-                                } else {
-                                    Toast.makeText(context, "Erreur lors de la création du lien de paiement Chap Chap Pay.", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD946EF), contentColor = Color.White),
-                        enabled = !isLoadingChapChap
-                    ) {
-                        if (isLoadingChapChap) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text("Payer avec Chap Chap Pay", fontWeight = FontWeight.Bold)
                         }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD946EF), contentColor = Color.White),
+                    enabled = !isLoadingChapChap
+                ) {
+                    if (isLoadingChapChap) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Payer avec Chap Chap Pay", fontWeight = FontWeight.Bold)
                     }
                 }
             },
@@ -2579,6 +2506,7 @@ fun DashboardScreen(
 
     // F. DIALOG: SCOLARITÉ & RECOUVREMENT
     if (showScolariteDialog) {
+        val isFounder = userRole == null || userRole.equals("FOUNDER", ignoreCase = true) || userRole.equals("FONDATEUR", ignoreCase = true) || userRole.equals("ADMIN", ignoreCase = true)
         var scolariteTab by remember { mutableIntStateOf(0) }
         
         // Find all unique classes from students AND configured classFees
@@ -2838,24 +2766,26 @@ fun DashboardScreen(
                                             Text("Logo de l'école", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E3A8A))
                                             Text("S'affiche sur toutes vos factures et reçus.", fontSize = 11.sp, color = Color.Gray)
                                             
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
-                                                Button(
-                                                    onClick = { pickImageLauncher.launch("image/*") },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F56E3)),
-                                                    modifier = Modifier.height(32.dp),
-                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                                                ) {
-                                                    Text(if (schoolLogoBase64 != null) "Changer" else "Importer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                }
-                                                if (schoolLogoBase64 != null) {
-                                                    OutlinedButton(
-                                                        onClick = { viewModel.setSchoolLogo(null) },
-                                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
-                                                        border = BorderStroke(1.dp, Color.Red),
+                                            if (isFounder) {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                                                    Button(
+                                                        onClick = { pickImageLauncher.launch("image/*") },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F56E3)),
                                                         modifier = Modifier.height(32.dp),
                                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                                                     ) {
-                                                        Text("Supprimer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        Text(if (schoolLogoBase64 != null) "Changer" else "Importer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    if (schoolLogoBase64 != null) {
+                                                        OutlinedButton(
+                                                            onClick = { viewModel.setSchoolLogo(null) },
+                                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                                                            border = BorderStroke(1.dp, Color.Red),
+                                                            modifier = Modifier.height(32.dp),
+                                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                                        ) {
+                                                            Text("Supprimer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -2901,16 +2831,18 @@ fun DashboardScreen(
                                                     fontWeight = FontWeight.Medium
                                                 )
                                             }
-                                            Button(
-                                                onClick = {
-                                                    editGradeFeeTarget = grade
-                                                    editFeeAmountString = if (currentFee > 0) currentFee.toString() else ""
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEFF6FF), contentColor = Color(0xFF1E3A8A)),
-                                                modifier = Modifier.height(32.dp),
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                                            ) {
-                                                Text("Modifier", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            if (isFounder) {
+                                                Button(
+                                                    onClick = {
+                                                        editGradeFeeTarget = grade
+                                                        editFeeAmountString = if (currentFee > 0) currentFee.toString() else ""
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEFF6FF), contentColor = Color(0xFF1E3A8A)),
+                                                    modifier = Modifier.height(32.dp),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                                ) {
+                                                    Text("Modifier", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                }
                                             }
                                         }
                                         HorizontalDivider(color = Color(0xFFF3F4F6))

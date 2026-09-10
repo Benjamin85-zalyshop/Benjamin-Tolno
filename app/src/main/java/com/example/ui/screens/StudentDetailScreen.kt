@@ -634,9 +634,7 @@ fun StudentDetailScreen(
                 com.example.ui.ReceiptPrinter.printSummaryTicket(
                     context,
                     schoolName ?: "",
-                    matricule,
-                    "${student.firstName} ${student.lastName}",
-                    student.grade,
+                    student,
                     ticketTotalPaid,
                     ticketRemaining,
                     currency

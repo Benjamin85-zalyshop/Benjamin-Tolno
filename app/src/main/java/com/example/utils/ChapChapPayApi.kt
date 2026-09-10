@@ -15,7 +15,7 @@ object ChapChapPayApi {
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("CCP-Api-Key", BuildConfig.CHAP_CHAP_TEST_API_KEY)
+            connection.setRequestProperty("CCP-Api-Key", BuildConfig.CHAP_CHAP_LIVE_API_KEY)
             connection.doOutput = true
 
             val jsonParam = JSONObject()
@@ -60,7 +60,7 @@ object ChapChapPayApi {
             val url = URL("https://chapchappay.com/api/ecommerce/order/$orderId")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
-            connection.setRequestProperty("CCP-Api-Key", BuildConfig.CHAP_CHAP_TEST_API_KEY)
+            connection.setRequestProperty("CCP-Api-Key", BuildConfig.CHAP_CHAP_LIVE_API_KEY)
 
             if (connection.responseCode in 200..299) {
                 val response = connection.inputStream.bufferedReader().use { it.readText() }

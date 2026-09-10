@@ -8,10 +8,11 @@ import com.example.data.models.*
 import com.example.data.repository.SchoolRepository
 import androidx.lifecycle.ViewModelProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.tasks.await
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 data class SchoolAdminItem(
     val email: String,
@@ -255,7 +256,7 @@ class SchoolViewModel(
                 firestore.collection("schools").document(email).set(
                     mapOf("classFeesStr" to jsonStr),
                     com.google.firebase.firestore.SetOptions.merge()
-                )
+                ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing class fees", e) }
             }
         } catch (e: Exception) {
             android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e)
@@ -282,6 +283,10 @@ class SchoolViewModel(
             val updated = account.copy(logoBase64 = base64)
             _schoolAccount.value = updated
             repository.updateSchoolAccount(updated)
+            
+            firestore.collection("schools").document(account.schoolName).set(
+                mapOf("logoBase64" to base64), com.google.firebase.firestore.SetOptions.merge()
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error updating logo", e) }
         }
     }
 
@@ -454,13 +459,14 @@ class SchoolViewModel(
         val email = _schoolAccount.value?.schoolName ?: return
         viewModelScope.launch {
             val remoteId = java.util.UUID.randomUUID().toString()
-            val subject = Subject(
+
+                    val subject = Subject(
                 schoolId = schoolId,
                 section = section,
                 grade = grade,
                 name = name,
                 coefficient = coefficient,
-                maxScore = maxScore,
+                maxScore = if (section == "LE PRIMAIRE" || section == "LA MATERNELLE") 10f else maxScore,
                 remoteId = remoteId
             )
             repository.insertSubject(subject)
@@ -474,6 +480,24 @@ class SchoolViewModel(
                     "maxScore" to subject.maxScore
                 )
             ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+        }
+    }
+
+    fun updateSubjectDetails(subject: Subject, newName: String, newCoeff: Int, newMaxScore: Float) {
+        val email = _schoolAccount.value?.schoolName ?: return
+        viewModelScope.launch {
+            val updated = subject.copy(name = newName, coefficient = newCoeff, maxScore = newMaxScore)
+            repository.updateSubject(updated)
+            if (updated.remoteId.isNotEmpty()) {
+                firestore.collection("schools").document(email).collection("subjects").document(updated.remoteId).set(
+                    mapOf(
+                        "name" to updated.name,
+                        "coefficient" to updated.coefficient,
+                        "maxScore" to updated.maxScore
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            }
         }
     }
 
@@ -610,13 +634,13 @@ class SchoolViewModel(
         viewModelScope.launch {
             defaultSubjects.forEach { (name, coeff, maxScore) ->
                 val remoteId = java.util.UUID.randomUUID().toString()
-                val subject = Subject(
+                    val subject = Subject(
                     schoolId = schoolId,
                     section = section,
                     grade = grade,
                     name = name,
                     coefficient = coeff,
-                    maxScore = maxScore,
+                    maxScore = if (section == "LE PRIMAIRE" || section == "LA MATERNELLE") 10f else maxScore,
                     remoteId = remoteId
                 )
                 repository.insertSubject(subject)
@@ -838,6 +862,7 @@ class SchoolViewModel(
     }
 
     fun logout() {
+        FirebaseAuth.getInstance().signOut()
         _currentSchoolId.value = null
         _schoolAccount.value = null
         _userRole.value = null
@@ -860,12 +885,12 @@ class SchoolViewModel(
             repository.updateSchoolAccount(updated)
             _schoolAccount.value = updated
             
-            firestore.collection("schools").document(account.schoolName).update(
+            firestore.collection("schools").document(account.schoolName).set(
                 mapOf(
                     "hasActiveSubscription" to true,
                     "isPendingValidation" to false,
                     "subscriptionExpiryDate" to updated.subscriptionExpiryDate
-                )
+                ), com.google.firebase.firestore.SetOptions.merge()
             ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error updating subscription", e) }
         }
     }
@@ -942,6 +967,7 @@ class SchoolViewModel(
     }
 
     private fun syncSchoolDataFromFirestore(email: String, schoolId: Int) {
+        fixPrimarySubjectsMaxScore()
         for (listener in activeListeners) {
             listener.remove()
         }
@@ -952,6 +978,8 @@ class SchoolViewModel(
 
         val schoolDocListener = firestore.collection("schools").document(email).addSnapshotListener { snapshot, e ->
             if (e != null || snapshot == null) return@addSnapshotListener
+            
+            // Sync class fees
             val classFeesStr = snapshot.getString("classFeesStr")
             if (classFeesStr != null) {
                 try {
@@ -960,6 +988,65 @@ class SchoolViewModel(
                     sharedPrefs.edit().putString("class_fees_$schoolId", classFeesStr).apply()
                 } catch (e: Exception) {
                     android.util.Log.e("ScolaPay-Firebase", "Error syncing class fees", e)
+                }
+            }
+            
+            // Sync school account details (Logo, displayName, subscriptions)
+            viewModelScope.launch {
+                val currentAccount = repository.getSchoolAccountByName(email)
+                if (currentAccount != null) {
+                    val remoteLogo = snapshot.getString("logoBase64")
+                    val remoteDisplayName = snapshot.getString("displayName")
+                    val remoteAddress = snapshot.getString("address")
+                    val remotePhone = snapshot.getString("founderPhone")
+                    val hasSub = snapshot.getBoolean("hasActiveSubscription") ?: currentAccount.hasActiveSubscription
+                    val pendingVal = snapshot.getBoolean("isPendingValidation") ?: currentAccount.isPendingValidation
+                    val subExpiry = snapshot.getLong("subscriptionExpiryDate") ?: currentAccount.subscriptionExpiryDate
+                    val remoteFinancierPwd = snapshot.getString("financierPasswordHash")
+                    val remotePwd = snapshot.getString("passwordHash")
+
+                    var isUpdated = false
+                    var updatedAccount = currentAccount
+                    
+                    if (remoteLogo != null && remoteLogo != updatedAccount.logoBase64) {
+                        updatedAccount = updatedAccount.copy(logoBase64 = remoteLogo)
+                        _schoolLogoBase64.value = remoteLogo
+                        isUpdated = true
+                    }
+                    if (remoteDisplayName != null && remoteDisplayName != updatedAccount.displayName) {
+                        updatedAccount = updatedAccount.copy(displayName = remoteDisplayName)
+                        _schoolName.value = remoteDisplayName
+                        isUpdated = true
+                    }
+                    if (remoteAddress != null && remoteAddress != updatedAccount.address) {
+                        updatedAccount = updatedAccount.copy(address = remoteAddress)
+                        isUpdated = true
+                    }
+                    if (remotePhone != null && remotePhone != updatedAccount.founderPhone) {
+                        updatedAccount = updatedAccount.copy(founderPhone = remotePhone)
+                        isUpdated = true
+                    }
+                    if (hasSub != updatedAccount.hasActiveSubscription || pendingVal != updatedAccount.isPendingValidation || subExpiry != updatedAccount.subscriptionExpiryDate) {
+                        updatedAccount = updatedAccount.copy(
+                            hasActiveSubscription = hasSub,
+                            isPendingValidation = pendingVal,
+                            subscriptionExpiryDate = subExpiry
+                        )
+                        isUpdated = true
+                    }
+                    if (remoteFinancierPwd != null && remoteFinancierPwd != updatedAccount.financierPasswordHash) {
+                        updatedAccount = updatedAccount.copy(financierPasswordHash = remoteFinancierPwd)
+                        isUpdated = true
+                    }
+                    if (remotePwd != null && remotePwd != updatedAccount.passwordHash) {
+                        updatedAccount = updatedAccount.copy(passwordHash = remotePwd)
+                        isUpdated = true
+                    }
+                    
+                    if (isUpdated) {
+                        repository.updateSchoolAccount(updatedAccount)
+                        _schoolAccount.value = updatedAccount
+                    }
                 }
             }
         }
@@ -1005,7 +1092,26 @@ class SchoolViewModel(
                     }
                     
                     val studentRemoteId = doc.getString("studentRemoteId") ?: continue
-                    val studentId = repository.getStudentIdByRemoteId(studentRemoteId) ?: continue
+                    
+                    var studentId = repository.getStudentIdByRemoteId(studentRemoteId)
+                    if (studentId == null) {
+                        try {
+                            val studentDoc = awaitTask(firestore.collection("schools").document(email).collection("students").document(studentRemoteId).get())
+                            if (studentDoc != null && studentDoc.exists()) {
+                                val student = Student(
+                                    id = 0, schoolId = schoolId,
+                                    firstName = studentDoc.getString("firstName") ?: "", lastName = studentDoc.getString("lastName") ?: "",
+                                    grade = studentDoc.getString("grade") ?: "", section = studentDoc.getString("section") ?: "Non défini",
+                                    remoteId = studentRemoteId, parentWhatsApp = studentDoc.getString("parentWhatsApp"),
+                                    registrationFee = studentDoc.getLong("registrationFee") ?: 0L, reenrollmentFee = studentDoc.getLong("reenrollmentFee") ?: 0L,
+                                    photoBase64 = studentDoc.getString("photoBase64"), schoolYear = studentDoc.getString("schoolYear") ?: "2026-2027"
+                                )
+                                repository.insertStudent(student)
+                                studentId = repository.getStudentIdByRemoteId(studentRemoteId)
+                            }
+                        } catch (e: Exception) {}
+                    }
+                    if (studentId == null) continue
                     
                     val payment = Payment(
                         id = existing?.id ?: 0,
@@ -1067,14 +1173,17 @@ class SchoolViewModel(
                         continue
                     }
                     
+                    val parsedSection = doc.getString("section") ?: ""
+                    val parsedMaxScore = if (parsedSection == "LE PRIMAIRE" || parsedSection == "LA MATERNELLE") 10f else ((doc.get("maxScore") as? Number)?.toFloat() ?: 20f)
+
                     val subject = Subject(
                         id = existing?.id ?: 0,
                         schoolId = schoolId,
-                        section = doc.getString("section") ?: "",
+                        section = parsedSection,
                         grade = doc.getString("grade") ?: "",
                         name = doc.getString("name") ?: "",
                         coefficient = doc.getLong("coefficient")?.toInt() ?: 1,
-                        maxScore = doc.getDouble("maxScore")?.toFloat() ?: 20f,
+                        maxScore = parsedMaxScore,
                         remoteId = remoteId
                     )
                     if (existing != null) {
@@ -1103,8 +1212,45 @@ class SchoolViewModel(
                     val studentRemoteId = doc.getString("studentRemoteId") ?: continue
                     val subjectRemoteId = doc.getString("subjectRemoteId") ?: continue
                     
-                    val studentId = repository.getStudentIdByRemoteId(studentRemoteId) ?: continue
-                    val subjectId = repository.getSubjectIdByRemoteId(subjectRemoteId) ?: continue
+                    var studentId = repository.getStudentIdByRemoteId(studentRemoteId)
+                    if (studentId == null) {
+                        try {
+                            val studentDoc = awaitTask(firestore.collection("schools").document(email).collection("students").document(studentRemoteId).get())
+                            if (studentDoc != null && studentDoc.exists()) {
+                                val student = Student(
+                                    id = 0, schoolId = schoolId,
+                                    firstName = studentDoc.getString("firstName") ?: "", lastName = studentDoc.getString("lastName") ?: "",
+                                    grade = studentDoc.getString("grade") ?: "", section = studentDoc.getString("section") ?: "Non défini",
+                                    remoteId = studentRemoteId, parentWhatsApp = studentDoc.getString("parentWhatsApp"),
+                                    registrationFee = studentDoc.getLong("registrationFee") ?: 0L, reenrollmentFee = studentDoc.getLong("reenrollmentFee") ?: 0L,
+                                    photoBase64 = studentDoc.getString("photoBase64"), schoolYear = studentDoc.getString("schoolYear") ?: "2026-2027"
+                                )
+                                repository.insertStudent(student)
+                                studentId = repository.getStudentIdByRemoteId(studentRemoteId)
+                            }
+                        } catch (e: Exception) {}
+                    }
+                    if (studentId == null) continue
+
+                    var subjectId = repository.getSubjectIdByRemoteId(subjectRemoteId)
+                    if (subjectId == null) {
+                        try {
+                            val subjectDoc = awaitTask(firestore.collection("schools").document(email).collection("subjects").document(subjectRemoteId).get())
+                            if (subjectDoc != null && subjectDoc.exists()) {
+                                val parsedSection = subjectDoc.getString("section") ?: ""
+                    val parsedMaxScore = if (parsedSection == "LE PRIMAIRE" || parsedSection == "LA MATERNELLE") 10f else ((subjectDoc.get("maxScore") as? Number)?.toFloat() ?: 20f)
+                                val subject = Subject(
+                                    id = 0, schoolId = schoolId,
+                                    section = parsedSection, grade = subjectDoc.getString("grade") ?: "",
+                                    name = subjectDoc.getString("name") ?: "", coefficient = subjectDoc.getLong("coefficient")?.toInt() ?: 1,
+                                    maxScore = parsedMaxScore, remoteId = subjectRemoteId
+                                )
+                                repository.insertSubject(subject)
+                                subjectId = repository.getSubjectIdByRemoteId(subjectRemoteId)
+                            }
+                        } catch (e: Exception) {}
+                    }
+                    if (subjectId == null) continue
                     
                     val grade = StudentGrade(
                         id = existing?.id ?: 0,
@@ -1474,84 +1620,121 @@ class SchoolViewModel(
     suspend fun login(email: String, pass: String): Boolean {
         // --- Vérification Super Admin ---
         if (email.trim().equals("benjamintolno7@gmail.com", ignoreCase = true) && pass == "Epbomibs5@") {
+            val auth = FirebaseAuth.getInstance()
+            try {
+                auth.signInWithEmailAndPassword(email, pass).await()
+            } catch (e: Exception) {
+                try {
+                    auth.createUserWithEmailAndPassword(email, pass).await()
+                } catch (e2: Exception) {
+                    android.util.Log.e("AdminLogin", "Firebase Auth failed", e2)
+                }
+            }
+            
             _userRole.value = "ADMIN"
             _schoolName.value = "ScolaPay Admin"
-            _currentSchoolId.value = -1 // ID fictif pour l'admin
-            
-            sharedPrefs.edit()
-                .putString("logged_in_email", email.trim())
-                .putString("logged_in_role", "ADMIN")
-                .apply()
-            
+            _currentSchoolId.value = -1 
+            sharedPrefs.edit().putString("logged_in_email", email.trim()).putString("logged_in_role", "ADMIN").apply()
             loadAdminSchools()
             return true
         }
-        // --------------------------------
+
+        val auth = FirebaseAuth.getInstance()
+        var isFounder = false
+        var isFinancier = false
+
+        // 1. Tenter la connexion Firebase Auth (Fondateur)
+        try {
+            auth.signInWithEmailAndPassword(email, pass).await()
+            isFounder = true
+        } catch (e: Exception) {
+            // 2. Tenter la connexion Firebase Auth (Financier)
+            try {
+                auth.signInWithEmailAndPassword("fin_$email", pass).await()
+                isFinancier = true
+            } catch (e2: Exception) {
+                // 3. MIGRATION : Si Firebase échoue, vérifier la base locale
+                val localAccount = repository.getSchoolAccountByName(email)
+                if (localAccount != null) {
+                    if (pass == localAccount.passwordHash || pass == "admin") {
+                        try {
+                            auth.createUserWithEmailAndPassword(email, pass).await()
+                            isFounder = true
+                        } catch (e3: Exception) { 
+                            try { auth.signInWithEmailAndPassword(email, pass).await(); isFounder = true } catch (e4: Exception) {}
+                        }
+                    } else if (pass == localAccount.financierPasswordHash || pass == "financier") {
+                        try {
+                            auth.createUserWithEmailAndPassword("fin_$email", pass).await()
+                            isFinancier = true
+                        } catch (e3: Exception) {
+                            try { auth.signInWithEmailAndPassword("fin_$email", pass).await(); isFinancier = true } catch (e4: Exception) {}
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!isFounder && !isFinancier) {
+            return false // Échec total de l'authentification
+        }
+
+        // Enregistrer l'UID dans Firestore pour les règles de sécurité
+        val uid = auth.currentUser?.uid
+        if (uid != null) {
+            val roleStr = if (isFounder) "FONDATEUR" else "FINANCIER"
+            firestore.collection("schools").document(email).collection("users").document(uid)
+                .set(mapOf("role" to roleStr), com.google.firebase.firestore.SetOptions.merge())
+        }
 
         var account = repository.getSchoolAccountByName(email)
-        
         if (account == null) {
-            val firstAccount = repository.getFirstSchoolAccount()
-            if (firstAccount != null) {
-                if (pass == firstAccount.passwordHash || pass == firstAccount.financierPasswordHash || pass == "admin" || pass == "financier") {
-                    account = firstAccount
-                }
-            } else {
-                // La base de données locale est vide (nouvelle instance).
-                // On auto-crée le compte pour éviter de bloquer l'utilisateur.
-                val defaultName = email.substringBefore("@").replaceFirstChar { it.uppercase() }
-                repository.registerSchool(
-                    name = email, 
-                    founderPassword = pass, 
-                    financierPassword = pass, 
-                    displayName = defaultName
-                )
-                account = repository.getSchoolAccountByName(email)
-            }
+            val defaultName = email.substringBefore("@").replaceFirstChar { it.uppercase() }
+            repository.registerSchool(name = email, founderPassword = pass, financierPassword = pass, displayName = defaultName)
+            account = repository.getSchoolAccountByName(email)
         }
 
         if (account != null) {
-            if (account.displayName == "École ScolaPay") {
-                val newName = account.schoolName.substringBefore("@").replaceFirstChar { it.uppercase() }
-                val updated = account.copy(displayName = newName)
-                repository.updateSchoolAccount(updated)
-                account = updated
-            }
-            // Normalement on vérifie le mot de passe du fondateur ou du financier.
-            if (pass == account.passwordHash || pass == "admin") {
-                _schoolAccount.value = account
-                _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
-                _schoolLogoBase64.value = account.logoBase64
-                _userRole.value = "FOUNDER"
-                _currentSchoolId.value = account.id
-                if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2026-2027"
-                
-                sharedPrefs.edit()
-                    .putString("logged_in_email", account.schoolName)
-                    .putString("logged_in_role", "FOUNDER")
-                    .apply()
-                // syncSchoolDataFromFirestore automatically called by _currentSchoolId observer
-                return true
-            } else if (pass == account.financierPasswordHash || pass == "financier") {
-                _schoolAccount.value = account
-                _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
-                _schoolLogoBase64.value = account.logoBase64
-                _userRole.value = "FINANCIER"
-                _currentSchoolId.value = account.id
-                if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2026-2027"
-                
-                sharedPrefs.edit()
-                    .putString("logged_in_email", account.schoolName)
-                    .putString("logged_in_role", "FINANCIER")
-                    .apply()
-                // syncSchoolDataFromFirestore automatically called by _currentSchoolId observer
-                return true
-            }
-            return false // Mot de passe incorrect
+            _schoolAccount.value = account
+            _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+            _schoolLogoBase64.value = account.logoBase64
+            _userRole.value = if (isFounder) "FOUNDER" else "FINANCIER"
+            _currentSchoolId.value = account.id
+            if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2026-2027"
+            
+            sharedPrefs.edit()
+                .putString("logged_in_email", account.schoolName)
+                .putString("logged_in_role", _userRole.value)
+                .apply()
+            return true
         }
-        return false // Account not found
+        return false
     }
     suspend fun registerSchool(name: String, fp: String, finp: String, dn: String, addr: String, phone: String): Boolean {
+        val auth = FirebaseAuth.getInstance()
+        
+        // 1. Créer le compte Firebase Auth pour le Fondateur
+        try {
+            auth.createUserWithEmailAndPassword(name, fp).await()
+        } catch (e: Exception) {
+            try { 
+                auth.signInWithEmailAndPassword(name, fp).await() 
+            } catch (e2: Exception) {
+                android.util.Log.e("ScolaPay", "Auth creation failed", e2)
+                return false // Échec critique si Firebase refuse la création
+            }
+        }
+        
+        // 2. Créer le compte Firebase Auth pour le Financier (en arrière-plan)
+        try {
+            auth.createUserWithEmailAndPassword("fin_$name", finp).await()
+        } catch (e: Exception) {}
+        
+        // 3. Se reconnecter en tant que Fondateur
+        try {
+            auth.signInWithEmailAndPassword(name, fp).await()
+        } catch (e: Exception) {}
+
         repository.registerSchool(name = name, founderPassword = fp, financierPassword = finp, displayName = dn, address = addr, founderPhone = phone)
         
         val schoolData = mapOf(
@@ -1564,17 +1747,37 @@ class SchoolViewModel(
             "isPendingValidation" to false,
             "createdAt" to System.currentTimeMillis()
         )
-        firestore.collection("schools").document(name)
-            .set(schoolData, com.google.firebase.firestore.SetOptions.merge())
-            .addOnFailureListener { e ->
-                android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e)
+
+        // Enregistrer l'UID du fondateur pour les règles de sécurité D'ABORD
+        val uid = auth.currentUser?.uid
+        if (uid != null) {
+            try {
+                firestore.collection("schools").document(name).collection("users").document(uid)
+                    .set(mapOf("role" to "FONDATEUR"), com.google.firebase.firestore.SetOptions.merge()).await()
+            } catch (e: Exception) {
+                android.util.Log.e("ScolaPay-Firebase", "Error writing user role", e)
             }
+        }
         
-        login(name, fp)
+        try {
+            firestore.collection("schools").document(name)
+                .set(schoolData, com.google.firebase.firestore.SetOptions.merge()).await()
+        } catch (e: Exception) {
+            android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e)
+        }
+        
         return true
     }
     suspend fun syncAccount(email: String) {}
-    suspend fun sendPasswordResetEmail(email: String): Boolean = true
+    suspend fun sendPasswordResetEmail(email: String): Boolean {
+        return try {
+            FirebaseAuth.getInstance().sendPasswordResetEmail(email).await()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
     suspend fun syncFinancierAuthAccount(a: String, b: String, c: String) {}
     fun updateCurrency(currency: String) {
         val account = _schoolAccount.value
@@ -1583,6 +1786,23 @@ class SchoolViewModel(
             _schoolAccount.value = updated
             viewModelScope.launch {
                 repository.updateSchoolAccount(updated)
+            }
+        }
+}
+    fun fixPrimarySubjectsMaxScore() {
+        val email = _schoolAccount.value?.schoolName ?: return
+        viewModelScope.launch {
+            val allSubjects = repository.getAllSubjectsDirect(_currentSchoolId.value ?: return@launch)
+            for (subject in allSubjects) {
+                if ((subject.section == "LE PRIMAIRE" || subject.section == "LA MATERNELLE") && subject.maxScore != 10f) {
+                    val fixedSubject = subject.copy(maxScore = 10f)
+                    repository.updateSubject(fixedSubject)
+                    if (fixedSubject.remoteId.isNotEmpty()) {
+                        firestore.collection("schools").document(email).collection("subjects").document(fixedSubject.remoteId).update(
+                            "maxScore", 10f
+                        )
+                    }
+                }
             }
         }
     }

@@ -1,26 +1,27 @@
 import re
-
-with open('app/src/main/java/com/example/ui/SchoolViewModel.kt', 'r', encoding='utf-8') as f:
+with open('app/src/main/java/com/example/ui/SchoolViewModel.kt', 'r') as f:
     content = f.read()
 
-target = """                for (s in students) {
-                    val matricule = if (!s.remoteId.isNullOrEmpty() && s.remoteId.length >= 5) s.remoteId.take(5).uppercase() else s.id.toString()
-                    database.getReference("students").child(matricule).child("schoolLogo").setValue(base64 ?: "")
-                }"""
+replacement = """    fun setSchoolLogo(base64: String?) {
+        _schoolLogoBase64.value = base64
+        val account = _schoolAccount.value ?: return
+        viewModelScope.launch {
+            val updated = account.copy(logoBase64 = base64)
+            _schoolAccount.value = updated
+            repository.updateSchoolAccount(updated)
+            
+            firestore.collection("schools").document(account.schoolName).update(
+                "logoBase64", base64
+            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error updating logo", e) }
+        }
+    }"""
 
-replacement = """                for (s in students) {
-                    val matricule = if (!s.remoteId.isNullOrEmpty() && s.remoteId.length >= 5) s.remoteId.take(5).uppercase() else s.id.toString()
-                    val ref = database.getReference("students").child(matricule)
-                    ref.child("schoolLogo").setValue(base64 ?: "")
-                    _schoolAccount.value?.let { acc ->
-                        ref.child("schoolName").setValue(acc.displayName.ifEmpty { acc.schoolName })
-                        ref.child("schoolAddress").setValue(acc.address)
-                        ref.child("schoolPhone").setValue(acc.founderPhone)
-                        ref.child("schoolYear").setValue(_selectedSchoolYear.value)
-                    }
-                }"""
+content = re.sub(
+    r'    fun setSchoolLogo\(base64: String\?\) \{.*?\n    \}',
+    replacement,
+    content,
+    flags=re.DOTALL
+)
 
-content = content.replace(target, replacement)
-
-with open('app/src/main/java/com/example/ui/SchoolViewModel.kt', 'w', encoding='utf-8') as f:
+with open('app/src/main/java/com/example/ui/SchoolViewModel.kt', 'w') as f:
     f.write(content)

@@ -1,0 +1,1 @@
+sed -i 's/maxScore = (doc.get("maxScore") as? Number)?.toFloat() ?: if ((doc.getString("section") ?: "") in listOf("LE PRIMAIRE", "LA MATERNELLE")) 10f else 20f,/maxScore = parsedMaxScore,/g' app/src/main/java/com/example/ui/SchoolViewModel.kt

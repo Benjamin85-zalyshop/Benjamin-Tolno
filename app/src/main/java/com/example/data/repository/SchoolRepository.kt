@@ -25,6 +25,8 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
     fun getAllSubjects(schoolId: Int): Flow<List<Subject>> =
         schoolDao.getAllSubjects(schoolId)
 
+    suspend fun updateSubject(subject: Subject) = schoolDao.updateSubject(subject)
+
     suspend fun insertSubject(subject: Subject) = schoolDao.insertSubject(subject)
 
     suspend fun deleteSubjectById(subjectId: Int) = schoolDao.deleteSubjectById(subjectId)

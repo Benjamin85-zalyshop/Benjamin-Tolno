@@ -1,0 +1,2 @@
+sed -i 's/val parsedSection = doc.getString("section") ?: ""/val parsedSection = subjectDoc.getString("section") ?: ""/g' app/src/main/java/com/example/ui/SchoolViewModel.kt
+sed -i 's/val parsedMaxScore = if (parsedSection == "LE PRIMAIRE" || parsedSection == "LA MATERNELLE") 10f else ((doc.get("maxScore") as? Number)?.toFloat() ?: 20f)/val parsedMaxScore = if (parsedSection == "LE PRIMAIRE" || parsedSection == "LA MATERNELLE") 10f else ((subjectDoc.get("maxScore") as? Number)?.toFloat() ?: 20f)/g' app/src/main/java/com/example/ui/SchoolViewModel.kt
