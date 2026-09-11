@@ -125,7 +125,7 @@ fun AcademicScreen(
             val formattedPaid = numberFormat.format(totalPaid)
             val formattedDue = numberFormat.format(due)
 
-            viewModel.syncStudentAcademicsToRTDB(student.schoolId, student.id, selectedTerm)
+            
             ReportCardPdfUtils.generateReportCardPdf(
                 context = context,
                 student = student,
@@ -831,7 +831,7 @@ private fun GradesEntryTab(
                                             examScore = null,
                                             comment = null
                                         )
-                                        viewModel.syncStudentAcademicsToRTDB(student.schoolId, student.id, selectedTerm)
+                                        
                                         Toast.makeText(context, "Note enregistrée pour ${student.firstName}", Toast.LENGTH_SHORT).show()
                                     },
                                     modifier = Modifier

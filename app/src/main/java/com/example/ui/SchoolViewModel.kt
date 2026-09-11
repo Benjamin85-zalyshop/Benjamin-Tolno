@@ -216,6 +216,7 @@ class SchoolViewModel(
                     "schoolYear" to student.schoolYear
                 )
             ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            
         }
     }
 
@@ -438,6 +439,7 @@ class SchoolViewModel(
                     "schoolYear" to year
                 )
             ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            
         }
     }
 
@@ -480,6 +482,7 @@ class SchoolViewModel(
                     "maxScore" to subject.maxScore
                 )
             ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            
         }
     }
 
@@ -698,6 +701,7 @@ class SchoolViewModel(
                     "teacherComment" to comment
                 )
             ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            
         }
     }
 

@@ -66,7 +66,8 @@ window.downloadPdf = function() {
             const cells = row.querySelectorAll('td');
             if (cells.length >= 3) {
                 const matName = cells[0].textContent;
-                const note = parseFloat(cells[2].textContent);
+                const noteStr = cells[2].textContent.replace(',', '.').trim();
+                const note = noteStr === '-' ? NaN : parseFloat(noteStr);
                 const coeff = 1;
                 totalCoeff += coeff;
                 if (!isNaN(note)) totalPoints += (note * coeff);
@@ -364,12 +365,12 @@ document.addEventListener("DOMContentLoaded", () => {
                             tdAvg.style.fontWeight = "600";
                             tdAvg.textContent = subjData['Moy'] || '-';
                             
-                            const avgScore = parseFloat(subjData['Moy']);
+                            const avgScore = parseFloat((subjData['Moy'] || '').replace(',', '.'));
                             if (!isNaN(avgScore) && avgScore < maxScore / 2) {
                                 tdAvg.style.color = "var(--danger)";
                             }
                             
-                            const evalScore = parseFloat(subjData['Eval']);
+                            const evalScore = parseFloat((subjData['Eval'] || '').replace(',', '.'));
                             if (!isNaN(evalScore) && evalScore < maxScore / 2) {
                                 tdEval.style.color = "var(--danger)";
                             }
