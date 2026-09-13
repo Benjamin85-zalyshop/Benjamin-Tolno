@@ -69,6 +69,16 @@ fun AdminDashboardScreen(
         viewModel.forceSyncSchools()
     }
 
+    var hasAutoSwitchedTab by remember { mutableStateOf(false) }
+    LaunchedEffect(schools) {
+        if (!hasAutoSwitchedTab && schools.isNotEmpty()) {
+            hasAutoSwitchedTab = true
+            if (schools.none { it.isPendingValidation } && selectedTab == 0) {
+                selectedTab = 2 // Basculer automatiquement sur l'onglet "Tous" s'il n'y a pas d'écoles en attente
+            }
+        }
+    }
+
     val filteredSchools = remember(schools, selectedTab) {
         when (selectedTab) {
             0 -> schools.filter { it.isPendingValidation }
@@ -167,15 +177,40 @@ fun AdminDashboardScreen(
             
             if (adminError != null) {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                 ) {
-                    Text(
-                        text = adminError ?: "",
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Synchronisation Cloud Firestore",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = adminError ?: "",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.forceSyncSchools()
+                                Toast.makeText(context, "Nouvelle tentative de synchronisation...", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Réessayer la synchronisation")
+                        }
+                    }
                 }
             }
 
@@ -209,6 +244,16 @@ fun AdminDashboardScreen(
                             color = MaterialTheme.colorScheme.outline,
                             textAlign = TextAlign.Center
                         )
+                        if (selectedTab == 0 && schools.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { selectedTab = 2 }
+                            ) {
+                                Icon(Icons.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Voir toutes les écoles (${schools.size})")
+                            }
+                        }
                     }
                 }
             } else {

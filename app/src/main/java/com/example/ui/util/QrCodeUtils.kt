@@ -105,7 +105,8 @@ object QrCodeUtils {
     data class QrParsedData(
         val rawContent: String,
         val studentId: Int?,
-        val matricule: String?
+        val matricule: String?,
+        val remoteId: String? = null
     )
 
     fun parseQrContent(content: String): QrParsedData {
@@ -116,9 +117,10 @@ object QrCodeUtils {
                 val uri = android.net.Uri.parse(cleanContent)
                 val idStr = uri.getQueryParameter("id")
                 val mat = uri.getQueryParameter("mat")
+                val rid = uri.getQueryParameter("rid")
                 val id = idStr?.toIntOrNull()
-                if (id != null || !mat.isNullOrEmpty()) {
-                    return QrParsedData(cleanContent, id, mat)
+                if (id != null || !mat.isNullOrEmpty() || !rid.isNullOrEmpty()) {
+                    return QrParsedData(cleanContent, id, mat, rid)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -135,10 +137,11 @@ object QrCodeUtils {
                     when (kv[0]) {
                         "id" -> id = kv[1].toIntOrNull()
                         "matricule" -> mat = kv[1]
+                        "rid" -> mat = kv[1] // fallback for old format if needed
                     }
                 }
             }
-            return QrParsedData(cleanContent, id, mat)
+            return QrParsedData(cleanContent, id, mat, null)
         }
         
         // Handle #MATRICULE format or raw text

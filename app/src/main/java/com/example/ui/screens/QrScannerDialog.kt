@@ -92,15 +92,21 @@ fun QrScannerDialog(
         val parsed = QrCodeUtils.parseQrContent(content)
         
         var found: Student? = null
-        if (parsed.studentId != null) {
-            found = students.find { it.id == parsed.studentId }
+        // 1. Search by globally unique remoteId first
+        if (!parsed.remoteId.isNullOrBlank()) {
+            found = students.find { it.remoteId == parsed.remoteId }
         }
+        // 2. Search by matricule (which is first 5 chars of remoteId)
         if (found == null && !parsed.matricule.isNullOrBlank()) {
             val targetMat = parsed.matricule.uppercase()
             found = students.find { student ->
                 val mat = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
                 mat == targetMat || student.remoteId.equals(targetMat, ignoreCase = true)
             }
+        }
+        // 3. Fallback to local SQLite id ONLY if remoteId/matricule didn't find anything
+        if (found == null && parsed.studentId != null) {
+            found = students.find { it.id == parsed.studentId }
         }
         if (found == null) {
             // Search by full name or ID fallback
