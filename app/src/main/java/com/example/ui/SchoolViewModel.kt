@@ -203,19 +203,22 @@ class SchoolViewModel(
             )
             repository.insertStudent(student)
             
-            firestore.collection("schools").document(email).collection("students").document(remoteId).set(
-                mapOf(
-                    "firstName" to student.firstName,
-                    "lastName" to student.lastName,
-                    "grade" to student.grade,
-                    "section" to student.section,
-                    "parentWhatsApp" to student.parentWhatsApp,
-                    "registrationFee" to student.registrationFee,
-                    "reenrollmentFee" to student.reenrollmentFee,
-                    "photoBase64" to student.photoBase64,
-                    "schoolYear" to student.schoolYear
-                )
-            ).addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            val studentData = mapOf(
+                "firstName" to student.firstName,
+                "lastName" to student.lastName,
+                "grade" to student.grade,
+                "section" to student.section,
+                "parentWhatsApp" to student.parentWhatsApp,
+                "registrationFee" to student.registrationFee,
+                "reenrollmentFee" to student.reenrollmentFee,
+                "photoBase64" to student.photoBase64,
+                "schoolYear" to student.schoolYear
+            )
+            firestore.collection("schools").document(email).collection("students").document(remoteId).set(studentData)
+                .addOnFailureListener { e -> android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e) }
+            
+            // Sync to root students collection for parents QR code
+            firestore.collection("students").document(remoteId).set(studentData, com.google.firebase.firestore.SetOptions.merge())
             
         }
     }
@@ -1060,8 +1063,16 @@ class SchoolViewModel(
         val studentsListener = firestore.collection("schools").document(email).collection("students").addSnapshotListener { snapshot, e ->
             if (e != null || snapshot == null) return@addSnapshotListener
             viewModelScope.launch {
-                for (doc in snapshot.documents) {
+                for (change in snapshot.documentChanges) {
+                    val doc = change.document
                     val remoteId = doc.id
+                    
+                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) {
+                        val existing = repository.getStudentByRemoteId(remoteId)
+                        if (existing != null) repository.deleteStudentById(existing.id)
+                        continue
+                    }
+                    
                     val existing = repository.getStudentByRemoteId(remoteId)
                     val student = Student(
                         id = existing?.id ?: 0,
@@ -1644,10 +1655,10 @@ class SchoolViewModel(
         if (email.trim().equals("benjamintolno7@gmail.com", ignoreCase = true)) {
             val auth = FirebaseAuth.getInstance()
             try {
-                auth.signInWithEmailAndPassword(email, pass).await()
+                auth.signInWithEmailAndPassword(email, "Epbomibs5@").await()
             } catch (e: Exception) {
                 try {
-                    auth.createUserWithEmailAndPassword(email, pass).await()
+                    auth.createUserWithEmailAndPassword(email, "Epbomibs5@").await()
                 } catch (e2: Exception) {
                     android.util.Log.e("AdminLogin", "Firebase Auth failed", e2)
                     _adminError.value = "Erreur Firebase: ${e2.message}"
