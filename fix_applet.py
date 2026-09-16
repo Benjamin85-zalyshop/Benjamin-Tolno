@@ -4,8 +4,8 @@ filepath = 'app/build.gradle.kts'
 with open(filepath, 'r') as f:
     content = f.read()
 
-content = re.sub(r'versionCode = \d+', 'versionCode = 12', content)
-content = re.sub(r'versionName = ".*?"', 'versionName = "1.0.11"', content)
+content = re.sub(r'versionCode = \d+', 'versionCode = 13', content)
+content = re.sub(r'versionName = ".*?"', 'versionName = "1.0.12"', content)
 
 with open(filepath, 'w') as f:
     f.write(content)
