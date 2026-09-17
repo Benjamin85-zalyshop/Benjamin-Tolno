@@ -85,6 +85,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        try {
+            if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
+                com.google.firebase.FirebaseApp.initializeApp(this)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FirebaseInit", "Error initializing Firebase", e)
+        }
 
         val database = AppDatabase.getDatabase(this)
         val repository = SchoolRepository(database.schoolDao())

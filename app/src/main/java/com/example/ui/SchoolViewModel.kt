@@ -33,7 +33,7 @@ class SchoolViewModel(
     private val repository: SchoolRepository,
     private val context: Context
 ) : ViewModel() {
-    private val firestore = FirebaseFirestore.getInstance()
+    private val firestore by lazy { FirebaseFirestore.getInstance() }
     private val sharedPrefs = context.getSharedPreferences("scolapay_prefs", Context.MODE_PRIVATE)
     private val activeListeners = mutableListOf<ListenerRegistration>()
     private val _adminError = MutableStateFlow<String?>(null)
