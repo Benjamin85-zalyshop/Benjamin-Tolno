@@ -143,32 +143,38 @@ class SchoolViewModel(
         if (id != null) repository.getPendingValidationStatus(id) else flowOf(false)
     }.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val trialDaysRemaining: StateFlow<Long> = _schoolAccount.map { account ->
-        if (account == null) return@map 0L
-        val elapsed = System.currentTimeMillis() - account.createdAt
+        if (account == null) return@map 90L
+        val now = System.currentTimeMillis()
+        val accountCreatedAt = if (account.createdAt > 0L) account.createdAt else now
+        val elapsed = (now - accountCreatedAt).coerceAtLeast(0L)
         val trialDuration = 90L * 24L * 60L * 60L * 1000L
         ((trialDuration - elapsed) / (24L * 60L * 60L * 1000L)).coerceAtLeast(0L)
-    }.stateIn(viewModelScope, SharingStarted.Lazily, 0L)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, 90L)
 
     val isTrialActive: StateFlow<Boolean> = _schoolAccount.map { account ->
-        if (account == null) return@map false
-        val elapsed = System.currentTimeMillis() - account.createdAt
+        if (account == null) return@map true
+        val now = System.currentTimeMillis()
+        val accountCreatedAt = if (account.createdAt > 0L) account.createdAt else now
+        val elapsed = (now - accountCreatedAt).coerceAtLeast(0L)
         val trialDuration = 90L * 24L * 60L * 60L * 1000L
         elapsed < trialDuration
-    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, true)
 
     val isAppAccessGranted: StateFlow<Boolean> = _schoolAccount.map { account ->
-        if (account == null) return@map false
-        val elapsed = System.currentTimeMillis() - account.createdAt
+        if (account == null) return@map true
+        val now = System.currentTimeMillis()
+        val accountCreatedAt = if (account.createdAt > 0L) account.createdAt else now
+        val elapsed = (now - accountCreatedAt).coerceAtLeast(0L)
         val trialDuration = 90L * 24L * 60L * 60L * 1000L
         val trialActive = elapsed < trialDuration
         
-        val isExpired = account.hasActiveSubscription && account.subscriptionExpiryDate > 0 && account.subscriptionExpiryDate <= System.currentTimeMillis()
+        val isExpired = account.hasActiveSubscription && account.subscriptionExpiryDate > 0 && account.subscriptionExpiryDate <= now
         val subActive = account.hasActiveSubscription && !isExpired
 
         val granted = trialActive || subActive
         android.util.Log.d("ScolaPay_Access", "account: ${account.schoolName}, createdAt: ${account.createdAt}, elapsed: $elapsed, trialActive: $trialActive, subActive: $subActive, granted: $granted")
         granted
-    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, true)
     
     fun getPendingOrderId(): String? = _pendingOrderId.value
     fun setSelectedSchoolYear(year: String) {
@@ -1334,7 +1340,8 @@ class SchoolViewModel(
                     val transactionId = doc.getString("transactionId")
                     val rejectionReason = doc.getString("rejectionReason")
                     val subscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
-                    val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                    val createdAtDoc = doc.getLong("createdAt")
+                    val createdAt = if (createdAtDoc != null && createdAtDoc > 0L) createdAtDoc else System.currentTimeMillis()
                     
                     val existing = repository.getSchoolAccountByName(email)
                     if (existing != null) {
@@ -1427,7 +1434,8 @@ class SchoolViewModel(
                         val transactionId = doc.getString("transactionId")
                         val rejectionReason = doc.getString("rejectionReason")
                         val subscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
-                        val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                        val createdAtDoc = doc.getLong("createdAt")
+                        val createdAt = if (createdAtDoc != null && createdAtDoc > 0L) createdAtDoc else System.currentTimeMillis()
                         
                         val existing = repository.getSchoolAccountByName(email)
                         if (existing != null) {
@@ -1616,6 +1624,11 @@ class SchoolViewModel(
                 } else {
                     var account = repository.getSchoolAccountByName(loggedInEmail)
                     if (account != null) {
+                        if (account.createdAt <= 0L) {
+                            val updated = account.copy(createdAt = System.currentTimeMillis())
+                            repository.updateSchoolAccount(updated)
+                            account = updated
+                        }
                         if (account.displayName == "École ScolaPay") {
                             val newName = account.schoolName.substringBefore("@").replaceFirstChar { it.uppercase() }
                             val updated = account.copy(displayName = newName)
@@ -1730,6 +1743,11 @@ class SchoolViewModel(
         }
 
         if (account != null) {
+            if (account.createdAt <= 0L) {
+                val updated = account.copy(createdAt = System.currentTimeMillis())
+                repository.updateSchoolAccount(updated)
+                account = updated
+            }
             _schoolAccount.value = account
             _schoolName.value = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
             _schoolLogoBase64.value = account.logoBase64
@@ -1772,6 +1790,7 @@ class SchoolViewModel(
 
         repository.registerSchool(name = name, founderPassword = fp, financierPassword = finp, displayName = dn, address = addr, founderPhone = phone)
         
+        val now = System.currentTimeMillis()
         val schoolData = mapOf(
             "displayName" to dn,
             "address" to addr,
@@ -1780,7 +1799,7 @@ class SchoolViewModel(
             "financierPasswordHash" to finp,
             "hasActiveSubscription" to false,
             "isPendingValidation" to false,
-            "createdAt" to System.currentTimeMillis()
+            "createdAt" to now
         )
 
         // Enregistrer l'UID du fondateur pour les règles de sécurité D'ABORD
@@ -1799,6 +1818,26 @@ class SchoolViewModel(
                 .set(schoolData, com.google.firebase.firestore.SetOptions.merge()).await()
         } catch (e: Exception) {
             android.util.Log.e("ScolaPay-Firebase", "Error syncing to Firebase", e)
+        }
+
+        var registeredAccount = repository.getSchoolAccountByName(name)
+        if (registeredAccount != null) {
+            if (registeredAccount.createdAt <= 0L) {
+                val fixed = registeredAccount.copy(createdAt = now)
+                repository.updateSchoolAccount(fixed)
+                registeredAccount = fixed
+            }
+            _schoolAccount.value = registeredAccount
+            _schoolName.value = registeredAccount.displayName.takeIf { it.isNotBlank() } ?: registeredAccount.schoolName
+            _schoolLogoBase64.value = registeredAccount.logoBase64
+            _userRole.value = "FOUNDER"
+            _currentSchoolId.value = registeredAccount.id
+            if (_selectedSchoolYear.value == null) _selectedSchoolYear.value = "2026-2027"
+            
+            sharedPrefs.edit()
+                .putString("logged_in_email", registeredAccount.schoolName)
+                .putString("logged_in_role", "FOUNDER")
+                .apply()
         }
         
         return true

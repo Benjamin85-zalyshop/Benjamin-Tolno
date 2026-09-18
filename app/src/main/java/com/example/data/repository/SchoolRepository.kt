@@ -196,7 +196,7 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
 }
 
     suspend fun registerSchool(name: String, founderPassword: String, financierPassword: String, displayName: String = "", address: String = "", founderPhone: String = "", currency: String = "GNF") {
-        schoolDao.insertSchoolAccount(com.example.data.models.SchoolAccount(schoolName = name, passwordHash = founderPassword, financierPasswordHash = financierPassword, displayName = displayName, address = address, founderPhone = founderPhone))
+        schoolDao.insertSchoolAccount(com.example.data.models.SchoolAccount(schoolName = name, passwordHash = founderPassword, financierPasswordHash = financierPassword, displayName = displayName, address = address, founderPhone = founderPhone, createdAt = System.currentTimeMillis()))
     
     suspend fun deduplicateData() {
         schoolDao.deduplicatePayments()
