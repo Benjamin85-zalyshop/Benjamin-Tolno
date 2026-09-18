@@ -1,7 +1,4 @@
-import os
-
-filepath = 'app/src/main/java/com/example/MyApplication.kt'
-content = """package com.example
+package com.example
 
 import android.app.Application
 import com.google.firebase.FirebaseApp
@@ -20,17 +17,3 @@ class MyApplication : Application() {
         }
     }
 }
-"""
-
-with open(filepath, 'w') as f:
-    f.write(content)
-
-manifest_path = 'app/src/main/AndroidManifest.xml'
-with open(manifest_path, 'r') as f:
-    manifest_content = f.read()
-
-if 'android:name=".MyApplication"' not in manifest_content:
-    manifest_content = manifest_content.replace('<application', '<application\n        android:name=".MyApplication"')
-    with open(manifest_path, 'w') as f:
-        f.write(manifest_content)
-

@@ -4,10 +4,17 @@ filepath = 'app/src/main/java/com/example/ui/SchoolViewModel.kt'
 with open(filepath, 'r') as f:
     content = f.read()
 
-find_text = '''class SchoolViewModel(private val repository: SchoolRepository) : ViewModel() {
-    private val firestore = FirebaseFirestore.getInstance()'''
-
-if find_text in content:
-    print("Found Firestore init in ViewModel")
+print("Checking SchoolViewModel Firebase initialization...")
+if "val firestore =" in content:
+    print("Found direct initialization:")
+    lines = [l for l in content.split('\n') if "firestore" in l]
+    for l in lines[:5]:
+        print(l.strip())
+elif "val firestore by lazy" in content:
+    print("Found lazy initialization:")
+    lines = [l for l in content.split('\n') if "firestore" in l]
+    for l in lines[:5]:
+        print(l.strip())
 else:
-    print("Not found")
+    print("Could not find firestore initialization")
+
