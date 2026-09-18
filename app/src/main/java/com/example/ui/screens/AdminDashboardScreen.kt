@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import com.example.ui.SchoolViewModel
 import com.example.ui.SchoolAdminItem
 
@@ -44,6 +45,14 @@ fun AdminDashboardScreen(
     var schoolToDelete by remember { mutableStateOf<SchoolAdminItem?>(null) }
     var showCleanDialog by remember { mutableStateOf(false) }
     var rejectionReason by remember { mutableStateOf("") }
+    
+    val coroutineScope = rememberCoroutineScope()
+    var showFirebaseAuthDialog by remember { mutableStateOf(false) }
+    var firebasePasswordInput by remember { mutableStateOf("") }
+    var isAuthenticatingFirebase by remember { mutableStateOf(false) }
+    var firebaseAuthErrorMessage by remember { mutableStateOf<String?>(null) }
+    var firebasePasswordVisible by remember { mutableStateOf(false) }
+    var firebaseResetSentMessage by remember { mutableStateOf<String?>(null) }
     
     val localContext = androidx.compose.ui.platform.LocalContext.current
     var showWhatsAppDialog by remember { mutableStateOf(false) }
@@ -200,15 +209,34 @@ fun AdminDashboardScreen(
                             style = MaterialTheme.typography.bodySmall
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        FilledTonalButton(
-                            onClick = {
-                                viewModel.forceSyncSchools()
-                                Toast.makeText(context, "Nouvelle tentative de synchronisation...", Toast.LENGTH_SHORT).show()
-                            }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Réessayer la synchronisation")
+                            Button(
+                                onClick = {
+                                    firebaseAuthErrorMessage = null
+                                    firebaseResetSentMessage = null
+                                    firebasePasswordInput = ""
+                                    showFirebaseAuthDialog = true
+                                },
+                                modifier = Modifier.weight(1.1f)
+                            ) {
+                                Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Connexion Firebase")
+                            }
+                            FilledTonalButton(
+                                onClick = {
+                                    viewModel.forceSyncSchools()
+                                    Toast.makeText(context, "Nouvelle tentative de synchronisation...", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.weight(0.9f)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Réessayer")
+                            }
                         }
                     }
                 }
@@ -391,6 +419,133 @@ fun AdminDashboardScreen(
             },
             dismissButton = {
                 OutlinedButton(onClick = { showCleanDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
+
+    if (showFirebaseAuthDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                if (!isAuthenticatingFirebase) showFirebaseAuthDialog = false 
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AdminPanelSettings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Connexion Cloud Firebase")
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        "Pour autoriser la synchronisation Firestore des abonnements, connectez-vous avec votre compte Firebase :",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = "benjamintolno7@gmail.com",
+                        onValueChange = {},
+                        label = { Text("E-mail administrateur") },
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) }
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = firebasePasswordInput,
+                        onValueChange = { 
+                            firebasePasswordInput = it
+                            firebaseAuthErrorMessage = null
+                        },
+                        label = { Text("Mot de passe Firebase") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        visualTransformation = if (firebasePasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { firebasePasswordVisible = !firebasePasswordVisible }) {
+                                Icon(
+                                    if (firebasePasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = null
+                                )
+                            }
+                        }
+                    )
+                    if (firebaseAuthErrorMessage != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            firebaseAuthErrorMessage!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (firebaseResetSentMessage != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            firebaseResetSentMessage!!,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TextButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                val sent = viewModel.sendPasswordResetEmail("benjamintolno7@gmail.com")
+                                if (sent) {
+                                    firebaseResetSentMessage = "E-mail de réinitialisation envoyé à benjamintolno7@gmail.com. Vérifiez vos spams."
+                                } else {
+                                    firebaseAuthErrorMessage = "Impossible d'envoyer l'e-mail de réinitialisation."
+                                }
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Mot de passe oublié ?")
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (firebasePasswordInput.isNotBlank()) {
+                            coroutineScope.launch {
+                                isAuthenticatingFirebase = true
+                                firebaseAuthErrorMessage = null
+                                val (ok, errorMsg) = viewModel.authenticateAdminWithFirebase(firebasePasswordInput)
+                                isAuthenticatingFirebase = false
+                                if (ok) {
+                                    showFirebaseAuthDialog = false
+                                    Toast.makeText(context, "Connecté à Firebase ! Synchronisation réussie.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    firebaseAuthErrorMessage = errorMsg ?: "Échec : mot de passe incorrect."
+                                }
+                            }
+                        }
+                    },
+                    enabled = firebasePasswordInput.isNotBlank() && !isAuthenticatingFirebase
+                ) {
+                    if (isAuthenticatingFirebase) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Connexion...")
+                    } else {
+                        Text("Se connecter")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showFirebaseAuthDialog = false },
+                    enabled = !isAuthenticatingFirebase
+                ) {
                     Text("Annuler")
                 }
             }
