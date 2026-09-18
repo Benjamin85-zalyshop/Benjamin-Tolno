@@ -19,8 +19,8 @@ android {
     applicationId = "com.aistudio.scolapay.gnf"
     minSdk = 24
     targetSdk = 34
-    versionCode = 18
-    versionName = "1.0.17"
+    versionCode = 19
+    versionName = "1.0.18"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -44,8 +44,8 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = true
-      isShrinkResources = true
+      isMinifyEnabled = false
+      isShrinkResources = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }

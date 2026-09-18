@@ -1,4 +1,24 @@
-package com.example
+import re
+
+# 1. Update app/build.gradle.kts
+gradle_path = 'app/build.gradle.kts'
+with open(gradle_path, 'r') as f:
+    content = f.read()
+
+content = content.replace('isMinifyEnabled = true', 'isMinifyEnabled = false')
+content = content.replace('isShrinkResources = true', 'isShrinkResources = false')
+
+# bump version
+content = re.sub(r'versionCode = \d+', 'versionCode = 19', content)
+content = re.sub(r'versionName = ".*?"', 'versionName = "1.0.18"', content)
+
+with open(gradle_path, 'w') as f:
+    f.write(content)
+print("Updated build.gradle.kts")
+
+# 2. Update MyApplication.kt with explicit FirebaseOptions fallback
+app_path = 'app/src/main/java/com/example/MyApplication.kt'
+app_content = """package com.example
 
 import android.app.Application
 import com.google.firebase.FirebaseApp
@@ -36,3 +56,9 @@ class MyApplication : Application() {
         }
     }
 }
+"""
+
+with open(app_path, 'w') as f:
+    f.write(app_content)
+print("Updated MyApplication.kt")
+
