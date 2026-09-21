@@ -18,6 +18,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.example.ui.printer.BluetoothPrinterManager
+import com.example.ui.printer.EscPosTicketBuilder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -88,6 +92,7 @@ fun StudentDetailScreen(
     var showRequestDeleteDialog by remember { mutableStateOf(false) }
     var deletionReason by remember { mutableStateOf("") }
     var paymentToDelete by remember { mutableStateOf<com.example.data.models.Payment?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     val exportPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/pdf"),
@@ -596,14 +601,47 @@ fun StudentDetailScreen(
                         onPrint = {
                             if (student != null) {
                                 val classFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
-                                com.example.ui.ReceiptPrinter.printReceipt(
-                                    context,
-                                    student,
-                                    payment,
-                                    schoolName ?: "",
-                                    classFee,
-                                    currency
-                                )
+                                val (savedMac, savedName) = BluetoothPrinterManager.getSavedPrinter(context)
+                                if (savedMac != null) {
+                                    // Impression directe sur imprimante thermique Bluetooth liée (POS 58mm ou Caisse 80mm)
+                                    val terminalType = BluetoothPrinterManager.getTerminalType(context)
+                                    Toast.makeText(context, "Impression en cours sur ${savedName ?: savedMac}...", Toast.LENGTH_SHORT).show()
+                                    coroutineScope.launch {
+                                        val data = EscPosTicketBuilder.buildPaymentReceipt(
+                                            terminalType = terminalType,
+                                            schoolName = schoolName ?: "",
+                                            student = student,
+                                            payment = payment,
+                                            classFee = classFee,
+                                            currency = currency
+                                        )
+                                        val result = BluetoothPrinterManager.printDataViaBluetooth(savedMac, data)
+                                        if (result.isSuccess) {
+                                            Toast.makeText(context, "Ticket imprimé avec succès !", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Erreur Bluetooth: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                            // Fallback sur le spouleur d'impression Android
+                                            com.example.ui.ReceiptPrinter.printReceipt(
+                                                context,
+                                                student,
+                                                payment,
+                                                schoolName ?: "",
+                                                classFee,
+                                                currency
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    // Spouleur d'impression Android avec format adapté au terminal choisi (58mm ou 80mm)
+                                    com.example.ui.ReceiptPrinter.printReceipt(
+                                        context,
+                                        student,
+                                        payment,
+                                        schoolName ?: "",
+                                        classFee,
+                                        currency
+                                    )
+                                }
                             }
                         }
                     )

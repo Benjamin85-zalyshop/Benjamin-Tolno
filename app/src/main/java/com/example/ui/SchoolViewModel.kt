@@ -1759,7 +1759,7 @@ class SchoolViewModel(
                 loadAdminSchools()
                 return true
             } else {
-                _loginError.value = "Mot de passe administrateur incorrect."
+                _loginError.value = "Mot de passe incorrect pour benjamintolno7@gmail.com. Cliquez sur 'Mot de passe oublié ?' si vous l'avez oublié."
                 return false
             }
         }

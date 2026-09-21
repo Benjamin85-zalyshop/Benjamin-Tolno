@@ -51,6 +51,8 @@ import com.example.data.models.DeletionRequest
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.ui.printer.BluetoothPrinterManager
+import com.example.ui.printer.PrinterTerminalType
 
 val SECTIONS = listOf("Toutes les sections", "LA MATERNELLE", "LE PRIMAIRE", "LE COLLÈGE", "LE LYCÉE", "L'UNIVERSITÉ", "L'ÉCOLE PROFESSIONNELLE")
 
@@ -3560,6 +3562,11 @@ fun DashboardScreen(
         var settingsTab by remember { mutableIntStateOf(0) }
         var tempFinancierPass by remember { mutableStateOf("") }
         var tempPassVisible by remember { mutableStateOf(false) }
+        var selectedTerminalType by remember { mutableStateOf(BluetoothPrinterManager.getTerminalType(context)) }
+        var pairedDevices by remember { mutableStateOf(BluetoothPrinterManager.getPairedPrinters()) }
+        val (savedMac, savedName) = remember(showSettingsDialog) { BluetoothPrinterManager.getSavedPrinter(context) }
+        var currentPrinterMac by remember { mutableStateOf(savedMac) }
+        var currentPrinterName by remember { mutableStateOf(savedName) }
 
         val currencies = listOf(
             Triple("GNF", "Franc Guinéen", "GNF"),
@@ -3615,17 +3622,22 @@ fun DashboardScreen(
                         Tab(
                             selected = settingsTab == 0,
                             onClick = { settingsTab = 0 },
-                            text = { Text("Devise", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                            text = { Text("Devise", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                         )
                         Tab(
                             selected = settingsTab == 1,
                             onClick = { settingsTab = 1 },
-                            text = { Text("Logo", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                            text = { Text("Logo", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                         )
                         Tab(
                             selected = settingsTab == 2,
                             onClick = { settingsTab = 2 },
-                            text = { Text("Sécurité", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                            text = { Text("Sécurité", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        Tab(
+                            selected = settingsTab == 3,
+                            onClick = { settingsTab = 3 },
+                            text = { Text("Imprimante", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                         )
                     }
 
@@ -3834,6 +3846,247 @@ fun DashboardScreen(
                                     enabled = tempFinancierPass.isNotBlank()
                                 ) {
                                     Text("Enregistrer le mot de passe")
+                                }
+                            }
+                        }
+                        3 -> {
+                            // Imprimante & Terminal Tab
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Text(
+                                    text = "Configurez vos terminaux d'impression thermique :",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1E3A8A)
+                                )
+
+                                Text(
+                                    text = "1. Choisissez le format de votre matériel :",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF4B5563)
+                                )
+
+                                // Option 1 : Terminal Mobile POS 58mm
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedTerminalType == PrinterTerminalType.POS_58MM) Color(0xFFEFF6FF) else Color(0xFFF9FAFB)
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selectedTerminalType == PrinterTerminalType.POS_58MM) Color(0xFF0F56E3) else Color(0xFFE5E7EB)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedTerminalType = PrinterTerminalType.POS_58MM
+                                            BluetoothPrinterManager.setTerminalType(context, PrinterTerminalType.POS_58MM)
+                                            Toast.makeText(context, "Mode Terminal POS (58 mm) sélectionné", Toast.LENGTH_SHORT).show()
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PhoneAndroid,
+                                            contentDescription = null,
+                                            tint = if (selectedTerminalType == PrinterTerminalType.POS_58MM) Color(0xFF0F56E3) else Color.Gray,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Terminal Mobile POS (58 mm)",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = if (selectedTerminalType == PrinterTerminalType.POS_58MM) Color(0xFF0F56E3) else Color.Black
+                                            )
+                                            Text(
+                                                text = "Appareil portable de poche, Sunmi V2, Z90, imprimantes thermiques mobiles Bluetooth (32 caractères / ligne).",
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF6B7280)
+                                            )
+                                        }
+                                        if (selectedTerminalType == PrinterTerminalType.POS_58MM) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = "Actif",
+                                                tint = Color(0xFF0F56E3),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Option 2 : Caisse Comptoir / Bureau 80mm
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedTerminalType == PrinterTerminalType.DESKTOP_80MM) Color(0xFFEFF6FF) else Color(0xFFF9FAFB)
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selectedTerminalType == PrinterTerminalType.DESKTOP_80MM) Color(0xFF0F56E3) else Color(0xFFE5E7EB)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedTerminalType = PrinterTerminalType.DESKTOP_80MM
+                                            BluetoothPrinterManager.setTerminalType(context, PrinterTerminalType.DESKTOP_80MM)
+                                            Toast.makeText(context, "Mode Caisse Comptoir (80 mm) sélectionné", Toast.LENGTH_SHORT).show()
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Computer,
+                                            contentDescription = null,
+                                            tint = if (selectedTerminalType == PrinterTerminalType.DESKTOP_80MM) Color(0xFF0F56E3) else Color.Gray,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Caisse Comptoir / Bureau (80 mm)",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = if (selectedTerminalType == PrinterTerminalType.DESKTOP_80MM) Color(0xFF0F56E3) else Color.Black
+                                            )
+                                            Text(
+                                                text = "Terminal fixe de caisse avec grand écran tactile, format grand rouleau 80 mm (48 caractères / ligne avec massicot).",
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF6B7280)
+                                            )
+                                        }
+                                        if (selectedTerminalType == PrinterTerminalType.DESKTOP_80MM) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = "Actif",
+                                                tint = Color(0xFF0F56E3),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                HorizontalDivider(color = Color(0xFFE5E7EB))
+
+                                Text(
+                                    text = "2. Association Bluetooth directe (Optionnelle) :",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF4B5563)
+                                )
+
+                                Text(
+                                    text = "Vous pouvez imprimer directement via Bluetooth sans passer par le menu d'impression Android.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF6B7280)
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (currentPrinterMac != null) "Imprimante : ${currentPrinterName ?: currentPrinterMac}" else "Aucune imprimante Bluetooth liée",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (currentPrinterMac != null) Color(0xFF10B981) else Color.Gray,
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    if (currentPrinterMac != null) {
+                                        TextButton(
+                                            onClick = {
+                                                BluetoothPrinterManager.setSavedPrinter(context, null, null)
+                                                currentPrinterMac = null
+                                                currentPrinterName = null
+                                                Toast.makeText(context, "Imprimante dissociée", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Text("Dissocier", fontSize = 11.sp, color = Color.Red)
+                                        }
+                                    }
+                                }
+
+                                Button(
+                                    onClick = {
+                                        pairedDevices = BluetoothPrinterManager.getPairedPrinters()
+                                        if (pairedDevices.isEmpty()) {
+                                            Toast.makeText(context, "Aucun appareil Bluetooth trouvé. Veuillez activer le Bluetooth et appairer votre imprimante dans les réglages Android.", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "${pairedDevices.size} appareil(s) Bluetooth détecté(s)", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = PaddingValues(vertical = 8.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Actualiser les appareils Bluetooth", fontSize = 12.sp)
+                                }
+
+                                if (pairedDevices.isNotEmpty()) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Appareils Bluetooth appairés :",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF4B5563)
+                                        )
+
+                                        pairedDevices.forEach { (name, mac) ->
+                                            val isCurrent = currentPrinterMac == mac
+                                            Card(
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = if (isCurrent) Color(0xFFDCFCE7) else Color.White
+                                                ),
+                                                border = BorderStroke(1.dp, if (isCurrent) Color(0xFF10B981) else Color(0xFFE5E7EB)),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        BluetoothPrinterManager.setSavedPrinter(context, mac, name)
+                                                        currentPrinterMac = mac
+                                                        currentPrinterName = name
+                                                        Toast.makeText(context, "Imprimante \"$name\" sélectionnée !", Toast.LENGTH_SHORT).show()
+                                                    }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(text = name, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                                        Text(text = mac, fontSize = 10.sp, color = Color.Gray)
+                                                    }
+                                                    if (isCurrent) {
+                                                        Text("Liée", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF10B981))
+                                                    } else {
+                                                        Text("Choisir", fontSize = 11.sp, color = Color(0xFF0F56E3))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

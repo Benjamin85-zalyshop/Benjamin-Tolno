@@ -17,6 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalContext
+import com.example.ui.printer.BluetoothPrinterManager
+import com.example.ui.printer.PrinterTerminalType
 import com.example.ui.util.QrCodeUtils
 import java.text.SimpleDateFormat
 import java.util.*
@@ -33,6 +36,10 @@ fun Ticket58mmDialog(
     onDismiss: () -> Unit,
     onPrint: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val terminalType = remember { BluetoothPrinterManager.getTerminalType(context) }
+    val dialogWidth = if (terminalType == PrinterTerminalType.POS_58MM) 260.dp else 340.dp
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -42,9 +49,7 @@ fun Ticket58mmDialog(
             color = Color.White,
             modifier = Modifier
                 .padding(16.dp)
-                // 58mm printer receipt is typically very narrow, around 384 pixels width max.
-                // We emulate this visually using a specific width in dp
-                .width(250.dp) 
+                .width(dialogWidth) 
                 .wrapContentHeight()
         ) {
             Column(

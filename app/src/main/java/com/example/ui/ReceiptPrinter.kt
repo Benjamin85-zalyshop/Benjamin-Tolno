@@ -22,6 +22,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import com.example.ui.printer.BluetoothPrinterManager
+import com.example.ui.printer.PrinterTerminalType
+
 object ReceiptPrinter {
 
     fun printReceipt(
@@ -32,13 +35,16 @@ object ReceiptPrinter {
         classFee: Long,
         currency: String = "GNF"
     ) {
+        val terminalType = BluetoothPrinterManager.getTerminalType(context)
         val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
         val jobName = "Reçu_${student.firstName}_${student.lastName}"
         
+        // 58mm -> ~250 points, 80mm -> ~360 points (1/72 inch points)
+        val pageWidth = if (terminalType == PrinterTerminalType.POS_58MM) 250 else 360
+        val pageHeight = if (terminalType == PrinterTerminalType.POS_58MM) 750 else 850
+        
         printManager.print(jobName, object : PrintDocumentAdapter() {
             private var pdfDocument: PdfDocument? = null
-            private val pageHeight = 750
-            private val pageWidth = 250 // Approx 58mm in 1/72 inch points
 
             override fun onLayout(
                 oldAttributes: PrintAttributes?,
@@ -63,12 +69,11 @@ object ReceiptPrinter {
             ) {
                 val doc = pdfDocument ?: return
                 
-                // Set paper size for thermal printer (approx 58mm = ~164 points, but let's use what attributes gave us, or fixed 250x600 for safe rendering)
                 val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
                 val page = doc.startPage(pageInfo)
                 val canvas = page.canvas
                 
-                drawReceiptContent(canvas, student, payment, schoolName, currency)
+                drawReceiptContent(canvas, student, payment, schoolName, currency, pageWidth)
                 
                 doc.finishPage(page)
                 
@@ -90,7 +95,8 @@ object ReceiptPrinter {
         student: Student,
         payment: Payment,
         schoolName: String,
-        currency: String
+        currency: String,
+        pageWidth: Int = 250
     ) {
         val paint = Paint().apply {
             color = Color.BLACK
@@ -99,7 +105,7 @@ object ReceiptPrinter {
         }
         
         var y = 30f
-        val centerX = 125f // half of 250
+        val centerX = pageWidth / 2f
         
         // School Name
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -175,13 +181,15 @@ object ReceiptPrinter {
         remaining: Long,
         currency: String = "GNF"
     ) {
+        val terminalType = BluetoothPrinterManager.getTerminalType(context)
         val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
         val jobName = "Recap_${student.firstName}_${student.lastName}"
         
+        val pageWidth = if (terminalType == PrinterTerminalType.POS_58MM) 250 else 360
+        val pageHeight = if (terminalType == PrinterTerminalType.POS_58MM) 750 else 850
+
         printManager.print(jobName, object : PrintDocumentAdapter() {
             private var pdfDocument: PdfDocument? = null
-            private val pageHeight = 750
-            private val pageWidth = 250 
 
             override fun onLayout(
                 oldAttributes: PrintAttributes?,
@@ -217,7 +225,7 @@ object ReceiptPrinter {
                 }
                 
                 var y = 30f
-                val centerX = 125f
+                val centerX = pageWidth / 2f
                 
                 paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 paint.textSize = 16f

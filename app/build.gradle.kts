@@ -19,8 +19,8 @@ android {
     applicationId = "com.aistudio.scolapay.gnf"
     minSdk = 24
     targetSdk = 34
-    versionCode = 23
-    versionName = "1.0.22"
+    versionCode = 25
+    versionName = "1.0.24"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
