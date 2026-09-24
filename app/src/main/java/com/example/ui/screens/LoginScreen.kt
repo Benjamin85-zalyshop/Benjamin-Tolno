@@ -241,7 +241,7 @@ fun LoginScreen(
                         coroutineScope.launch {
                             isLoggingIn = true
                             errorMessage = null
-                            val success = viewModel.login(email.trim(), password)
+                            val success = viewModel.login(email.trim(), password.trim())
                             if (success) {
                                 onNavigateToDashboard()
                             } else {

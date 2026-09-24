@@ -48,6 +48,10 @@ fun StudentsScreen(
     var selectedGrade by remember { mutableStateOf<String?>(null) }
     var showQrScannerDialog by remember { mutableStateOf(false) }
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.syncAllStudentOnlinePayments()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

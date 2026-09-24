@@ -39,6 +39,10 @@ fun SubscriptionScreen(
     val coroutineScope = rememberCoroutineScope()
     var isLoadingChapChap by remember { mutableStateOf(false) }
     val pendingOrderId by viewModel.pendingOrderId.collectAsStateWithLifecycle()
+    val schoolAcc by viewModel.schoolAccount.collectAsStateWithLifecycle()
+    val isLocked = schoolAcc?.isAppLocked == true
+    val rejectionReason = schoolAcc?.rejectionReason
+    val hasActive = schoolAcc?.hasActiveSubscription == true
     
     LaunchedEffect(Unit) {
         viewModel.getPendingOrderId()
@@ -47,10 +51,10 @@ fun SubscriptionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Abonnement Requis", fontWeight = FontWeight.Bold) },
+                title = { Text(if (isLocked) "Accès Suspendu" else "Abonnement Requis", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = if (isLocked) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = if (isLocked) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
                     IconButton(onClick = onLogout) {
@@ -96,11 +100,6 @@ fun SubscriptionScreen(
                 )
                 Spacer(modifier = Modifier.height(48.dp))
             } else {
-                val schoolAcc by viewModel.schoolAccount.collectAsStateWithLifecycle()
-                val rejectionReason = schoolAcc?.rejectionReason
-                val hasActive = schoolAcc?.hasActiveSubscription == true
-                val isLocked = schoolAcc?.isAppLocked == true
-                
                 if (isLocked) {
                     Text(
                         text = "Accès Suspendu",
@@ -186,92 +185,44 @@ fun SubscriptionScreen(
                     }
                 }
 
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)), // Light blue brand container
-                    border = BorderStroke(1.dp, Color(0xFFBFDBFE))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "OFFRE PROMOTIONNELLE EXCEPTIONNELLE",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2563EB)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = "500 000 GNF",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough
-                                ),
-                                color = Color.Gray
-                            )
-                            Text(
-                                text = "200 000 GNF / an",
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF10B981) // Beautiful green for active price
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Bénéficiez du tarif réduit de 200 000 GNF au lieu du prix normal de 500 000 GNF.",
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            color = Color(0xFF1E3A8A)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Choisissez votre méthode de paiement",
+                    text = if (isLocked) "Régularisation du compte" else "Choisissez votre méthode de paiement",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.Start)
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = if (isLocked) "Veuillez régler le montant dû sur l'un des numéros ci-dessous :" else "Veuillez effectuer le dépôt sur l'un des numéros ci-dessous :",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(10.dp))
                 
-
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        text = "Veuillez effectuer le dépôt sur l'un des numéros ci-dessous :",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Orange Money : 628 37 65 66", fontWeight = FontWeight.Bold, color = Color(0xFFFF6600), fontSize = 16.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("MTN MoMo : 660 37 78 87", fontWeight = FontWeight.Bold, color = Color(0xFFCC9900), fontSize = 16.sp)
-                        }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Orange Money : 628 37 65 66", fontWeight = FontWeight.Bold, color = Color(0xFFFF6600), fontSize = 16.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("MTN MoMo : 660 37 78 87", fontWeight = FontWeight.Bold, color = Color(0xFFCC9900), fontSize = 16.sp)
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Text(
-                        text = "Soumettre votre paiement",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = if (isLocked) "Soumettre votre justificatif de régularisation" else "Soumettre votre paiement",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Start)
+                )
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
@@ -326,7 +277,7 @@ fun SubscriptionScreen(
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
-                        Text("Envoyer pour validation")
+                        Text(if (isLocked) "Envoyer le justificatif" else "Envoyer pour validation")
                     }
                 }
             }

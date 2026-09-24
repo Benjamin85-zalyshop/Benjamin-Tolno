@@ -96,6 +96,9 @@ fun DashboardScreen(
     val selectedSection by viewModel.selectedSection.collectAsStateWithLifecycle()
     val userRole by viewModel.userRole.collectAsStateWithLifecycle()
     val selectedSchoolYear by viewModel.selectedSchoolYear.collectAsStateWithLifecycle()
+    val isUserFounder = remember(userRole) {
+        userRole == null || userRole.equals("FOUNDER", ignoreCase = true) || userRole.equals("FONDATEUR", ignoreCase = true) || userRole.equals("ADMIN", ignoreCase = true)
+    }
     
     val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
     val currency = schoolAccount?.currency ?: "GNF"
@@ -126,6 +129,9 @@ fun DashboardScreen(
     var showCommuniquesDialog by remember { mutableStateOf(false) }
     var showSupportDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showMerchantConfigDialog by remember { mutableStateOf(false) }
+    var schoolChapChapKeyInput by remember { mutableStateOf("") }
+    var schoolMerchantPhoneInput by remember { mutableStateOf("") }
     var selectedCurrency by remember { mutableStateOf(schoolAccount?.currency ?: "GNF") }
     var showInscriptionDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -884,7 +890,6 @@ fun DashboardScreen(
                     }
                     
                     val pendingRequests = deletionRequests.filter { it.status == "PENDING" }
-                    val isUserFounder = userRole == null || userRole.equals("FOUNDER", ignoreCase = true) || userRole.equals("FONDATEUR", ignoreCase = true) || userRole.equals("ADMIN", ignoreCase = true)
                     val cancelledPayments = payments.filter { it.isCancelled }
                     if (isUserFounder && cancelledPayments.isNotEmpty()) {
                         item {
@@ -1163,6 +1168,105 @@ fun DashboardScreen(
                                     bgColor = Color(0xFFE0F2FE),
                                     onClick = onNavigateToAcademic
                                 )
+                            }
+
+                            // Row 4 (Visible uniquement pour le Fondateur)
+                            if (isUserFounder) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Start
+                                ) {
+                                    QuickAccessButton(
+                                        title = "Marchand",
+                                        icon = Icons.Default.PointOfSale,
+                                        iconColor = Color(0xFF2563EB),
+                                        bgColor = Color(0xFFEFF6FF),
+                                        onClick = {
+                                            viewModel.loadMySchoolMerchantConfig { k, p ->
+                                                schoolChapChapKeyInput = k
+                                                schoolMerchantPhoneInput = p
+                                            }
+                                            showMerchantConfigDialog = true
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 5b. CARTE COMPTE MARCHAND EN LIGNE (VISIBLE UNIQUEMENT CHEZ LE FONDATEUR)
+                    if (isUserFounder) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable {
+                                        viewModel.loadMySchoolMerchantConfig { k, p ->
+                                            schoolChapChapKeyInput = k
+                                            schoolMerchantPhoneInput = p
+                                        }
+                                        showMerchantConfigDialog = true
+                                    },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                                border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .background(Color(0xFF16A34A), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AccountBalance,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Compte Marchand ChapChapPay",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                color = Color(0xFF14532D)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                color = Color(0xFF16A34A),
+                                                shape = RoundedCornerShape(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "DIRECT",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Recevez l'argent des parents directement sur votre compte Orange Money / MTN",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF166534),
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForward,
+                                        contentDescription = "Ouvrir",
+                                        tint = Color(0xFF16A34A),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -1468,10 +1572,76 @@ fun DashboardScreen(
                     ) {
                         Text("Gérer le mot de passe Financier")
                     }
+
+                    if (isUserFounder) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Paiements en Ligne Directs", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        OutlinedButton(
+                            onClick = { 
+                                showSettingsDialog = false
+                                viewModel.loadMySchoolMerchantConfig { k, p ->
+                                    schoolChapChapKeyInput = k
+                                    schoolMerchantPhoneInput = p
+                                }
+                                showMerchantConfigDialog = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("💳 Compte Marchand de l'école (ChapChapPay)")
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showSettingsDialog = false }) { Text("Fermer") }
+            }
+        )
+    }
+
+    if (showMerchantConfigDialog && isUserFounder) {
+        AlertDialog(
+            onDismissRequest = { showMerchantConfigDialog = false },
+            title = { Text("Compte Marchand ChapChapPay", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Renseignez ici votre clé API Marchand ChapChapPay. Tous les paiements des parents effectués par Orange Money ou MTN Mobile Money seront versés DIRECTEMENT sur le compte marchand de votre école, sans intermédiaire.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.DarkGray
+                    )
+                    OutlinedTextField(
+                        value = schoolChapChapKeyInput,
+                        onValueChange = { schoolChapChapKeyInput = it },
+                        label = { Text("Clé API ChapChapPay (CCP-Api-Key)") },
+                        placeholder = { Text("Ex: 8a4b2c...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = schoolMerchantPhoneInput,
+                        onValueChange = { schoolMerchantPhoneInput = it },
+                        label = { Text("Numéro Orange Money / MTN Marchand") },
+                        placeholder = { Text("Ex: 628XXXXXX") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.saveMySchoolMerchantApiKey(schoolChapChapKeyInput, schoolMerchantPhoneInput)
+                        Toast.makeText(context, "Compte marchand enregistré avec succès !", Toast.LENGTH_SHORT).show()
+                        showMerchantConfigDialog = false
+                    }
+                ) {
+                    Text("Enregistrer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMerchantConfigDialog = false }) {
+                    Text("Annuler")
+                }
             }
         )
     }

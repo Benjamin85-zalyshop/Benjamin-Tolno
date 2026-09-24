@@ -73,6 +73,10 @@ fun StudentDetailScreen(
     val student = students.find { it.id == studentId }
     val studentPayments = allPayments.filter { it.studentId == studentId }.sortedByDescending { it.date }
     
+    androidx.compose.runtime.LaunchedEffect(studentId) {
+        viewModel.syncAllStudentOnlinePayments()
+    }
+    
     val numberFormat = NumberFormat.getNumberInstance(Locale("fr", "GN"))
     val totalPaid = studentPayments.filter { !it.isCancelled && it.reason != "Inscription" && it.reason != "Réinscription" }.sumOf { it.amount }
 

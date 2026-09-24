@@ -1,5 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getDatabase, ref, onValue, set, update, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCFzxiVtMxfbFmnl9nXdg9JOLBjqAedqK0",
@@ -14,6 +16,13 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
+const auth = getAuth(app);
+const firestoreDb = getFirestore(app);
+
+// Authenticate anonymously so parents can read/write without credentials
+signInAnonymously(auth).catch(err => {
+    console.warn("Auth anonyme notice:", err.message);
+});
 
 // Make functions available globally for HTML onclick attributes
 window.toggleSection = function(id) {
@@ -318,6 +327,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 studentPaymentState.dueFee = Math.max(0, dbDue);
                 if (data.studentName) studentPaymentState.studentName = data.studentName;
                 if (data.grade) studentPaymentState.studentGrade = data.grade;
+                if (data.schoolEmail) {
+                    studentPaymentState.schoolEmail = data.schoolEmail;
+                }
                 if (data.schoolName) {
                     studentPaymentState.schoolName = data.schoolName;
                     listenToSchoolStatus(data.schoolName);
@@ -454,16 +466,27 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!sName) return;
         const schoolKey = sanitizeFirebaseKey(sName);
         const schoolRef = ref(database, 'schools/' + schoolKey);
-        onValue(schoolRef, (snap) => {
-            if (snap.exists()) {
-                const sData = snap.val();
-                studentPaymentState.isOnlinePaymentAllowed = (sData.onlinePaymentEnabled !== false && sData.isAppLocked !== true);
-                studentPaymentState.schoolLockReason = sData.lockReason || "";
-            } else {
+        try {
+            onValue(schoolRef, (snap) => {
+                if (snap.exists()) {
+                    const sData = snap.val();
+                    studentPaymentState.isOnlinePaymentAllowed = (sData.onlinePaymentEnabled !== false && sData.isAppLocked !== true);
+                    studentPaymentState.schoolLockReason = sData.lockReason || "";
+                    studentPaymentState.schoolApiKey = (sData.chapchapApiKey || "").trim();
+                    studentPaymentState.schoolMerchantPhone = (sData.merchantPhone || "").trim();
+                    if (sData.email) studentPaymentState.schoolEmail = sData.email;
+                } else {
+                    studentPaymentState.isOnlinePaymentAllowed = true;
+                }
+                updateBlockedUI();
+            }, (err) => {
+                console.warn("RTDB school read notice:", err);
                 studentPaymentState.isOnlinePaymentAllowed = true;
-            }
-            updateBlockedUI();
-        });
+                updateBlockedUI();
+            });
+        } catch (e) {
+            console.warn("listenToSchoolStatus error:", e);
+        }
     }
 
     function updateBlockedUI() {
@@ -587,14 +610,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const orderId = "PAY_" + Date.now() + "_" + Math.floor(100 + Math.random() * 900);
         const studentDesc = `Frais Scolarité - ${studentPaymentState.studentName} (${studentPaymentState.schoolName})`;
 
+        let chapchapPaymentUrl = null;
+        const activeApiKey = (studentPaymentState.schoolApiKey && studentPaymentState.schoolApiKey.length > 5) 
+            ? studentPaymentState.schoolApiKey 
+            : CHAPCHAP_TEST_API_KEY;
+
         try {
-            // Appel API ChapChapPay (Clé de test fournie)
+            // Appel API ChapChapPay (Clé propre de l'école si renseignée, sinon clé test)
             try {
                 const response = await fetch("https://chapchappay.com/api/ecommerce/create", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "CCP-Api-Key": CHAPCHAP_TEST_API_KEY
+                        "CCP-Api-Key": activeApiKey
                     },
                     body: JSON.stringify({
                         amount: amount,
@@ -607,7 +635,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (response.ok) {
                     const resJson = await response.json();
                     if (resJson.payment_url) {
-                        // Ouvrir la page de paiement sécurisée si souhaité
+                        chapchapPaymentUrl = resJson.payment_url;
                         console.log("ChapChapPay Payment URL:", resJson.payment_url);
                     }
                 }
@@ -624,39 +652,99 @@ document.addEventListener("DOMContentLoaded", () => {
                 const updatedPaid = (studentPaymentState.paidFee || 0) + amount;
 
                 // 1. Mise à jour du solde élève
-                await update(ref(database, 'students/' + studentPaymentState.rid), {
-                    paidFee: updatedPaid
-                });
+                try {
+                    await update(ref(database, 'students/' + studentPaymentState.rid), {
+                        paidFee: updatedPaid
+                    });
+                } catch (stErr) {
+                    console.warn("RTDB student update permission warning:", stErr);
+                }
 
                 // 2. Création de l'enregistrement de reçu
-                const receiptRef = ref(database, `students/${studentPaymentState.rid}/payments/${orderId}`);
-                await set(receiptRef, {
-                    amount: amount,
-                    date: dateStr,
-                    timestamp: Date.now(),
-                    paymentMethod: `Paiement en ligne ChapChapPay (${operatorLabel})`,
-                    operator: studentPaymentState.selectedMethod,
-                    phoneNumber: rawPhone,
-                    transactionId: orderId,
-                    feeType: "Frais de Scolarité",
-                    schoolName: studentPaymentState.schoolName,
-                    studentName: studentPaymentState.studentName
-                });
+                try {
+                    const receiptRef = ref(database, `students/${studentPaymentState.rid}/payments/${orderId}`);
+                    await set(receiptRef, {
+                        amount: amount,
+                        date: dateStr,
+                        timestamp: Date.now(),
+                        paymentMethod: `Paiement en ligne ChapChapPay (${operatorLabel})`,
+                        operator: studentPaymentState.selectedMethod,
+                        phoneNumber: rawPhone,
+                        transactionId: orderId,
+                        feeType: "Frais de Scolarité",
+                        schoolName: studentPaymentState.schoolName,
+                        studentName: studentPaymentState.studentName
+                    });
+                } catch (rcErr) {
+                    console.warn("RTDB receipt creation permission warning:", rcErr);
+                }
 
                 // 3. Option B : Mise à jour de la comptabilité école et commission ScolaPay
-                const schoolKey = sanitizeFirebaseKey(studentPaymentState.schoolName);
-                const schoolRef = ref(database, 'schools/' + schoolKey);
-                const schoolSnap = await get(schoolRef);
-                const sData = schoolSnap.exists() ? schoolSnap.val() : {};
+                try {
+                    const schoolKey = sanitizeFirebaseKey(studentPaymentState.schoolName);
+                    const schoolRef = ref(database, 'schools/' + schoolKey);
+                    let sData = {};
+                    try {
+                        const schoolSnap = await get(schoolRef);
+                        if (schoolSnap.exists()) sData = schoolSnap.val();
+                    } catch (snapErr) {
+                        console.warn("RTDB school snapshot warning:", snapErr);
+                    }
 
-                await update(schoolRef, {
-                    schoolName: studentPaymentState.schoolName,
-                    onlinePaymentsCount: (sData.onlinePaymentsCount || 0) + 1,
-                    onlinePaymentsTotal: (sData.onlinePaymentsTotal || 0) + amount,
-                    unpaidCommission: (sData.unpaidCommission || 0) + 3000, // 3000 GNF de commission zalytechno (Option B)
-                    lastPaymentDate: dateStr,
-                    lastPaymentTimestamp: Date.now()
-                });
+                    const newCount = (sData.onlinePaymentsCount || 0) + 1;
+                    const newTotal = (sData.onlinePaymentsTotal || 0) + amount;
+                    const newComm = (sData.unpaidCommission || 0) + 3000;
+
+                    await update(schoolRef, {
+                        schoolName: studentPaymentState.schoolName,
+                        onlinePaymentsCount: newCount,
+                        onlinePaymentsTotal: newTotal,
+                        unpaidCommission: newComm,
+                        lastPaymentDate: dateStr,
+                        lastPaymentTimestamp: Date.now()
+                    });
+
+                    // Si une clé email existe, mettre à jour également sous la clé email
+                    const schoolEmail = sData.email || studentPaymentState.schoolEmail;
+                    if (schoolEmail) {
+                        const emailKey = sanitizeFirebaseKey(schoolEmail);
+                        if (emailKey !== schoolKey) {
+                            try {
+                                await update(ref(database, 'schools/' + emailKey), {
+                                    schoolName: studentPaymentState.schoolName,
+                                    email: schoolEmail,
+                                    onlinePaymentsCount: newCount,
+                                    onlinePaymentsTotal: newTotal,
+                                    unpaidCommission: newComm,
+                                    lastPaymentDate: dateStr,
+                                    lastPaymentTimestamp: Date.now()
+                                });
+                            } catch (e) {}
+                        }
+                    }
+
+                    // 4. Synchronisation directe dans Cloud Firestore
+                    try {
+                        const targetDocs = [];
+                        if (schoolEmail) targetDocs.push(schoolEmail);
+                        if (studentPaymentState.schoolName && !targetDocs.includes(studentPaymentState.schoolName)) {
+                            targetDocs.push(studentPaymentState.schoolName);
+                        }
+                        for (const docId of targetDocs) {
+                            await setDoc(doc(firestoreDb, "schools", docId), {
+                                unpaidCommission: increment(3000),
+                                onlinePaymentsCount: increment(1),
+                                onlinePaymentsTotal: increment(amount),
+                                lastPaymentDate: dateStr,
+                                lastPaymentTimestamp: Date.now()
+                            }, { merge: true });
+                        }
+                    } catch (fsErr) {
+                        console.warn("Firestore sync warning from web portal:", fsErr);
+                    }
+                } catch (scErr) {
+                    console.warn("RTDB school stats update warning:", scErr);
+                }
 
                 // Mise à jour de l'état local
                 studentPaymentState.paidFee = updatedPaid;
@@ -673,6 +761,15 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('successDate').textContent = dateStr;
             document.getElementById('successOperator').textContent = operatorLabel + ` (${rawPhone})`;
 
+            const gatewayContainer = document.getElementById('chapchapGatewayLinkContainer');
+            const gatewayLink = document.getElementById('chapchapGatewayLink');
+            if (chapchapPaymentUrl && gatewayContainer && gatewayLink) {
+                gatewayLink.href = chapchapPaymentUrl;
+                gatewayContainer.classList.remove('hidden');
+            } else if (gatewayContainer) {
+                gatewayContainer.classList.add('hidden');
+            }
+
             // Actualisation dynamique de la jauge sur la page
             const updatedPercent = studentPaymentState.totalFee > 0 ? (studentPaymentState.paidFee / studentPaymentState.totalFee) * 100 : 100;
             updateFinancialUI(
@@ -683,10 +780,10 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
         } catch (err) {
-            console.error("Erreur lors de l'enregistrement du paiement:", err);
+            console.error("Erreur globale lors du traitement du paiement:", err);
             loadingDiv.classList.add('hidden');
             submitBtn.classList.remove('hidden');
-            alert("Erreur lors du traitement du paiement. Veuillez réessayer.");
+            alert("Erreur lors du traitement du paiement : " + (err && err.message ? err.message : "Vérifiez vos paramètres réseau et réessayez."));
         }
     };
 
