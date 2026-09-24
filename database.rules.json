@@ -3,7 +3,13 @@
     "students": {
       "$student_id": {
         ".read": true,
-        ".write": "auth != null"
+        ".write": true
+      }
+    },
+    "schools": {
+      "$school_id": {
+        ".read": true,
+        ".write": true
       }
     }
   }

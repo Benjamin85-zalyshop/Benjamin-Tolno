@@ -99,24 +99,72 @@ fun SubscriptionScreen(
                 val schoolAcc by viewModel.schoolAccount.collectAsStateWithLifecycle()
                 val rejectionReason = schoolAcc?.rejectionReason
                 val hasActive = schoolAcc?.hasActiveSubscription == true
+                val isLocked = schoolAcc?.isAppLocked == true
                 
-                Text(
-                    text = if (hasActive) "Abonnement expiré" else "Expiration de l'essai gratuit",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = if (hasActive) "Votre abonnement annuel a expiré. Pour continuer à utiliser tous les services de ScolaPay pour les 12 prochains mois, veuillez renouveler votre abonnement." else "Votre période d'essai gratuite de 3 mois a expiré. Pour continuer à bénéficier de tous les services de ScolaPay, activez votre abonnement annuel.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                if (isLocked) {
+                    Text(
+                        text = "Accès Suspendu",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "L'accès à l'application ScolaPay pour cet établissement est momentanément suspendu par l'administration.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "Motif de la suspension",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = schoolAcc?.lockReason?.ifBlank { "Régularisation de commission requise." } ?: "Régularisation de commission requise.",
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if ((schoolAcc?.unpaidCommission ?: 0L) > 0) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Montant des commissions dues : ${schoolAcc?.unpaidCommission} GNF",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = if (hasActive) "Abonnement expiré" else "Expiration de l'essai gratuit",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (hasActive) "Votre abonnement annuel a expiré. Pour continuer à utiliser tous les services de ScolaPay pour les 12 prochains mois, veuillez renouveler votre abonnement." else "Votre période d'essai gratuite de 3 mois a expiré. Pour continuer à bénéficier de tous les services de ScolaPay, activez votre abonnement annuel.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
                 
-                if (!rejectionReason.isNullOrBlank()) {
+                if (!isLocked && !rejectionReason.isNullOrBlank()) {
                     Card(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)

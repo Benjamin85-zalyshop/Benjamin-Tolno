@@ -26,7 +26,13 @@ data class SchoolAdminItem(
     val createdAt: Long = 0L,
     val paymentPhoneNumber: String? = null,
     val transactionId: String? = null,
-    val rejectionReason: String? = null
+    val rejectionReason: String? = null,
+    val onlinePaymentEnabled: Boolean = true,
+    val isAppLocked: Boolean = false,
+    val unpaidCommission: Long = 0L,
+    val onlinePaymentsCount: Int = 0,
+    val onlinePaymentsTotal: Long = 0L,
+    val lockReason: String? = null
 )
 
 class SchoolViewModel(
@@ -162,6 +168,7 @@ class SchoolViewModel(
 
     val isAppAccessGranted: StateFlow<Boolean> = _schoolAccount.map { account ->
         if (account == null) return@map true
+        if (account.isAppLocked) return@map false
         val now = System.currentTimeMillis()
         val accountCreatedAt = if (account.createdAt > 0L) account.createdAt else now
         val elapsed = (now - accountCreatedAt).coerceAtLeast(0L)
@@ -1057,6 +1064,29 @@ class SchoolViewModel(
                         updatedAccount = updatedAccount.copy(passwordHash = remotePwd)
                         isUpdated = true
                     }
+                    val remoteOnlinePayment = snapshot.getBoolean("onlinePaymentEnabled") ?: updatedAccount.onlinePaymentEnabled
+                    val remoteIsAppLocked = snapshot.getBoolean("isAppLocked") ?: updatedAccount.isAppLocked
+                    val remoteCommission = snapshot.getLong("unpaidCommission") ?: updatedAccount.unpaidCommission
+                    val remoteOnlineCount = snapshot.getLong("onlinePaymentsCount")?.toInt() ?: updatedAccount.onlinePaymentsCount
+                    val remoteOnlineTotal = snapshot.getLong("onlinePaymentsTotal") ?: updatedAccount.onlinePaymentsTotal
+                    val remoteLockReason = snapshot.getString("lockReason") ?: updatedAccount.lockReason
+
+                    if (remoteOnlinePayment != updatedAccount.onlinePaymentEnabled ||
+                        remoteIsAppLocked != updatedAccount.isAppLocked ||
+                        remoteCommission != updatedAccount.unpaidCommission ||
+                        remoteOnlineCount != updatedAccount.onlinePaymentsCount ||
+                        remoteOnlineTotal != updatedAccount.onlinePaymentsTotal ||
+                        remoteLockReason != updatedAccount.lockReason) {
+                        updatedAccount = updatedAccount.copy(
+                            onlinePaymentEnabled = remoteOnlinePayment,
+                            isAppLocked = remoteIsAppLocked,
+                            unpaidCommission = remoteCommission,
+                            onlinePaymentsCount = remoteOnlineCount,
+                            onlinePaymentsTotal = remoteOnlineTotal,
+                            lockReason = remoteLockReason
+                        )
+                        isUpdated = true
+                    }
                     
                     if (isUpdated) {
                         repository.updateSchoolAccount(updatedAccount)
@@ -1343,6 +1373,12 @@ class SchoolViewModel(
                     val subscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
                     val createdAtDoc = doc.getLong("createdAt")
                     val createdAt = if (createdAtDoc != null && createdAtDoc > 0L) createdAtDoc else System.currentTimeMillis()
+                    val onlinePaymentEnabled = doc.getBoolean("onlinePaymentEnabled") ?: true
+                    val isAppLocked = doc.getBoolean("isAppLocked") ?: false
+                    val unpaidCommission = doc.getLong("unpaidCommission") ?: 0L
+                    val onlinePaymentsCount = doc.getLong("onlinePaymentsCount")?.toInt() ?: 0
+                    val onlinePaymentsTotal = doc.getLong("onlinePaymentsTotal") ?: 0L
+                    val lockReason = doc.getString("lockReason")
                     
                     val existing = repository.getSchoolAccountByName(email)
                     if (existing != null) {
@@ -1360,7 +1396,13 @@ class SchoolViewModel(
                                 transactionId = transactionId ?: existing.transactionId,
                                 rejectionReason = rejectionReason,
                                 subscriptionExpiryDate = subscriptionExpiryDate,
-                                createdAt = createdAt
+                                createdAt = createdAt,
+                                onlinePaymentEnabled = onlinePaymentEnabled,
+                                isAppLocked = isAppLocked,
+                                unpaidCommission = unpaidCommission,
+                                onlinePaymentsCount = onlinePaymentsCount,
+                                onlinePaymentsTotal = onlinePaymentsTotal,
+                                lockReason = lockReason
                             )
                         )
                     } else {
@@ -1379,7 +1421,13 @@ class SchoolViewModel(
                                 transactionId = transactionId,
                                 rejectionReason = rejectionReason,
                                 subscriptionExpiryDate = subscriptionExpiryDate,
-                                createdAt = createdAt
+                                createdAt = createdAt,
+                                onlinePaymentEnabled = onlinePaymentEnabled,
+                                isAppLocked = isAppLocked,
+                                unpaidCommission = unpaidCommission,
+                                onlinePaymentsCount = onlinePaymentsCount,
+                                onlinePaymentsTotal = onlinePaymentsTotal,
+                                lockReason = lockReason
                             )
                         )
                     }
@@ -1398,7 +1446,13 @@ class SchoolViewModel(
                             subscriptionExpiryDate = it.subscriptionExpiryDate,
                             paymentPhoneNumber = it.paymentPhoneNumber,
                             transactionId = it.transactionId,
-                            createdAt = it.createdAt
+                            createdAt = it.createdAt,
+                            onlinePaymentEnabled = it.onlinePaymentEnabled,
+                            isAppLocked = it.isAppLocked,
+                            unpaidCommission = it.unpaidCommission,
+                            onlinePaymentsCount = it.onlinePaymentsCount,
+                            onlinePaymentsTotal = it.onlinePaymentsTotal,
+                            lockReason = it.lockReason
                         )
                     }
                     _adminSchools.value = adminItems
@@ -1482,6 +1536,12 @@ class SchoolViewModel(
                         val subscriptionExpiryDate = doc.getLong("subscriptionExpiryDate") ?: 0L
                         val createdAtDoc = doc.getLong("createdAt")
                         val createdAt = if (createdAtDoc != null && createdAtDoc > 0L) createdAtDoc else System.currentTimeMillis()
+                        val onlinePaymentEnabled = doc.getBoolean("onlinePaymentEnabled") ?: true
+                        val isAppLocked = doc.getBoolean("isAppLocked") ?: false
+                        val unpaidCommission = doc.getLong("unpaidCommission") ?: 0L
+                        val onlinePaymentsCount = doc.getLong("onlinePaymentsCount")?.toInt() ?: 0
+                        val onlinePaymentsTotal = doc.getLong("onlinePaymentsTotal") ?: 0L
+                        val lockReason = doc.getString("lockReason")
                         
                         val existing = repository.getSchoolAccountByName(email)
                         if (existing != null) {
@@ -1499,7 +1559,13 @@ class SchoolViewModel(
                                     transactionId = transactionId ?: existing.transactionId,
                                     rejectionReason = rejectionReason,
                                     subscriptionExpiryDate = subscriptionExpiryDate,
-                                    createdAt = createdAt
+                                    createdAt = createdAt,
+                                    onlinePaymentEnabled = onlinePaymentEnabled,
+                                    isAppLocked = isAppLocked,
+                                    unpaidCommission = unpaidCommission,
+                                    onlinePaymentsCount = onlinePaymentsCount,
+                                    onlinePaymentsTotal = onlinePaymentsTotal,
+                                    lockReason = lockReason
                                 )
                             )
                         } else {
@@ -1518,7 +1584,13 @@ class SchoolViewModel(
                                     transactionId = transactionId,
                                     rejectionReason = rejectionReason,
                                     subscriptionExpiryDate = subscriptionExpiryDate,
-                                    createdAt = createdAt
+                                    createdAt = createdAt,
+                                    onlinePaymentEnabled = onlinePaymentEnabled,
+                                    isAppLocked = isAppLocked,
+                                    unpaidCommission = unpaidCommission,
+                                    onlinePaymentsCount = onlinePaymentsCount,
+                                    onlinePaymentsTotal = onlinePaymentsTotal,
+                                    lockReason = lockReason
                                 )
                             )
                         }
@@ -1546,10 +1618,86 @@ class SchoolViewModel(
                     subscriptionExpiryDate = it.subscriptionExpiryDate,
                     paymentPhoneNumber = it.paymentPhoneNumber,
                     transactionId = it.transactionId,
-                    createdAt = it.createdAt
+                    createdAt = it.createdAt,
+                    onlinePaymentEnabled = it.onlinePaymentEnabled,
+                    isAppLocked = it.isAppLocked,
+                    unpaidCommission = it.unpaidCommission,
+                    onlinePaymentsCount = it.onlinePaymentsCount,
+                    onlinePaymentsTotal = it.onlinePaymentsTotal,
+                    lockReason = it.lockReason
                 )
             }
             _adminSchools.value = adminItems
+        }
+    }
+
+    fun toggleSchoolOnlinePayment(email: String, schoolName: String, enabled: Boolean) {
+        viewModelScope.launch {
+            val account = repository.getSchoolAccountByName(email)
+            if (account != null) {
+                repository.updateSchoolAccount(account.copy(onlinePaymentEnabled = enabled))
+            }
+            firestore.collection("schools").document(email).set(
+                mapOf("onlinePaymentEnabled" to enabled),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            val sName = if (account?.displayName.isNullOrBlank()) (if (schoolName.isNotBlank()) schoolName else email) else account!!.displayName
+            val schoolKey = sName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+            try {
+                val rtdbRef = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                    .getReference("schools").child(schoolKey)
+                rtdbRef.updateChildren(mapOf("onlinePaymentEnabled" to enabled))
+            } catch (e: Exception) {
+                android.util.Log.w("ScolaPay", "RTDB sync error: ${e.message}")
+            }
+            loadAdminSchools()
+        }
+    }
+
+    fun toggleSchoolAppLock(email: String, schoolName: String, locked: Boolean, reason: String? = null) {
+        viewModelScope.launch {
+            val defaultReason = reason ?: if (locked) "Accès à l'application ScolaPay suspendu pour facture de commission impayée. Merci de contacter le support zalytechno." else ""
+            val account = repository.getSchoolAccountByName(email)
+            if (account != null) {
+                repository.updateSchoolAccount(account.copy(isAppLocked = locked, lockReason = defaultReason))
+            }
+            firestore.collection("schools").document(email).set(
+                mapOf("isAppLocked" to locked, "lockReason" to defaultReason),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            val sName = if (account?.displayName.isNullOrBlank()) (if (schoolName.isNotBlank()) schoolName else email) else account!!.displayName
+            val schoolKey = sName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+            try {
+                val rtdbRef = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                    .getReference("schools").child(schoolKey)
+                rtdbRef.updateChildren(mapOf("isAppLocked" to locked, "lockReason" to defaultReason))
+            } catch (e: Exception) {
+                android.util.Log.w("ScolaPay", "RTDB sync error: ${e.message}")
+            }
+            loadAdminSchools()
+        }
+    }
+
+    fun resetSchoolCommission(email: String, schoolName: String) {
+        viewModelScope.launch {
+            val account = repository.getSchoolAccountByName(email)
+            if (account != null) {
+                repository.updateSchoolAccount(account.copy(unpaidCommission = 0L))
+            }
+            firestore.collection("schools").document(email).set(
+                mapOf("unpaidCommission" to 0L),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            val sName = if (account?.displayName.isNullOrBlank()) (if (schoolName.isNotBlank()) schoolName else email) else account!!.displayName
+            val schoolKey = sName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+            try {
+                val rtdbRef = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                    .getReference("schools").child(schoolKey)
+                rtdbRef.updateChildren(mapOf("unpaidCommission" to 0L))
+            } catch (e: Exception) {
+                android.util.Log.w("ScolaPay", "RTDB sync error: ${e.message}")
+            }
+            loadAdminSchools()
         }
     }
 

@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import com.example.ui.SchoolViewModel
@@ -312,6 +313,31 @@ fun AdminDashboardScreen(
                             onForceExpireClick = {
                                 viewModel.forceExpireSchool(item.email)
                                 android.widget.Toast.makeText(localContext, "Expiration simulée pour ${item.email}", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            onToggleOnlinePayment = { enabled ->
+                                viewModel.toggleSchoolOnlinePayment(item.email, item.displayName.ifEmpty { item.schoolName }, enabled)
+                                android.widget.Toast.makeText(localContext, if (enabled) "Paiement en ligne activé pour ${item.displayName.ifEmpty { item.schoolName }}" else "Paiement en ligne bloqué pour ${item.displayName.ifEmpty { item.schoolName }}", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            onToggleAppLock = { locked ->
+                                viewModel.toggleSchoolAppLock(item.email, item.displayName.ifEmpty { item.schoolName }, locked)
+                                android.widget.Toast.makeText(localContext, if (locked) "Application verrouillée pour ${item.displayName.ifEmpty { item.schoolName }}" else "Application déverrouillée pour ${item.displayName.ifEmpty { item.schoolName }}", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            onResetCommission = {
+                                viewModel.resetSchoolCommission(item.email, item.displayName.ifEmpty { item.schoolName })
+                                android.widget.Toast.makeText(localContext, "Commission réinitialisée à 0 pour ${item.displayName.ifEmpty { item.schoolName }}", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            onSendCommissionInvoice = {
+                                val cleanPhone = item.founderPhone.trim().replace(" ", "").replace("+", "")
+                                val schoolTitle = item.displayName.ifEmpty { item.schoolName }
+                                val invoiceMsg = "Bonjour Direction de *$schoolTitle*,\n\nVoici le point de vos paiements de scolarité perçus en ligne via ScolaPay :\n• Nombre de paiements : ${item.onlinePaymentsCount}\n• Total des règlements : ${item.onlinePaymentsTotal} GNF\n• Commission due à ScolaPay : *${item.unpaidCommission} GNF*\n\nMerci d'effectuer le reversement de la commission par Orange Money / Mobile Money pour maintenir le service actif.\n\nCordialement,\nService Financier ScolaPay / zalytechno"
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${Uri.encode(invoiceMsg)}")
+                                    }
+                                    localContext.startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(localContext, "Impossible d'ouvrir WhatsApp", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             }
                         )
                     }
@@ -682,7 +708,11 @@ fun SchoolRequestCard(
     onRejectClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onWhatsAppClick: () -> Unit,
-    onForceExpireClick: () -> Unit = {}
+    onForceExpireClick: () -> Unit = {},
+    onToggleOnlinePayment: (Boolean) -> Unit = {},
+    onToggleAppLock: (Boolean) -> Unit = {},
+    onResetCommission: () -> Unit = {},
+    onSendCommissionInvoice: () -> Unit = {}
 ) {
     val localContext = LocalContext.current
     Card(
@@ -921,6 +951,129 @@ fun SchoolRequestCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (!item.onlinePaymentEnabled || item.isAppLocked) Color(0xFFFEF2F2) else Color(0xFFF0FDF4)
+                ),
+                border = BorderStroke(1.dp, if (!item.onlinePaymentEnabled || item.isAppLocked) Color(0xFFFCA5A5) else Color(0xFFBBF7D0)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("💳", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Paiements Web & Commissions",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                        Surface(
+                            color = if (item.onlinePaymentEnabled) Color(0xFF16A34A).copy(alpha = 0.15f) else Color(0xFFDC2626).copy(alpha = 0.15f),
+                            contentColor = if (item.onlinePaymentEnabled) Color(0xFF16A34A) else Color(0xFFDC2626),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = if (item.onlinePaymentEnabled) "PORTAIL ACTIF" else "PORTAIL BLOQUÉ",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Collecte en ligne (Option B)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text("${item.onlinePaymentsTotal} GNF (${item.onlinePaymentsCount} paiements)", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Commission due à zalytechno", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text(
+                                text = "${item.unpaidCommission} GNF",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (item.unpaidCommission > 0) Color(0xFFDC2626) else Color(0xFF16A34A)
+                            )
+                        }
+                    }
+
+                    if (item.isAppLocked) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("⚠️ Accès application mobile verrouillé pour cet établissement", color = Color(0xFFDC2626), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Interrupteurs / Kill-Switches
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { onToggleOnlinePayment(!item.onlinePaymentEnabled) },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (item.onlinePaymentEnabled) Color(0xFFDC2626) else Color(0xFF16A34A)
+                            ),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (item.onlinePaymentEnabled) "Bloquer Paiement" else "Débloquer Paiement",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = { onToggleAppLock(!item.isAppLocked) },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (item.isAppLocked) Color(0xFF16A34A) else Color(0xFFD97706)
+                            ),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (item.isAppLocked) "Déverrouiller App" else "Verrouiller App",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (item.founderPhone.isNotBlank()) {
+                            Button(
+                                onClick = onSendCommissionInvoice,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                            ) {
+                                Text("📲 Facture WhatsApp", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        }
+                        if (item.unpaidCommission > 0) {
+                            Button(
+                                onClick = onResetCommission,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                            ) {
+                                Text("✓ Encaissé (Solde 0)", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }

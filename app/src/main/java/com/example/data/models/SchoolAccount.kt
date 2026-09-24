@@ -20,5 +20,11 @@ data class SchoolAccount(
     val founderPhone: String = "",
     val subscriptionExpiryDate: Long = 0L,
     val currency: String = "GNF",
-    val logoBase64: String? = null
+    val logoBase64: String? = null,
+    val onlinePaymentEnabled: Boolean = true,
+    val isAppLocked: Boolean = false,
+    val unpaidCommission: Long = 0L,
+    val onlinePaymentsCount: Int = 0,
+    val onlinePaymentsTotal: Long = 0L,
+    val lockReason: String? = null
 )

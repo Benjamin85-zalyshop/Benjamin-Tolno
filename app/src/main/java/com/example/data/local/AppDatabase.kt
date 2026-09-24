@@ -13,7 +13,7 @@ import com.example.data.models.Student
 import com.example.data.models.Subject
 import com.example.data.models.StudentGrade
 
-@Database(entities = [Student::class, Payment::class, Expense::class, SchoolAccount::class, Subject::class, StudentGrade::class], version = 24, exportSchema = false)
+@Database(entities = [Student::class, Payment::class, Expense::class, SchoolAccount::class, Subject::class, StudentGrade::class], version = 25, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun schoolDao(): SchoolDao
 
@@ -49,6 +49,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE school_accounts ADD COLUMN onlinePaymentEnabled INTEGER NOT NULL DEFAULT 1")
+                database.execSQL("ALTER TABLE school_accounts ADD COLUMN isAppLocked INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE school_accounts ADD COLUMN unpaidCommission INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE school_accounts ADD COLUMN onlinePaymentsCount INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE school_accounts ADD COLUMN onlinePaymentsTotal INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE school_accounts ADD COLUMN lockReason TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -56,7 +67,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "scolapay_database"
                 )
-                .addMigrations(MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
+                .addMigrations(MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
