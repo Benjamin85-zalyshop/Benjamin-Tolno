@@ -1,12 +1,18 @@
 {
   "rules": {
+    ".read": true,
+    ".write": true,
     "students": {
+      ".read": true,
+      ".write": true,
       "$student_id": {
         ".read": true,
         ".write": true
       }
     },
     "schools": {
+      ".read": true,
+      ".write": true,
       "$school_id": {
         ".read": true,
         ".write": true

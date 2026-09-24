@@ -1479,6 +1479,7 @@ class SchoolViewModel(
                     val lockReason = doc.getString("lockReason")
                     
                     val existing = repository.getSchoolAccountByName(email)
+                        ?: repository.getAllSchoolAccounts().find { it.displayName.equals(email, ignoreCase = true) || it.displayName.equals(displayName, ignoreCase = true) }
                     if (existing != null) {
                         repository.updateSchoolAccount(
                             existing.copy(
@@ -1497,9 +1498,9 @@ class SchoolViewModel(
                                 createdAt = createdAt,
                                 onlinePaymentEnabled = onlinePaymentEnabled,
                                 isAppLocked = isAppLocked,
-                                unpaidCommission = unpaidCommission,
-                                onlinePaymentsCount = onlinePaymentsCount,
-                                onlinePaymentsTotal = onlinePaymentsTotal,
+                                unpaidCommission = maxOf(existing.unpaidCommission, unpaidCommission),
+                                onlinePaymentsCount = maxOf(existing.onlinePaymentsCount, onlinePaymentsCount),
+                                onlinePaymentsTotal = maxOf(existing.onlinePaymentsTotal, onlinePaymentsTotal),
                                 lockReason = lockReason
                             )
                         )
@@ -1646,6 +1647,7 @@ class SchoolViewModel(
                         val lockReason = doc.getString("lockReason")
                         
                         val existing = repository.getSchoolAccountByName(email)
+                            ?: repository.getAllSchoolAccounts().find { it.displayName.equals(email, ignoreCase = true) || it.displayName.equals(displayName, ignoreCase = true) }
                         if (existing != null) {
                             repository.updateSchoolAccount(
                                 existing.copy(
@@ -1709,12 +1711,109 @@ class SchoolViewModel(
         }
     }
 
+    private fun normalizeSyncKey(s: String): String {
+        return try {
+            java.text.Normalizer.normalize(s.trim(), java.text.Normalizer.Form.NFD)
+                .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+                .replace(Regex("[^a-zA-Z0-9]"), "")
+                .lowercase()
+        } catch (e: Exception) {
+            s.trim().lowercase()
+        }
+    }
+
     suspend fun syncSchoolsFromRTDB() {
         try {
             val rtdb = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
-            val snapshot = rtdb.getReference("schools").get().await()
-            if (snapshot.exists()) {
-                processRtdbSchoolsSnapshot(snapshot)
+            
+            // 1. Essai lecture globale si les règles le permettent
+            try {
+                val snapshot = rtdb.getReference("schools").get().await()
+                if (snapshot.exists()) {
+                    processRtdbSchoolsSnapshot(snapshot)
+                }
+            } catch (e: Exception) {
+                android.util.Log.d("ScolaPay", "Global schools read notice: ${e.message}")
+            }
+
+            // 2. Interrogation directe école par école (correspondant à "$schoolId": { ".read": true })
+            val allAccounts = repository.getAllSchoolAccounts()
+            if (allAccounts.isNotEmpty()) {
+                var hasChanges = false
+                for (acc in allAccounts) {
+                    val candidateKeys = mutableSetOf<String>()
+                    if (acc.displayName.isNotBlank()) {
+                        candidateKeys.add(acc.displayName.trim())
+                        candidateKeys.add(acc.displayName.replace(Regex("[.#$\\[\\]/]"), "_").trim())
+                    }
+                    if (acc.schoolName.isNotBlank()) {
+                        candidateKeys.add(acc.schoolName.trim())
+                        candidateKeys.add(acc.schoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim())
+                    }
+
+                    var bestComm = acc.unpaidCommission
+                    var bestCount = acc.onlinePaymentsCount
+                    var bestTotal = acc.onlinePaymentsTotal
+                    var bestOnlineEnabled = acc.onlinePaymentEnabled
+                    var bestIsLocked = acc.isAppLocked
+                    var bestLockReason = acc.lockReason
+
+                    for (cKey in candidateKeys) {
+                        if (cKey.isBlank()) continue
+                        try {
+                            val schoolChildSnap = rtdb.getReference("schools").child(cKey).get().await()
+                            if (schoolChildSnap.exists()) {
+                                val rtdbComm = schoolChildSnap.child("unpaidCommission").getValue(Long::class.java)
+                                    ?: schoolChildSnap.child("unpaidCommission").getValue(Double::class.java)?.toLong() ?: 0L
+                                val rtdbCount = schoolChildSnap.child("onlinePaymentsCount").getValue(Long::class.java)?.toInt()
+                                    ?: schoolChildSnap.child("onlinePaymentsCount").getValue(Double::class.java)?.toInt() ?: 0
+                                val rtdbTotal = schoolChildSnap.child("onlinePaymentsTotal").getValue(Long::class.java)
+                                    ?: schoolChildSnap.child("onlinePaymentsTotal").getValue(Double::class.java)?.toLong() ?: 0L
+                                val rtdbOnlineEnabled = schoolChildSnap.child("onlinePaymentEnabled").getValue(Boolean::class.java)
+                                val rtdbIsLocked = schoolChildSnap.child("isAppLocked").getValue(Boolean::class.java)
+                                val rtdbLock = schoolChildSnap.child("lockReason").getValue(String::class.java)
+
+                                if (rtdbComm > bestComm) bestComm = rtdbComm
+                                if (rtdbCount > bestCount) bestCount = rtdbCount
+                                if (rtdbTotal > bestTotal) bestTotal = rtdbTotal
+                                if (rtdbOnlineEnabled != null) bestOnlineEnabled = rtdbOnlineEnabled
+                                if (rtdbIsLocked != null) bestIsLocked = rtdbIsLocked
+                                if (rtdbLock != null) bestLockReason = rtdbLock
+                            }
+                        } catch (childErr: Exception) {
+                            android.util.Log.d("ScolaPay", "Child read notice for $cKey: ${childErr.message}")
+                        }
+                    }
+
+                    if (bestComm != acc.unpaidCommission || bestCount != acc.onlinePaymentsCount || bestTotal != acc.onlinePaymentsTotal || bestOnlineEnabled != acc.onlinePaymentEnabled || bestIsLocked != acc.isAppLocked) {
+                        val updated = acc.copy(
+                            unpaidCommission = bestComm,
+                            onlinePaymentsCount = bestCount,
+                            onlinePaymentsTotal = bestTotal,
+                            onlinePaymentEnabled = bestOnlineEnabled,
+                            isAppLocked = bestIsLocked,
+                            lockReason = bestLockReason
+                        )
+                        repository.updateSchoolAccount(updated)
+                        hasChanges = true
+
+                        try {
+                            firestore.collection("schools").document(acc.schoolName).set(
+                                mapOf(
+                                    "unpaidCommission" to bestComm,
+                                    "onlinePaymentsCount" to bestCount,
+                                    "onlinePaymentsTotal" to bestTotal
+                                ),
+                                com.google.firebase.firestore.SetOptions.merge()
+                            )
+                        } catch (eFs: Exception) {
+                            android.util.Log.w("ScolaPay", "Firestore sync warning: ${eFs.message}")
+                        }
+                    }
+                }
+                if (hasChanges) {
+                    loadAdminSchools()
+                }
             }
         } catch (e: Exception) {
             android.util.Log.w("ScolaPay", "Error syncing schools from RTDB: ${e.message}")
@@ -1738,12 +1837,21 @@ class SchoolViewModel(
                         for (pChild in paymentsNode.children) {
                             val sName = pChild.child("schoolName").getValue(String::class.java)
                                 ?: stChild.child("schoolName").getValue(String::class.java) ?: ""
+                            val sEmail = pChild.child("schoolEmail").getValue(String::class.java)
+                                ?: stChild.child("schoolEmail").getValue(String::class.java) ?: ""
                             val amt = pChild.child("amount").getValue(Long::class.java)
                                 ?: pChild.child("amount").getValue(Double::class.java)?.toLong() ?: 0L
-                            if (sName.isNotBlank() && amt > 0L) {
-                                val norm = sName.trim().lowercase()
-                                paymentCounts[norm] = (paymentCounts[norm] ?: 0) + 1
-                                paymentTotals[norm] = (paymentTotals[norm] ?: 0L) + amt
+                            if (amt > 0L) {
+                                if (sName.isNotBlank()) {
+                                    val normN = normalizeSyncKey(sName)
+                                    paymentCounts[normN] = (paymentCounts[normN] ?: 0) + 1
+                                    paymentTotals[normN] = (paymentTotals[normN] ?: 0L) + amt
+                                }
+                                if (sEmail.isNotBlank()) {
+                                    val normE = normalizeSyncKey(sEmail)
+                                    paymentCounts[normE] = (paymentCounts[normE] ?: 0) + 1
+                                    paymentTotals[normE] = (paymentTotals[normE] ?: 0L) + amt
+                                }
                             }
                         }
                     }
@@ -1751,16 +1859,13 @@ class SchoolViewModel(
 
                 var hasChanges = false
                 for (acc in allAccounts) {
-                    val keyDisplay = acc.displayName.trim().lowercase()
-                    val keyEmail = acc.schoolName.trim().lowercase()
-                    val cleanSanitizedDisplay = keyDisplay.replace(Regex("[.#$\\[\\]/]"), "_").trim()
-                    val cleanSanitizedEmail = keyEmail.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+                    val normDisplay = normalizeSyncKey(acc.displayName)
+                    val normEmail = normalizeSyncKey(acc.schoolName)
 
                     var count = 0
                     var total = 0L
                     for ((normKey, c) in paymentCounts) {
-                        if (normKey == keyDisplay || normKey == keyEmail ||
-                            normKey == cleanSanitizedDisplay || normKey == cleanSanitizedEmail) {
+                        if (normKey.isNotBlank() && (normKey == normDisplay || normKey == normEmail)) {
                             count += c
                             total += (paymentTotals[normKey] ?: 0L)
                         }
@@ -1822,24 +1927,29 @@ class SchoolViewModel(
             val rtdbLockReason = child.child("lockReason").getValue(String::class.java)
 
             val cleanKey = key.trim()
+            val normKey = normalizeSyncKey(cleanKey)
             val matchedAccount = allAccounts.find { acc ->
                 val cleanDisplayName = acc.displayName.trim()
                 val cleanEmail = acc.schoolName.trim()
                 val sanitizedDisplay = cleanDisplayName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
                 val sanitizedEmail = cleanEmail.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+                val normDisplay = normalizeSyncKey(cleanDisplayName)
+                val normEmail = normalizeSyncKey(cleanEmail)
 
                 cleanKey.equals(cleanDisplayName, ignoreCase = true) ||
                 cleanKey.equals(cleanEmail, ignoreCase = true) ||
                 cleanKey.equals(sanitizedDisplay, ignoreCase = true) ||
                 cleanKey.equals(sanitizedEmail, ignoreCase = true) ||
+                (normKey.isNotBlank() && (normKey == normDisplay || normKey == normEmail)) ||
                 (childSchoolName.isNotBlank() && (
                     childSchoolName.equals(cleanDisplayName, ignoreCase = true) ||
                     childSchoolName.equals(cleanEmail, ignoreCase = true) ||
-                    childSchoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim().equals(sanitizedDisplay, ignoreCase = true)
+                    normalizeSyncKey(childSchoolName) == normDisplay
                 )) ||
                 (childEmail.isNotBlank() && (
                     childEmail.equals(cleanEmail, ignoreCase = true) ||
-                    childEmail.equals(cleanDisplayName, ignoreCase = true)
+                    childEmail.equals(cleanDisplayName, ignoreCase = true) ||
+                    normalizeSyncKey(childEmail) == normEmail
                 ))
             }
 
@@ -1919,11 +2029,42 @@ class SchoolViewModel(
                         }
                     }
                     override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
-                        android.util.Log.w("ScolaPay", "RTDB students listen error: ${error.message}")
+                        android.util.Log.d("ScolaPay", "RTDB students listen notice: ${error.message}")
                     }
                 }
                 studentsRef.addValueEventListener(studentListener)
                 activeRtdbListeners[studentsRef] = studentListener
+            }
+
+            // Écouteurs individuels sur chaque école (autorisés par "$schoolId": { ".read": true })
+            viewModelScope.launch {
+                val allAccounts = repository.getAllSchoolAccounts()
+                for (acc in allAccounts) {
+                    val candidateKeys = listOf(
+                        acc.displayName.trim(),
+                        acc.displayName.replace(Regex("[.#$\\[\\]/]"), "_").trim(),
+                        acc.schoolName.trim(),
+                        acc.schoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+                    ).filter { it.isNotBlank() }.distinct()
+
+                    for (cKey in candidateKeys) {
+                        val childRef = rtdb.getReference("schools").child(cKey)
+                        if (!activeRtdbListeners.containsKey(childRef)) {
+                            val cListener = object : com.google.firebase.database.ValueEventListener {
+                                override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                                    viewModelScope.launch {
+                                        syncSchoolsFromRTDB()
+                                    }
+                                }
+                                override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                                    android.util.Log.d("ScolaPay", "Child listener notice for $cKey: ${error.message}")
+                                }
+                            }
+                            childRef.addValueEventListener(cListener)
+                            activeRtdbListeners[childRef] = cListener
+                        }
+                    }
+                }
             }
         } catch (e: Exception) {
             android.util.Log.w("ScolaPay", "Error setting up RTDB schools listener: ${e.message}")

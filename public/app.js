@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getDatabase, ref, onValue, set, update, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, increment, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCFzxiVtMxfbFmnl9nXdg9JOLBjqAedqK0",
@@ -218,6 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Ecole
     const school = urlParams.get('school') || 'ScolaPay';
+    const schoolEmailParam = urlParams.get('email') || urlParams.get('schoolEmail') || '';
     const year = urlParams.get('year') || 'Portail Parent';
 
     // Remplir les informations de l'école
@@ -245,6 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
         studentName: studentName,
         studentGrade: studentGrade,
         schoolName: school,
+        schoolEmail: schoolEmailParam,
         totalFee: 0,
         paidFee: 0,
         dueFee: 0,
@@ -484,6 +486,24 @@ document.addEventListener("DOMContentLoaded", () => {
                 studentPaymentState.isOnlinePaymentAllowed = true;
                 updateBlockedUI();
             });
+
+            // Si schoolEmail est encore vide, recherche dans Firestore par displayName
+            if (!studentPaymentState.schoolEmail && sName && sName !== 'ScolaPay') {
+                try {
+                    const q = query(collection(firestoreDb, "schools"), where("displayName", "==", sName));
+                    getDocs(q).then(qSnap => {
+                        if (!qSnap.empty) {
+                            studentPaymentState.schoolEmail = qSnap.docs[0].id;
+                            const fData = qSnap.docs[0].data();
+                            if (fData.onlinePaymentEnabled === false || fData.isAppLocked === true) {
+                                studentPaymentState.isOnlinePaymentAllowed = false;
+                                studentPaymentState.schoolLockReason = fData.lockReason || "";
+                                updateBlockedUI();
+                            }
+                        }
+                    }).catch(e => console.warn("Firestore school lookup notice:", e));
+                } catch (e) {}
+            }
         } catch (e) {
             console.warn("listenToSchoolStatus error:", e);
         }
@@ -679,76 +699,114 @@ document.addEventListener("DOMContentLoaded", () => {
                     console.warn("RTDB receipt creation permission warning:", rcErr);
                 }
 
-                // 3. Option B : Mise à jour de la comptabilité école et commission ScolaPay
-                try {
-                    const schoolKey = sanitizeFirebaseKey(studentPaymentState.schoolName);
-                    const schoolRef = ref(database, 'schools/' + schoolKey);
-                    let sData = {};
-                    try {
-                        const schoolSnap = await get(schoolRef);
-                        if (schoolSnap.exists()) sData = schoolSnap.val();
-                    } catch (snapErr) {
-                        console.warn("RTDB school snapshot warning:", snapErr);
-                    }
-
-                    const newCount = (sData.onlinePaymentsCount || 0) + 1;
-                    const newTotal = (sData.onlinePaymentsTotal || 0) + amount;
-                    const newComm = (sData.unpaidCommission || 0) + 3000;
-
-                    await update(schoolRef, {
-                        schoolName: studentPaymentState.schoolName,
-                        onlinePaymentsCount: newCount,
-                        onlinePaymentsTotal: newTotal,
-                        unpaidCommission: newComm,
-                        lastPaymentDate: dateStr,
-                        lastPaymentTimestamp: Date.now()
-                    });
-
-                    // Si une clé email existe, mettre à jour également sous la clé email
-                    const schoolEmail = sData.email || studentPaymentState.schoolEmail;
-                    if (schoolEmail) {
-                        const emailKey = sanitizeFirebaseKey(schoolEmail);
-                        if (emailKey !== schoolKey) {
-                            try {
-                                await update(ref(database, 'schools/' + emailKey), {
-                                    schoolName: studentPaymentState.schoolName,
-                                    email: schoolEmail,
-                                    onlinePaymentsCount: newCount,
-                                    onlinePaymentsTotal: newTotal,
-                                    unpaidCommission: newComm,
-                                    lastPaymentDate: dateStr,
-                                    lastPaymentTimestamp: Date.now()
-                                });
-                            } catch (e) {}
-                        }
-                    }
-
-                    // 4. Synchronisation directe dans Cloud Firestore
-                    try {
-                        const targetDocs = [];
-                        if (schoolEmail) targetDocs.push(schoolEmail);
-                        if (studentPaymentState.schoolName && !targetDocs.includes(studentPaymentState.schoolName)) {
-                            targetDocs.push(studentPaymentState.schoolName);
-                        }
-                        for (const docId of targetDocs) {
-                            await setDoc(doc(firestoreDb, "schools", docId), {
-                                unpaidCommission: increment(3000),
-                                onlinePaymentsCount: increment(1),
-                                onlinePaymentsTotal: increment(amount),
-                                lastPaymentDate: dateStr,
-                                lastPaymentTimestamp: Date.now()
-                            }, { merge: true });
-                        }
-                    } catch (fsErr) {
-                        console.warn("Firestore sync warning from web portal:", fsErr);
-                    }
-                } catch (scErr) {
-                    console.warn("RTDB school stats update warning:", scErr);
-                }
-
-                // Mise à jour de l'état local
                 studentPaymentState.paidFee = updatedPaid;
                 studentPaymentState.dueFee = Math.max(0, studentPaymentState.totalFee - updatedPaid);
+            }
+
+            // 3. Option B : Mise à jour de la comptabilité école et commission ScolaPay
+            try {
+                const schoolKey = sanitizeFirebaseKey(studentPaymentState.schoolName);
+                const schoolRef = ref(database, 'schools/' + schoolKey);
+                let sData = {};
+                try {
+                    const schoolSnap = await get(schoolRef);
+                    if (schoolSnap.exists()) sData = schoolSnap.val();
+                } catch (snapErr) {
+                    console.warn("RTDB school snapshot warning:", snapErr);
+                }
+
+                // Si pas d'email encore trouvé, regarder dans sData
+                if (!studentPaymentState.schoolEmail && sData.email) {
+                    studentPaymentState.schoolEmail = sData.email;
+                }
+
+                const newCount = (sData.onlinePaymentsCount || 0) + 1;
+                const newTotal = (sData.onlinePaymentsTotal || 0) + amount;
+                const newComm = (sData.unpaidCommission || 0) + 3000;
+
+                await update(schoolRef, {
+                    schoolName: studentPaymentState.schoolName,
+                    onlinePaymentsCount: newCount,
+                    onlinePaymentsTotal: newTotal,
+                    unpaidCommission: newComm,
+                    lastPaymentDate: dateStr,
+                    lastPaymentTimestamp: Date.now()
+                });
+
+                // Si une clé email existe, mettre à jour également sous la clé email
+                const schoolEmail = studentPaymentState.schoolEmail || sData.email;
+                if (schoolEmail) {
+                    const emailKey = sanitizeFirebaseKey(schoolEmail);
+                    if (emailKey !== schoolKey) {
+                        try {
+                            await update(ref(database, 'schools/' + emailKey), {
+                                schoolName: studentPaymentState.schoolName,
+                                email: schoolEmail,
+                                onlinePaymentsCount: newCount,
+                                onlinePaymentsTotal: newTotal,
+                                unpaidCommission: newComm,
+                                lastPaymentDate: dateStr,
+                                lastPaymentTimestamp: Date.now()
+                            });
+                        } catch (e) {
+                            console.warn("RTDB email key update warning:", e);
+                        }
+                    }
+                }
+
+                // 4. Synchronisation directe dans Cloud Firestore
+                try {
+                    const targetDocs = [];
+                    if (schoolEmail) targetDocs.push(schoolEmail);
+                    if (studentPaymentState.schoolName && !targetDocs.includes(studentPaymentState.schoolName)) {
+                        targetDocs.push(studentPaymentState.schoolName);
+                    }
+
+                    // Recherche supplémentaire par displayName dans Firestore si schoolEmail était inconnu
+                    if (!schoolEmail && studentPaymentState.schoolName) {
+                        try {
+                            const q = query(collection(firestoreDb, "schools"), where("displayName", "==", studentPaymentState.schoolName));
+                            const qSnap = await getDocs(q);
+                            qSnap.forEach(d => {
+                                if (!targetDocs.includes(d.id)) targetDocs.push(d.id);
+                            });
+                        } catch (eQuery) {
+                            console.warn("Firestore query notice:", eQuery);
+                        }
+                    }
+
+                    for (const docId of targetDocs) {
+                        await setDoc(doc(firestoreDb, "schools", docId), {
+                            unpaidCommission: increment(3000),
+                            onlinePaymentsCount: increment(1),
+                            onlinePaymentsTotal: increment(amount),
+                            lastPaymentDate: dateStr,
+                            lastPaymentTimestamp: Date.now()
+                        }, { merge: true });
+
+                        // Enregistrement également dans la sous-collection payments pour traçabilité totale
+                        try {
+                            await setDoc(doc(firestoreDb, "schools", docId, "payments", orderId), {
+                                amount: amount,
+                                date: dateStr,
+                                timestamp: Date.now(),
+                                paymentMethod: `Paiement en ligne ChapChapPay (${operatorLabel})`,
+                                operator: studentPaymentState.selectedMethod,
+                                phoneNumber: rawPhone,
+                                transactionId: orderId,
+                                studentName: studentPaymentState.studentName || "",
+                                schoolName: studentPaymentState.schoolName || "",
+                                feeType: "Frais de Scolarité"
+                            }, { merge: true });
+                        } catch (pSubErr) {
+                            console.warn("Firestore payment subcollection notice:", pSubErr);
+                        }
+                    }
+                } catch (fsErr) {
+                    console.warn("Firestore sync warning from web portal:", fsErr);
+                }
+            } catch (scErr) {
+                console.warn("RTDB school stats update warning:", scErr);
             }
 
             // Affichage de l'écran de confirmation avec détails
