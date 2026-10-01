@@ -2570,14 +2570,19 @@ class SchoolViewModel(
     fun updateSchoolMerchantConfig(email: String, schoolName: String, apiKey: String, merchantPhone: String) {
         viewModelScope.launch {
             val cleanKey = schoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+            val cleanEmailKey = email.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+            val payload = mapOf("chapchapApiKey" to apiKey.trim(), "merchantPhone" to merchantPhone.trim())
             firestore.collection("schools").document(email).set(
-                mapOf("chapchapApiKey" to apiKey.trim(), "merchantPhone" to merchantPhone.trim()),
+                payload,
                 com.google.firebase.firestore.SetOptions.merge()
             )
             try {
-                val rtdbRef = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
-                    .getReference("schools").child(cleanKey)
-                rtdbRef.updateChildren(mapOf("chapchapApiKey" to apiKey.trim(), "merchantPhone" to merchantPhone.trim()))
+                val db = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                val schoolsRef = db.getReference("schools")
+                schoolsRef.child(cleanKey).updateChildren(payload)
+                if (cleanEmailKey.isNotBlank() && cleanEmailKey != cleanKey) {
+                    schoolsRef.child(cleanEmailKey).updateChildren(payload)
+                }
             } catch (e: Exception) {
                 android.util.Log.w("ScolaPay", "RTDB merchant config sync error: ${e.message}")
             }
@@ -2594,14 +2599,20 @@ class SchoolViewModel(
             val email = _schoolAccount.value?.schoolName ?: return@launch
             val sName = _schoolAccount.value?.displayName?.ifBlank { _schoolAccount.value?.schoolName } ?: return@launch
             val cleanKey = sName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+            val cleanEmailKey = email.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+            val payload = mapOf("chapchapApiKey" to apiKey.trim(), "merchantPhone" to merchantPhone.trim())
+
             firestore.collection("schools").document(email).set(
-                mapOf("chapchapApiKey" to apiKey.trim(), "merchantPhone" to merchantPhone.trim()),
+                payload,
                 com.google.firebase.firestore.SetOptions.merge()
             )
             try {
-                val rtdbRef = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
-                    .getReference("schools").child(cleanKey)
-                rtdbRef.updateChildren(mapOf("chapchapApiKey" to apiKey.trim(), "merchantPhone" to merchantPhone.trim()))
+                val db = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                val schoolsRef = db.getReference("schools")
+                schoolsRef.child(cleanKey).updateChildren(payload)
+                if (cleanEmailKey.isNotBlank() && cleanEmailKey != cleanKey) {
+                    schoolsRef.child(cleanEmailKey).updateChildren(payload)
+                }
             } catch (e: Exception) {
                 android.util.Log.w("ScolaPay", "RTDB my school merchant sync error: ${e.message}")
             }

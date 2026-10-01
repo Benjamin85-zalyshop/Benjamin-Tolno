@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getDatabase, ref, onValue, set, update, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, increment, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, increment, collection, query, where, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCFzxiVtMxfbFmnl9nXdg9JOLBjqAedqK0",
@@ -334,7 +334,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 if (data.schoolName) {
                     studentPaymentState.schoolName = data.schoolName;
-                    listenToSchoolStatus(data.schoolName);
+                    listenToSchoolStatus(data.schoolName, data.schoolEmail);
+                } else if (data.schoolEmail) {
+                    listenToSchoolStatus("", data.schoolEmail);
                 }
                 
                 let dbPercent = 0;
@@ -464,48 +466,104 @@ document.addEventListener("DOMContentLoaded", () => {
     // & CONTRÔLE SUSPENSION ÉCOLE (KILL-SWITCH)
     // ==========================================
 
-    function listenToSchoolStatus(sName) {
-        if (!sName) return;
-        const schoolKey = sanitizeFirebaseKey(sName);
-        const schoolRef = ref(database, 'schools/' + schoolKey);
-        try {
-            onValue(schoolRef, (snap) => {
-                if (snap.exists()) {
-                    const sData = snap.val();
-                    studentPaymentState.isOnlinePaymentAllowed = (sData.onlinePaymentEnabled !== false && sData.isAppLocked !== true);
-                    studentPaymentState.schoolLockReason = sData.lockReason || "";
-                    studentPaymentState.schoolApiKey = (sData.chapchapApiKey || "").trim();
-                    studentPaymentState.schoolMerchantPhone = (sData.merchantPhone || "").trim();
-                    if (sData.email) studentPaymentState.schoolEmail = sData.email;
-                } else {
-                    studentPaymentState.isOnlinePaymentAllowed = true;
-                }
-                updateBlockedUI();
-            }, (err) => {
-                console.warn("RTDB school read notice:", err);
-                studentPaymentState.isOnlinePaymentAllowed = true;
-                updateBlockedUI();
-            });
-
-            // Si schoolEmail est encore vide, recherche dans Firestore par displayName
-            if (!studentPaymentState.schoolEmail && sName && sName !== 'ScolaPay') {
-                try {
-                    const q = query(collection(firestoreDb, "schools"), where("displayName", "==", sName));
-                    getDocs(q).then(qSnap => {
-                        if (!qSnap.empty) {
-                            studentPaymentState.schoolEmail = qSnap.docs[0].id;
-                            const fData = qSnap.docs[0].data();
-                            if (fData.onlinePaymentEnabled === false || fData.isAppLocked === true) {
-                                studentPaymentState.isOnlinePaymentAllowed = false;
-                                studentPaymentState.schoolLockReason = fData.lockReason || "";
-                                updateBlockedUI();
-                            }
+    function listenToSchoolStatus(sName, sEmail) {
+        if (!sName && !sEmail) return;
+        const targetEmail = sEmail || studentPaymentState.schoolEmail;
+        if (sName) {
+            const schoolKey = sanitizeFirebaseKey(sName);
+            const schoolRef = ref(database, 'schools/' + schoolKey);
+            try {
+                onValue(schoolRef, (snap) => {
+                    if (snap.exists()) {
+                        const sData = snap.val();
+                        studentPaymentState.isOnlinePaymentAllowed = (sData.onlinePaymentEnabled !== false && sData.isAppLocked !== true);
+                        studentPaymentState.schoolLockReason = sData.lockReason || "";
+                        if (sData.chapchapApiKey && sData.chapchapApiKey.trim().length > 5) {
+                            studentPaymentState.schoolApiKey = sData.chapchapApiKey.trim();
                         }
-                    }).catch(e => console.warn("Firestore school lookup notice:", e));
-                } catch (e) {}
+                        if (sData.merchantPhone) {
+                            studentPaymentState.schoolMerchantPhone = sData.merchantPhone.trim();
+                        }
+                        if (sData.email) studentPaymentState.schoolEmail = sData.email;
+                    }
+                    updateBlockedUI();
+                }, (err) => {
+                    console.warn("RTDB school read notice:", err);
+                    updateBlockedUI();
+                });
+            } catch (e) {
+                console.warn("listenToSchoolStatus error:", e);
             }
-        } catch (e) {
-            console.warn("listenToSchoolStatus error:", e);
+        }
+
+        if (targetEmail) {
+            const emailKey = sanitizeFirebaseKey(targetEmail);
+            const emailRef = ref(database, 'schools/' + emailKey);
+            try {
+                onValue(emailRef, (snap) => {
+                    if (snap.exists()) {
+                        const sData = snap.val();
+                        if (sData.onlinePaymentEnabled !== undefined || sData.isAppLocked !== undefined) {
+                            studentPaymentState.isOnlinePaymentAllowed = (sData.onlinePaymentEnabled !== false && sData.isAppLocked !== true);
+                            studentPaymentState.schoolLockReason = sData.lockReason || "";
+                        }
+                        if (sData.chapchapApiKey && sData.chapchapApiKey.trim().length > 5) {
+                            studentPaymentState.schoolApiKey = sData.chapchapApiKey.trim();
+                        }
+                        if (sData.merchantPhone) {
+                            studentPaymentState.schoolMerchantPhone = sData.merchantPhone.trim();
+                        }
+                    }
+                    updateBlockedUI();
+                }, (err) => {
+                    console.warn("RTDB emailKey read notice:", err);
+                });
+            } catch (e) {
+                console.warn("RTDB emailKey error:", e);
+            }
+
+            try {
+                getDoc(doc(firestoreDb, "schools", targetEmail)).then(dSnap => {
+                    if (dSnap.exists()) {
+                        const fData = dSnap.data();
+                        if (fData.onlinePaymentEnabled === false || fData.isAppLocked === true) {
+                            studentPaymentState.isOnlinePaymentAllowed = false;
+                            studentPaymentState.schoolLockReason = fData.lockReason || "";
+                            updateBlockedUI();
+                        }
+                        if (fData.chapchapApiKey && fData.chapchapApiKey.trim().length > 5) {
+                            studentPaymentState.schoolApiKey = fData.chapchapApiKey.trim();
+                        }
+                        if (fData.merchantPhone) {
+                            studentPaymentState.schoolMerchantPhone = fData.merchantPhone.trim();
+                        }
+                    }
+                }).catch(e => console.warn("Firestore school doc lookup notice:", e));
+            } catch (e) {}
+        }
+
+        // Si schoolEmail est encore vide, recherche dans Firestore par displayName
+        if (!targetEmail && sName && sName !== 'ScolaPay') {
+            try {
+                const q = query(collection(firestoreDb, "schools"), where("displayName", "==", sName));
+                getDocs(q).then(qSnap => {
+                    if (!qSnap.empty) {
+                        studentPaymentState.schoolEmail = qSnap.docs[0].id;
+                        const fData = qSnap.docs[0].data();
+                        if (fData.onlinePaymentEnabled === false || fData.isAppLocked === true) {
+                            studentPaymentState.isOnlinePaymentAllowed = false;
+                            studentPaymentState.schoolLockReason = fData.lockReason || "";
+                            updateBlockedUI();
+                        }
+                        if (fData.chapchapApiKey && fData.chapchapApiKey.trim().length > 5) {
+                            studentPaymentState.schoolApiKey = fData.chapchapApiKey.trim();
+                        }
+                        if (fData.merchantPhone) {
+                            studentPaymentState.schoolMerchantPhone = fData.merchantPhone.trim();
+                        }
+                    }
+                }).catch(e => console.warn("Firestore school lookup notice:", e));
+            } catch (e) {}
         }
     }
 
@@ -688,179 +746,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.warn("ChapChapPay direct web api notice (test sandbox active):", apiError);
             }
 
-            // Enregistrement du paiement dans Firebase RTDB
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
-            const operatorLabel = studentPaymentState.selectedMethod === 'orange_money' ? 'Orange Money' : 'MTN MoMo';
-
-            if (studentPaymentState.rid) {
-                const updatedPaid = (studentPaymentState.paidFee || 0) + amount;
-
-                // 1. Mise à jour du solde élève
-                try {
-                    await update(ref(database, 'students/' + studentPaymentState.rid), {
-                        paidFee: updatedPaid
-                    });
-                } catch (stErr) {
-                    console.warn("RTDB student update permission warning:", stErr);
-                }
-
-                // 2. Création de l'enregistrement de reçu
-                try {
-                    const receiptRef = ref(database, `students/${studentPaymentState.rid}/payments/${orderId}`);
-                    await set(receiptRef, {
-                        amount: amount,
-                        date: dateStr,
-                        timestamp: Date.now(),
-                        paymentMethod: `Paiement en ligne ChapChapPay (${operatorLabel})`,
-                        operator: studentPaymentState.selectedMethod,
-                        phoneNumber: rawPhone,
-                        transactionId: orderId,
-                        feeType: "Frais de Scolarité",
-                        schoolName: studentPaymentState.schoolName,
-                        studentName: studentPaymentState.studentName
-                    });
-                } catch (rcErr) {
-                    console.warn("RTDB receipt creation permission warning:", rcErr);
-                }
-
-                studentPaymentState.paidFee = updatedPaid;
-                studentPaymentState.dueFee = Math.max(0, studentPaymentState.totalFee - updatedPaid);
+            if (chapchapPaymentUrl) {
+                // Redirection immédiate vers la page officielle de paiement ChapChapPay (Orange Money / MTN MoMo)
+                loadingDiv.classList.add('hidden');
+                window.location.href = chapchapPaymentUrl;
+                return;
             }
 
-            // 3. Option B : Mise à jour de la comptabilité école et commission ScolaPay
-            try {
-                const schoolKey = sanitizeFirebaseKey(studentPaymentState.schoolName);
-                const schoolRef = ref(database, 'schools/' + schoolKey);
-                let sData = {};
-                try {
-                    const schoolSnap = await get(schoolRef);
-                    if (schoolSnap.exists()) sData = schoolSnap.val();
-                } catch (snapErr) {
-                    console.warn("RTDB school snapshot warning:", snapErr);
-                }
-
-                // Si pas d'email encore trouvé, regarder dans sData
-                if (!studentPaymentState.schoolEmail && sData.email) {
-                    studentPaymentState.schoolEmail = sData.email;
-                }
-
-                const newCount = (sData.onlinePaymentsCount || 0) + 1;
-                const newTotal = (sData.onlinePaymentsTotal || 0) + amount;
-                const newComm = (sData.unpaidCommission || 0) + 3000;
-
-                await update(schoolRef, {
-                    schoolName: studentPaymentState.schoolName,
-                    onlinePaymentsCount: newCount,
-                    onlinePaymentsTotal: newTotal,
-                    unpaidCommission: newComm,
-                    lastPaymentDate: dateStr,
-                    lastPaymentTimestamp: Date.now()
-                });
-
-                // Si une clé email existe, mettre à jour également sous la clé email
-                const schoolEmail = studentPaymentState.schoolEmail || sData.email;
-                if (schoolEmail) {
-                    const emailKey = sanitizeFirebaseKey(schoolEmail);
-                    if (emailKey !== schoolKey) {
-                        try {
-                            await update(ref(database, 'schools/' + emailKey), {
-                                schoolName: studentPaymentState.schoolName,
-                                email: schoolEmail,
-                                onlinePaymentsCount: newCount,
-                                onlinePaymentsTotal: newTotal,
-                                unpaidCommission: newComm,
-                                lastPaymentDate: dateStr,
-                                lastPaymentTimestamp: Date.now()
-                            });
-                        } catch (e) {
-                            console.warn("RTDB email key update warning:", e);
-                        }
-                    }
-                }
-
-                // 4. Synchronisation directe dans Cloud Firestore
-                try {
-                    const targetDocs = [];
-                    if (schoolEmail) targetDocs.push(schoolEmail);
-                    if (studentPaymentState.schoolName && !targetDocs.includes(studentPaymentState.schoolName)) {
-                        targetDocs.push(studentPaymentState.schoolName);
-                    }
-
-                    // Recherche supplémentaire par displayName dans Firestore si schoolEmail était inconnu
-                    if (!schoolEmail && studentPaymentState.schoolName) {
-                        try {
-                            const q = query(collection(firestoreDb, "schools"), where("displayName", "==", studentPaymentState.schoolName));
-                            const qSnap = await getDocs(q);
-                            qSnap.forEach(d => {
-                                if (!targetDocs.includes(d.id)) targetDocs.push(d.id);
-                            });
-                        } catch (eQuery) {
-                            console.warn("Firestore query notice:", eQuery);
-                        }
-                    }
-
-                    for (const docId of targetDocs) {
-                        await setDoc(doc(firestoreDb, "schools", docId), {
-                            unpaidCommission: increment(3000),
-                            onlinePaymentsCount: increment(1),
-                            onlinePaymentsTotal: increment(amount),
-                            lastPaymentDate: dateStr,
-                            lastPaymentTimestamp: Date.now()
-                        }, { merge: true });
-
-                        // Enregistrement également dans la sous-collection payments pour traçabilité totale
-                        try {
-                            await setDoc(doc(firestoreDb, "schools", docId, "payments", orderId), {
-                                amount: amount,
-                                date: dateStr,
-                                timestamp: Date.now(),
-                                paymentMethod: `Paiement en ligne ChapChapPay (${operatorLabel})`,
-                                operator: studentPaymentState.selectedMethod,
-                                phoneNumber: rawPhone,
-                                transactionId: orderId,
-                                studentName: studentPaymentState.studentName || "",
-                                schoolName: studentPaymentState.schoolName || "",
-                                feeType: "Frais de Scolarité"
-                            }, { merge: true });
-                        } catch (pSubErr) {
-                            console.warn("Firestore payment subcollection notice:", pSubErr);
-                        }
-                    }
-                } catch (fsErr) {
-                    console.warn("Firestore sync warning from web portal:", fsErr);
-                }
-            } catch (scErr) {
-                console.warn("RTDB school stats update warning:", scErr);
-            }
-
-            // Affichage de l'écran de confirmation avec détails
+            // Si l'API en ligne ChapChapPay est bloquée par la sécurité du navigateur (CORS)
             loadingDiv.classList.add('hidden');
-            document.getElementById('paymentModalForm').classList.add('hidden');
-            document.getElementById('paymentSuccessView').classList.remove('hidden');
-
-            document.getElementById('successAmountText').textContent = formatCurrency(amount);
-            document.getElementById('successTransId').textContent = orderId;
-            document.getElementById('successDate').textContent = dateStr;
-            document.getElementById('successOperator').textContent = operatorLabel + ` (${rawPhone})`;
-
-            const gatewayContainer = document.getElementById('chapchapGatewayLinkContainer');
-            const gatewayLink = document.getElementById('chapchapGatewayLink');
-            if (chapchapPaymentUrl && gatewayContainer && gatewayLink) {
-                gatewayLink.href = chapchapPaymentUrl;
-                gatewayContainer.classList.remove('hidden');
-            } else if (gatewayContainer) {
-                gatewayContainer.classList.add('hidden');
+            submitBtn.classList.remove('hidden');
+            
+            const merchantPhone = studentPaymentState.schoolMerchantPhone;
+            let msg = "La passerelle de paiement en ligne ChapChapPay ne peut pas être ouverte directement depuis ce navigateur en raison des restrictions de sécurité CORS.\n\n";
+            if (merchantPhone) {
+                msg += `Pour régler les frais scolaires en toute sécurité, veuillez effectuer votre dépôt Orange Money ou MTN Mobile Money directement sur le compte marchand officiel de l'école :\n📞 Numéro Marchand : ${merchantPhone}\n\nUne fois le transfert effectué, l'école validera immédiatement le reçu.`;
+            } else {
+                msg += "Veuillez vous rapprocher directement de l'établissement pour effectuer votre versement en attendant la configuration du lien de paiement direct.";
             }
-
-            // Actualisation dynamique de la jauge sur la page
-            const updatedPercent = studentPaymentState.totalFee > 0 ? (studentPaymentState.paidFee / studentPaymentState.totalFee) * 100 : 100;
-            updateFinancialUI(
-                formatCurrency(studentPaymentState.totalFee),
-                formatCurrency(studentPaymentState.paidFee),
-                formatCurrency(studentPaymentState.dueFee),
-                updatedPercent
-            );
+            alert(msg);
+            return;
 
         } catch (err) {
             console.error("Erreur globale lors du traitement du paiement:", err);
@@ -871,7 +776,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     // Initial check for school status
-    listenToSchoolStatus(school);
+    listenToSchoolStatus(school, schoolEmailParam);
 
     // Afficher le contenu
     setTimeout(() => {
