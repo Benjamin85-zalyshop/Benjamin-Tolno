@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +47,7 @@ fun AdminDashboardScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var schoolToDelete by remember { mutableStateOf<SchoolAdminItem?>(null) }
     var showCleanDialog by remember { mutableStateOf(false) }
+    var showManageSubsDialog by remember { mutableStateOf(false) }
     var rejectionReason by remember { mutableStateOf("") }
     
     val coroutineScope = rememberCoroutineScope()
@@ -56,6 +59,9 @@ fun AdminDashboardScreen(
     var firebaseResetSentMessage by remember { mutableStateOf<String?>(null) }
     
     val localContext = androidx.compose.ui.platform.LocalContext.current
+    var showLockDialog by remember { mutableStateOf(false) }
+    var schoolToLock by remember { mutableStateOf<SchoolAdminItem?>(null) }
+    var lockCommissionInput by remember { mutableStateOf("") }
     var showWhatsAppDialog by remember { mutableStateOf(false) }
     var schoolForWhatsApp by remember { mutableStateOf<SchoolAdminItem?>(null) }
     var whatsappMessage by remember { mutableStateOf("") }
@@ -84,7 +90,7 @@ fun AdminDashboardScreen(
         if (!hasAutoSwitchedTab && schools.isNotEmpty()) {
             hasAutoSwitchedTab = true
             if (schools.none { it.isPendingValidation } && selectedTab == 0) {
-                selectedTab = 2 // Basculer automatiquement sur l'onglet "Tous" s'il n'y a pas d'écoles en attente
+                selectedTab = 3 // Basculer automatiquement sur l'onglet "Tous" s'il n'y a pas d'écoles en attente
             }
         }
     }
@@ -93,6 +99,7 @@ fun AdminDashboardScreen(
         when (selectedTab) {
             0 -> schools.filter { it.isPendingValidation }
             1 -> schools.filter { it.hasActiveSubscription }
+            2 -> schools.filter { !it.hasActiveSubscription }
             else -> schools
         }
     }
@@ -111,6 +118,14 @@ fun AdminDashboardScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
+                    IconButton(
+                        onClick = { showManageSubsDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Gérer les abonnements"
+                        )
+                    }
                     IconButton(
                         onClick = { showCleanDialog = true }
                     ) {
@@ -149,7 +164,10 @@ fun AdminDashboardScreen(
                 .padding(padding)
         ) {
             // Tabs
-            PrimaryTabRow(selectedTabIndex = selectedTab) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedTab,
+                edgePadding = 8.dp
+            ) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
@@ -175,6 +193,17 @@ fun AdminDashboardScreen(
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.PersonOff, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Non abonnés (${schools.count { !it.hasActiveSubscription }})")
+                        }
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -266,6 +295,7 @@ fun AdminDashboardScreen(
                             text = when (selectedTab) {
                                 0 -> "Aucune demande d'abonnement en attente !"
                                 1 -> "Aucune école n'a d'abonnement actif."
+                                2 -> "Aucune école non abonnée."
                                 else -> "Aucune école enregistrée."
                             },
                             style = MaterialTheme.typography.titleMedium,
@@ -276,7 +306,7 @@ fun AdminDashboardScreen(
                         if (selectedTab == 0 && schools.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
-                                onClick = { selectedTab = 2 }
+                                onClick = { selectedTab = 3 }
                             ) {
                                 Icon(Icons.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -301,6 +331,14 @@ fun AdminDashboardScreen(
                                 rejectionReason = ""
                                 showRejectDialog = true
                             },
+                            onToggleSubscription = { active ->
+                                viewModel.toggleSchoolSubscription(item.email, active)
+                                android.widget.Toast.makeText(
+                                    localContext,
+                                    if (active) "Abonnement activé pour 1 an !" else "École passée en non-abonnée.",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            },
                             onDeleteClick = {
                                 schoolToDelete = item
                                 showDeleteDialog = true
@@ -319,8 +357,15 @@ fun AdminDashboardScreen(
                                 android.widget.Toast.makeText(localContext, if (enabled) "Paiement en ligne activé pour ${item.displayName.ifEmpty { item.schoolName }}" else "Paiement en ligne bloqué pour ${item.displayName.ifEmpty { item.schoolName }}", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             onToggleAppLock = { locked ->
-                                viewModel.toggleSchoolAppLock(item.email, item.displayName.ifEmpty { item.schoolName }, locked)
-                                android.widget.Toast.makeText(localContext, if (locked) "Application verrouillée pour ${item.displayName.ifEmpty { item.schoolName }}" else "Application déverrouillée pour ${item.displayName.ifEmpty { item.schoolName }}", android.widget.Toast.LENGTH_SHORT).show()
+                                if (locked) {
+                                    schoolToLock = item
+                                    val calcDue = if (item.unpaidCommission > 0L) item.unpaidCommission else (item.onlinePaymentsCount.toLong() * 3000L).coerceAtLeast(3000L)
+                                    lockCommissionInput = calcDue.toString()
+                                    showLockDialog = true
+                                } else {
+                                    viewModel.toggleSchoolAppLock(item.email, item.displayName.ifEmpty { item.schoolName }, false)
+                                    android.widget.Toast.makeText(localContext, "Application déverrouillée pour ${item.displayName.ifEmpty { item.schoolName }}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             },
                             onResetCommission = {
                                 viewModel.resetSchoolCommission(item.email, item.displayName.ifEmpty { item.schoolName })
@@ -344,6 +389,69 @@ fun AdminDashboardScreen(
                 }
             }
         }
+    }
+
+    if (showManageSubsDialog) {
+        AlertDialog(
+            onDismissRequest = { showManageSubsDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Gestion des abonnements", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Régularisez facilement les abonnements de vos écoles. Si des écoles ont été marquées comme abonnées alors qu'elles ne l'étaient pas, vous pouvez corriger leur statut ici :",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("Actions automatiques :", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                            
+                            Button(
+                                onClick = {
+                                    viewModel.resetUnverifiedSchoolsToNonSubscribed(resetAll = false)
+                                    showManageSubsDialog = false
+                                    Toast.makeText(context, "Écoles sans preuve de paiement repassées en non-abonnées !", Toast.LENGTH_LONG).show()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706))
+                            ) {
+                                Text("Rétablir les écoles sans justificatif", fontSize = 13.sp)
+                            }
+                            
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.resetUnverifiedSchoolsToNonSubscribed(resetAll = true)
+                                    showManageSubsDialog = false
+                                    Toast.makeText(context, "Toutes les écoles repassées en non-abonnées !", Toast.LENGTH_LONG).show()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Text("Rétablir TOUTES les écoles en non-abonnées", fontSize = 13.sp)
+                            }
+                        }
+                    }
+                    Text(
+                        "Astuce : Vous pouvez aussi activer ou désactiver l'abonnement de chaque école individuellement via le bouton sur sa carte.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showManageSubsDialog = false }) {
+                    Text("Fermer")
+                }
+            }
+        )
     }
 
     if (showRejectDialog && schoolToReject != null) {
@@ -699,6 +807,76 @@ fun AdminDashboardScreen(
             }
         )
     }
+
+    if (showLockDialog && schoolToLock != null) {
+        val s = schoolToLock!!
+        AlertDialog(
+            onDismissRequest = { showLockDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFD97706))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Verrouiller l'application", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Vous allez verrouiller l'application pour ${s.displayName.ifEmpty { s.schoolName }}.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Indiquez le montant de la commission impayée à réclamer sur l'écran de verrouillage :",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = lockCommissionInput,
+                        onValueChange = { lockCommissionInput = it.filter { char -> char.isDigit() } },
+                        label = { Text("Montant réclamé (GNF)") },
+                        placeholder = { Text("Ex: 96000") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    if (s.onlinePaymentsCount > 0) {
+                        Text(
+                            "Statistiques : ${s.onlinePaymentsCount} paiements perçus (${s.onlinePaymentsTotal} GNF encaissés).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF0F56E3)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val enteredAmount = lockCommissionInput.toLongOrNull() ?: 3000L
+                        viewModel.toggleSchoolAppLock(
+                            s.email,
+                            s.displayName.ifEmpty { s.schoolName },
+                            locked = true,
+                            customAmount = enteredAmount
+                        )
+                        showLockDialog = false
+                        android.widget.Toast.makeText(
+                            localContext,
+                            "Application verrouillée avec une commission de $enteredAmount GNF",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+                ) {
+                    Text("Confirmer le verrouillage")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLockDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -712,7 +890,8 @@ fun SchoolRequestCard(
     onToggleOnlinePayment: (Boolean) -> Unit = {},
     onToggleAppLock: (Boolean) -> Unit = {},
     onResetCommission: () -> Unit = {},
-    onSendCommissionInvoice: () -> Unit = {}
+    onSendCommissionInvoice: () -> Unit = {},
+    onToggleSubscription: (Boolean) -> Unit = {}
 ) {
     val localContext = LocalContext.current
     Card(
@@ -956,12 +1135,24 @@ fun SchoolRequestCard(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+            val isLockedOrBlocked = !item.onlinePaymentEnabled || item.isAppLocked
+            val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val cardBg = if (isDark) {
+                if (isLockedOrBlocked) Color(0xFF3B1212) else Color(0xFF0F2E1B)
+            } else {
+                if (isLockedOrBlocked) Color(0xFFFEF2F2) else Color(0xFFF0FDF4)
+            }
+            val cardBorder = if (isLockedOrBlocked) Color(0xFFFCA5A5) else Color(0xFFBBF7D0)
+            val titleTextColor = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
+            val subTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (!item.onlinePaymentEnabled || item.isAppLocked) Color(0xFFFEF2F2) else Color(0xFFF0FDF4)
+                    containerColor = cardBg,
+                    contentColor = titleTextColor
                 ),
-                border = BorderStroke(1.dp, if (!item.onlinePaymentEnabled || item.isAppLocked) Color(0xFFFCA5A5) else Color(0xFFBBF7D0)),
+                border = BorderStroke(1.dp, cardBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
@@ -976,7 +1167,8 @@ fun SchoolRequestCard(
                             Text(
                                 text = "Paiements Web & Commissions",
                                 fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleSmall
+                                style = MaterialTheme.typography.titleSmall,
+                                color = titleTextColor
                             )
                         }
                         Surface(
@@ -997,11 +1189,11 @@ fun SchoolRequestCard(
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
-                            Text("Collecte en ligne (Option B)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            Text("${item.onlinePaymentsTotal} GNF (${item.onlinePaymentsCount} paiements)", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Collecte en ligne (Option B)", style = MaterialTheme.typography.bodySmall, color = subTextColor)
+                            Text("${item.onlinePaymentsTotal} GNF (${item.onlinePaymentsCount} paiements)", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, color = titleTextColor)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("Commission due à zalytechno", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text("Commission due à zalytechno", style = MaterialTheme.typography.bodySmall, color = subTextColor)
                             Text(
                                 text = "${item.unpaidCommission} GNF",
                                 fontWeight = FontWeight.Bold,
@@ -1037,7 +1229,9 @@ fun SchoolRequestCard(
                         }
 
                         OutlinedButton(
-                            onClick = { onToggleAppLock(!item.isAppLocked) },
+                            onClick = {
+                                onToggleAppLock(!item.isAppLocked)
+                            },
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = if (item.isAppLocked) Color(0xFF16A34A) else Color(0xFFD97706)
                             ),
@@ -1078,64 +1272,59 @@ fun SchoolRequestCard(
                 }
             }
 
-            if (item.isPendingValidation || item.hasActiveSubscription) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onDeleteClick) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Supprimer", tint = MaterialTheme.colorScheme.error)
-                    }
-                    
-                    Row {
-                        if (item.isPendingValidation) {
-                            OutlinedButton(
-                                onClick = onRejectClick,
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                modifier = Modifier.padding(end = 8.dp)
-                            ) {
-                                Icon(Icons.Filled.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Refuser")
-                            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onDeleteClick) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Supprimer", tint = MaterialTheme.colorScheme.error)
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (item.isPendingValidation) {
+                        OutlinedButton(
+                            onClick = onRejectClick,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Icon(Icons.Filled.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Refuser")
+                        }
 
-                            Button(
-                                onClick = onApprove,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                                modifier = Modifier.testTag("approve_btn")
-                            ) {
-                                Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Valider")
-                            }
-                        } else if (item.hasActiveSubscription) {
-                            OutlinedButton(
-                                onClick = onRejectClick,
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                modifier = Modifier.testTag("revoke_btn")
-                            ) {
-                                Icon(Icons.Filled.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Révoquer / Refuser")
-                            }
+                        Button(
+                            onClick = onApprove,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            modifier = Modifier.testTag("approve_btn")
+                        ) {
+                            Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Valider")
+                        }
+                    } else if (item.hasActiveSubscription) {
+                        OutlinedButton(
+                            onClick = { onToggleSubscription(false) },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.testTag("revoke_btn")
+                        ) {
+                            Icon(Icons.Filled.PersonOff, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Passer en non-abonné", fontSize = 12.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = { onToggleSubscription(true) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                            modifier = Modifier.testTag("activate_btn")
+                        ) {
+                            Icon(Icons.Filled.VerifiedUser, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Activer abonnement (1 an)", fontSize = 12.sp)
                         }
                     }
                 }
-            } else {
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onDeleteClick) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Supprimer", tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-                
-
             }
         }
     }

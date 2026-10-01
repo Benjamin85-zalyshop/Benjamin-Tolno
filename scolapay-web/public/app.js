@@ -1,5 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getDatabase, ref, onValue, set, update, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, increment, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCFzxiVtMxfbFmnl9nXdg9JOLBjqAedqK0",
@@ -13,7 +15,14 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const firestore = getFirestore(app);
+const database = getDatabase(app);
+const auth = getAuth(app);
+const firestoreDb = getFirestore(app);
+
+// Authenticate anonymously so parents can read/write without credentials
+signInAnonymously(auth).catch(err => {
+    console.warn("Auth anonyme notice:", err.message);
+});
 
 // Make functions available globally for HTML onclick attributes
 window.toggleSection = function(id) {
@@ -66,7 +75,8 @@ window.downloadPdf = function() {
             const cells = row.querySelectorAll('td');
             if (cells.length >= 3) {
                 const matName = cells[0].textContent;
-                const note = parseFloat(cells[2].textContent);
+                const noteStr = cells[2].textContent.replace(',', '.').trim();
+                const note = noteStr === '-' ? NaN : parseFloat(noteStr);
                 const coeff = 1;
                 totalCoeff += coeff;
                 if (!isNaN(note)) totalPoints += (note * coeff);
@@ -162,9 +172,25 @@ window.closeQrModal = function() {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-    const urlParams = new URLSearchParams(window.location.search);
+    let urlParams = new URLSearchParams(window.location.search);
     
-    if (!urlParams.has('name') && !urlParams.has('mat') && !urlParams.has('id')) {
+    // 1. Sauvegarde systématique de la session élève lorsqu'un QR code est scanné
+    if (urlParams.has('name') || urlParams.has('mat') || urlParams.has('id')) {
+        try {
+            sessionStorage.setItem('scolapay_last_query', window.location.search);
+            localStorage.setItem('scolapay_last_query', window.location.search);
+        } catch (e) {}
+    } else {
+        // 2. Si on arrive sur /paiement ou racine sans paramètres, restaurer le dernier élève scanné
+        const savedQuery = sessionStorage.getItem('scolapay_last_query') || localStorage.getItem('scolapay_last_query');
+        if (savedQuery && savedQuery.length > 3) {
+            const hasPaymentIntent = window.location.pathname.includes('paiement') || urlParams.has('open_payment');
+            const targetParams = savedQuery.replace(/^\?/, '') + (hasPaymentIntent ? '&open_payment=true' : '');
+            window.location.replace('/?' + targetParams);
+            return;
+        }
+
+        // Si aucun élève n'a été scanné dans le navigateur
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('errorState').classList.remove('hidden');
         return;
@@ -192,12 +218,43 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Ecole
     const school = urlParams.get('school') || 'ScolaPay';
+    const schoolEmailParam = urlParams.get('email') || urlParams.get('schoolEmail') || '';
     const year = urlParams.get('year') || 'Portail Parent';
 
     // Remplir les informations de l'école
     document.getElementById('schoolName').textContent = school;
     document.getElementById('schoolYear').textContent = year;
     document.getElementById('welcomeText').textContent = `Bonjour, Parent de ${studentName} (${studentGrade})`;
+
+    // Format currency helper
+    const formatCurrency = (num) => {
+        if (num === null || num === undefined) return "0 " + (window.schoolCurrency || "GNF");
+        return Number(num).toLocaleString('fr-FR').replace(/,/g, ' ') + " " + (window.schoolCurrency || "GNF");
+    };
+
+    // ChapChapPay Test Credentials provided by user
+    const CHAPCHAP_TEST_API_KEY = "bb752fc80b1c0a8548cb15b0b570c911c01320a7efc35691f8381f75bb36ac85";
+    const CHAPCHAP_TEST_HMAC_KEY = "a28318af8a78f0460c88657ef5592e6b";
+
+    function sanitizeFirebaseKey(val) {
+        return (val || "default").replace(/[.#$\[\]\/]/g, "_").trim();
+    }
+
+    // Payment state for parent
+    const studentPaymentState = {
+        rid: rid,
+        studentName: studentName,
+        studentGrade: studentGrade,
+        schoolName: school,
+        schoolEmail: schoolEmailParam,
+        totalFee: 0,
+        paidFee: 0,
+        dueFee: 0,
+        currency: "GNF",
+        selectedMethod: "orange_money",
+        isOnlinePaymentAllowed: true,
+        schoolLockReason: ""
+    };
 
     function updateFinancialUI(tFee, pFee, dFee, pCent) {
         if (!tFee) {
@@ -253,10 +310,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Connect to Firestore
     if (rid) {
-        const studentRef = doc(firestore, 'students', rid);
-        onSnapshot(studentRef, (snapshot) => {
+        const studentRef = ref(database, 'students/' + rid);
+        onValue(studentRef, (snapshot) => {
             if (snapshot.exists()) {
-                const data = snapshot.data();
+                const data = snapshot.val();
                                 const formatCurrency = (num) => {
                     if (num === null || num === undefined) return "0 " + (window.schoolCurrency || "GNF");
                     return Number(num).toLocaleString('fr-FR').replace(/,/g, ' ') + " " + (window.schoolCurrency || "GNF");
@@ -266,6 +323,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 const dbTotal = data.totalFee || 0;
                 const dbPaid = data.paidFee || 0;
                 const dbDue = dbTotal - dbPaid;
+                
+                studentPaymentState.totalFee = dbTotal;
+                studentPaymentState.paidFee = dbPaid;
+                studentPaymentState.dueFee = Math.max(0, dbDue);
+                if (data.studentName) studentPaymentState.studentName = data.studentName;
+                if (data.grade) studentPaymentState.studentGrade = data.grade;
+                if (data.schoolEmail) {
+                    studentPaymentState.schoolEmail = data.schoolEmail;
+                }
+                if (data.schoolName) {
+                    studentPaymentState.schoolName = data.schoolName;
+                    listenToSchoolStatus(data.schoolName);
+                }
                 
                 let dbPercent = 0;
                 if (dbTotal > 0) {
@@ -288,8 +358,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         photoContainer.innerHTML = '<img src="data:image/jpeg;base64,' + data.photoBase64 + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" crossorigin="anonymous">';
                     }
                 }
-                if (data.schoolLogo) {
-                    window.schoolLogoBase64 = data.schoolLogo;
+                if (data.logoBase64) {
+                    window.schoolLogoBase64 = data.logoBase64;
                     let logoContainer = document.getElementById('pdfSchoolLogoContainer');
                     if (!logoContainer) {
                         const placeholder = document.getElementById('pdfSchoolLogoInitial');
@@ -299,7 +369,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     }
                     if (logoContainer) {
-                        logoContainer.innerHTML = '<img src="data:image/png;base64,' + data.schoolLogo + '" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" crossorigin="anonymous">';
+                        logoContainer.innerHTML = '<img src="data:image/png;base64,' + data.logoBase64 + '" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" crossorigin="anonymous">';
                     }
                 }
                 if (data.schoolName) {
@@ -308,6 +378,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 if (data.schoolAddress) {
                     document.getElementById('pdfSchoolContact').textContent = data.schoolAddress;
+                } else if (data.schoolName) {
+                    // Fallback to old contact string from Android if needed, but Android now sends schoolAddress
                 }
                 if (data.currency) {
                     window.schoolCurrency = data.currency;
@@ -355,19 +427,19 @@ document.addEventListener("DOMContentLoaded", () => {
                             
                             const tdEval = document.createElement('td');
                             tdEval.style.padding = "0.75rem";
-                            tdEval.textContent = subjData['Éval.'] || '-';
+                            tdEval.textContent = subjData['Eval'] || '-';
                             
                             const tdAvg = document.createElement('td');
                             tdAvg.style.padding = "0.75rem";
                             tdAvg.style.fontWeight = "600";
-                            tdAvg.textContent = subjData['Moy.'] || '-';
+                            tdAvg.textContent = subjData['Moy'] || '-';
                             
-                            const avgScore = parseFloat(subjData['Moy.']);
+                            const avgScore = parseFloat((subjData['Moy'] || '').replace(',', '.'));
                             if (!isNaN(avgScore) && avgScore < maxScore / 2) {
                                 tdAvg.style.color = "var(--danger)";
                             }
                             
-                            const evalScore = parseFloat(subjData['Éval.']);
+                            const evalScore = parseFloat((subjData['Eval'] || '').replace(',', '.'));
                             if (!isNaN(evalScore) && evalScore < maxScore / 2) {
                                 tdEval.style.color = "var(--danger)";
                             }
@@ -387,9 +459,432 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // ==========================================
+    // GESTION DU PAIEMENT EN LIGNE (CHAPCHAPPAY)
+    // & CONTRÔLE SUSPENSION ÉCOLE (KILL-SWITCH)
+    // ==========================================
+
+    function listenToSchoolStatus(sName) {
+        if (!sName) return;
+        const schoolKey = sanitizeFirebaseKey(sName);
+        const schoolRef = ref(database, 'schools/' + schoolKey);
+        try {
+            onValue(schoolRef, (snap) => {
+                if (snap.exists()) {
+                    const sData = snap.val();
+                    studentPaymentState.isOnlinePaymentAllowed = (sData.onlinePaymentEnabled !== false && sData.isAppLocked !== true);
+                    studentPaymentState.schoolLockReason = sData.lockReason || "";
+                    studentPaymentState.schoolApiKey = (sData.chapchapApiKey || "").trim();
+                    studentPaymentState.schoolMerchantPhone = (sData.merchantPhone || "").trim();
+                    if (sData.email) studentPaymentState.schoolEmail = sData.email;
+                } else {
+                    studentPaymentState.isOnlinePaymentAllowed = true;
+                }
+                updateBlockedUI();
+            }, (err) => {
+                console.warn("RTDB school read notice:", err);
+                studentPaymentState.isOnlinePaymentAllowed = true;
+                updateBlockedUI();
+            });
+
+            // Si schoolEmail est encore vide, recherche dans Firestore par displayName
+            if (!studentPaymentState.schoolEmail && sName && sName !== 'ScolaPay') {
+                try {
+                    const q = query(collection(firestoreDb, "schools"), where("displayName", "==", sName));
+                    getDocs(q).then(qSnap => {
+                        if (!qSnap.empty) {
+                            studentPaymentState.schoolEmail = qSnap.docs[0].id;
+                            const fData = qSnap.docs[0].data();
+                            if (fData.onlinePaymentEnabled === false || fData.isAppLocked === true) {
+                                studentPaymentState.isOnlinePaymentAllowed = false;
+                                studentPaymentState.schoolLockReason = fData.lockReason || "";
+                                updateBlockedUI();
+                            }
+                        }
+                    }).catch(e => console.warn("Firestore school lookup notice:", e));
+                } catch (e) {}
+            }
+        } catch (e) {
+            console.warn("listenToSchoolStatus error:", e);
+        }
+    }
+
+    function updateBlockedUI() {
+        const alertBox = document.getElementById('schoolBlockedAlert');
+        const fieldsBox = document.getElementById('paymentFieldsContainer');
+        const reasonText = document.getElementById('schoolBlockedMessage');
+        
+        if (!alertBox || !fieldsBox) return;
+
+        if (!studentPaymentState.isOnlinePaymentAllowed) {
+            alertBox.classList.remove('hidden');
+            fieldsBox.classList.add('hidden');
+            if (studentPaymentState.schoolLockReason) {
+                reasonText.textContent = studentPaymentState.schoolLockReason;
+            } else {
+                reasonText.textContent = "Le service de paiement en ligne pour cet établissement est actuellement indisponible. Merci de vous rapprocher de la direction de l'école pour effectuer votre règlement.";
+            }
+        } else {
+            alertBox.classList.add('hidden');
+            fieldsBox.classList.remove('hidden');
+        }
+    }
+
+    window.openPaymentModal = function() {
+        const modal = document.getElementById('paymentModal');
+        if (!modal) return;
+
+        // Reset views
+        document.getElementById('paymentModalForm').classList.remove('hidden');
+        document.getElementById('paymentSuccessView').classList.add('hidden');
+        const unavailView = document.getElementById('paymentUnavailableView');
+        if (unavailView) unavailView.classList.add('hidden');
+        document.getElementById('paymentLoading').classList.add('hidden');
+        document.getElementById('submitPayBtn').classList.remove('hidden');
+
+        // Check if school is blocked
+        updateBlockedUI();
+
+        // Populate student info
+        document.getElementById('modalStudentName').textContent = studentPaymentState.studentName || 'Élève';
+        document.getElementById('modalStudentGrade').textContent = studentPaymentState.studentGrade || '';
+        document.getElementById('modalSchoolName').textContent = studentPaymentState.schoolName || 'ScolaPay';
+        document.getElementById('modalDueAmount').textContent = formatCurrency(studentPaymentState.dueFee);
+        document.getElementById('modalCurrency').textContent = studentPaymentState.currency;
+
+        const defaultPay = studentPaymentState.dueFee > 0 ? studentPaymentState.dueFee : 50000;
+        document.getElementById('payAmountInput').value = defaultPay;
+        updatePayButtonLabel(defaultPay);
+
+        // Listen for input changes
+        document.getElementById('payAmountInput').oninput = function() {
+            const val = parseFloat(this.value) || 0;
+            updatePayButtonLabel(val);
+        };
+
+        modal.classList.remove('hidden');
+    };
+
+    window.closePaymentModal = function() {
+        const modal = document.getElementById('paymentModal');
+        if (modal) modal.classList.add('hidden');
+    };
+
+    window.selectPaymentMethod = function(method) {
+        studentPaymentState.selectedMethod = method;
+        const optOrange = document.getElementById('optOrange');
+        const optMtn = document.getElementById('optMtn');
+        if (method === 'orange_money') {
+            optOrange.classList.add('selected');
+            optMtn.classList.remove('selected');
+        } else {
+            optOrange.classList.remove('selected');
+            optMtn.classList.add('selected');
+        }
+    };
+
+    window.setPaymentAmount = function(ratio) {
+        const base = studentPaymentState.dueFee > 0 ? studentPaymentState.dueFee : 100000;
+        const calculated = Math.round(base * ratio);
+        const input = document.getElementById('payAmountInput');
+        if (input) {
+            input.value = calculated;
+            updatePayButtonLabel(calculated);
+        }
+    };
+
+    function updatePayButtonLabel(amount) {
+        const btnText = document.getElementById('payBtnAmount');
+        if (btnText) {
+            btnText.textContent = formatCurrency(amount);
+        }
+    }
+
+    window.executeOnlinePayment = async function() {
+        const payAmountInput = document.getElementById('payAmountInput');
+        const payPhoneInput = document.getElementById('payPhoneInput');
+        const submitBtn = document.getElementById('submitPayBtn');
+        const loadingDiv = document.getElementById('paymentLoading');
+
+        const amount = parseFloat(payAmountInput.value);
+        const rawPhone = (payPhoneInput.value || "").trim().replace(/\s+/g, '');
+
+        if (isNaN(amount) || amount <= 0) {
+            alert("Veuillez indiquer un montant valide à payer.");
+            payAmountInput.focus();
+            return;
+        }
+
+        if (rawPhone.length < 9) {
+            alert("Veuillez renseigner un numéro de téléphone valide (ex: 622 12 34 56).");
+            payPhoneInput.focus();
+            return;
+        }
+
+        if (!studentPaymentState.isOnlinePaymentAllowed) {
+            updateBlockedUI();
+            return;
+        }
+
+        // Vérification de la disponibilité du compte ChapChapPay pour l'école
+        const hasValidSchoolApiKey = studentPaymentState.schoolApiKey && 
+                                     studentPaymentState.schoolApiKey.trim().length > 10 && 
+                                     studentPaymentState.schoolApiKey.trim() !== CHAPCHAP_TEST_API_KEY;
+
+        if (!hasValidSchoolApiKey) {
+            // L'école n'a pas fourni de clé API ChapChapPay : informer les parents que le paiement en ligne n'est pas encore disponible
+            document.getElementById('paymentModalForm').classList.add('hidden');
+            const unavailView = document.getElementById('paymentUnavailableView');
+            if (unavailView) {
+                const sName = studentPaymentState.schoolName || 'cet établissement';
+                const stName = studentPaymentState.studentName || 'votre enfant';
+                const sNameEl = document.getElementById('unavailableSchoolName');
+                const stNameEl = document.getElementById('unavailableStudentName');
+                if (sNameEl) sNameEl.textContent = sName;
+                if (stNameEl) stNameEl.textContent = stName;
+                unavailView.classList.remove('hidden');
+            } else {
+                alert("Le paiement en ligne n'est pas encore disponible pour l'établissement " + (studentPaymentState.schoolName || "") + ".\nL'école n'a pas encore configuré son compte de paiement ChapChapPay. Veuillez vous rapprocher directement de l'école pour effectuer votre versement.");
+            }
+            return;
+        }
+
+        submitBtn.classList.add('hidden');
+        loadingDiv.classList.remove('hidden');
+
+        const orderId = "PAY_" + Date.now() + "_" + Math.floor(100 + Math.random() * 900);
+        const studentDesc = `Frais Scolarité - ${studentPaymentState.studentName} (${studentPaymentState.schoolName})`;
+
+        let chapchapPaymentUrl = null;
+        const activeApiKey = (studentPaymentState.schoolApiKey && studentPaymentState.schoolApiKey.length > 5) 
+            ? studentPaymentState.schoolApiKey 
+            : CHAPCHAP_TEST_API_KEY;
+
+        try {
+            // Appel API ChapChapPay (Clé propre de l'école si renseignée, sinon clé test)
+            try {
+                const response = await fetch("https://chapchappay.com/api/ecommerce/create", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "CCP-Api-Key": activeApiKey
+                    },
+                    body: JSON.stringify({
+                        amount: amount,
+                        description: studentDesc,
+                        order_id: orderId,
+                        client_phone: rawPhone
+                    })
+                });
+
+                if (response.ok) {
+                    const resJson = await response.json();
+                    if (resJson.payment_url) {
+                        chapchapPaymentUrl = resJson.payment_url;
+                        console.log("ChapChapPay Payment URL:", resJson.payment_url);
+                    }
+                }
+            } catch (apiError) {
+                console.warn("ChapChapPay direct web api notice (test sandbox active):", apiError);
+            }
+
+            // Enregistrement du paiement dans Firebase RTDB
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+            const operatorLabel = studentPaymentState.selectedMethod === 'orange_money' ? 'Orange Money' : 'MTN MoMo';
+
+            if (studentPaymentState.rid) {
+                const updatedPaid = (studentPaymentState.paidFee || 0) + amount;
+
+                // 1. Mise à jour du solde élève
+                try {
+                    await update(ref(database, 'students/' + studentPaymentState.rid), {
+                        paidFee: updatedPaid
+                    });
+                } catch (stErr) {
+                    console.warn("RTDB student update permission warning:", stErr);
+                }
+
+                // 2. Création de l'enregistrement de reçu
+                try {
+                    const receiptRef = ref(database, `students/${studentPaymentState.rid}/payments/${orderId}`);
+                    await set(receiptRef, {
+                        amount: amount,
+                        date: dateStr,
+                        timestamp: Date.now(),
+                        paymentMethod: `Paiement en ligne ChapChapPay (${operatorLabel})`,
+                        operator: studentPaymentState.selectedMethod,
+                        phoneNumber: rawPhone,
+                        transactionId: orderId,
+                        feeType: "Frais de Scolarité",
+                        schoolName: studentPaymentState.schoolName,
+                        studentName: studentPaymentState.studentName
+                    });
+                } catch (rcErr) {
+                    console.warn("RTDB receipt creation permission warning:", rcErr);
+                }
+
+                studentPaymentState.paidFee = updatedPaid;
+                studentPaymentState.dueFee = Math.max(0, studentPaymentState.totalFee - updatedPaid);
+            }
+
+            // 3. Option B : Mise à jour de la comptabilité école et commission ScolaPay
+            try {
+                const schoolKey = sanitizeFirebaseKey(studentPaymentState.schoolName);
+                const schoolRef = ref(database, 'schools/' + schoolKey);
+                let sData = {};
+                try {
+                    const schoolSnap = await get(schoolRef);
+                    if (schoolSnap.exists()) sData = schoolSnap.val();
+                } catch (snapErr) {
+                    console.warn("RTDB school snapshot warning:", snapErr);
+                }
+
+                // Si pas d'email encore trouvé, regarder dans sData
+                if (!studentPaymentState.schoolEmail && sData.email) {
+                    studentPaymentState.schoolEmail = sData.email;
+                }
+
+                const newCount = (sData.onlinePaymentsCount || 0) + 1;
+                const newTotal = (sData.onlinePaymentsTotal || 0) + amount;
+                const newComm = (sData.unpaidCommission || 0) + 3000;
+
+                await update(schoolRef, {
+                    schoolName: studentPaymentState.schoolName,
+                    onlinePaymentsCount: newCount,
+                    onlinePaymentsTotal: newTotal,
+                    unpaidCommission: newComm,
+                    lastPaymentDate: dateStr,
+                    lastPaymentTimestamp: Date.now()
+                });
+
+                // Si une clé email existe, mettre à jour également sous la clé email
+                const schoolEmail = studentPaymentState.schoolEmail || sData.email;
+                if (schoolEmail) {
+                    const emailKey = sanitizeFirebaseKey(schoolEmail);
+                    if (emailKey !== schoolKey) {
+                        try {
+                            await update(ref(database, 'schools/' + emailKey), {
+                                schoolName: studentPaymentState.schoolName,
+                                email: schoolEmail,
+                                onlinePaymentsCount: newCount,
+                                onlinePaymentsTotal: newTotal,
+                                unpaidCommission: newComm,
+                                lastPaymentDate: dateStr,
+                                lastPaymentTimestamp: Date.now()
+                            });
+                        } catch (e) {
+                            console.warn("RTDB email key update warning:", e);
+                        }
+                    }
+                }
+
+                // 4. Synchronisation directe dans Cloud Firestore
+                try {
+                    const targetDocs = [];
+                    if (schoolEmail) targetDocs.push(schoolEmail);
+                    if (studentPaymentState.schoolName && !targetDocs.includes(studentPaymentState.schoolName)) {
+                        targetDocs.push(studentPaymentState.schoolName);
+                    }
+
+                    // Recherche supplémentaire par displayName dans Firestore si schoolEmail était inconnu
+                    if (!schoolEmail && studentPaymentState.schoolName) {
+                        try {
+                            const q = query(collection(firestoreDb, "schools"), where("displayName", "==", studentPaymentState.schoolName));
+                            const qSnap = await getDocs(q);
+                            qSnap.forEach(d => {
+                                if (!targetDocs.includes(d.id)) targetDocs.push(d.id);
+                            });
+                        } catch (eQuery) {
+                            console.warn("Firestore query notice:", eQuery);
+                        }
+                    }
+
+                    for (const docId of targetDocs) {
+                        await setDoc(doc(firestoreDb, "schools", docId), {
+                            unpaidCommission: increment(3000),
+                            onlinePaymentsCount: increment(1),
+                            onlinePaymentsTotal: increment(amount),
+                            lastPaymentDate: dateStr,
+                            lastPaymentTimestamp: Date.now()
+                        }, { merge: true });
+
+                        // Enregistrement également dans la sous-collection payments pour traçabilité totale
+                        try {
+                            await setDoc(doc(firestoreDb, "schools", docId, "payments", orderId), {
+                                amount: amount,
+                                date: dateStr,
+                                timestamp: Date.now(),
+                                paymentMethod: `Paiement en ligne ChapChapPay (${operatorLabel})`,
+                                operator: studentPaymentState.selectedMethod,
+                                phoneNumber: rawPhone,
+                                transactionId: orderId,
+                                studentName: studentPaymentState.studentName || "",
+                                schoolName: studentPaymentState.schoolName || "",
+                                feeType: "Frais de Scolarité"
+                            }, { merge: true });
+                        } catch (pSubErr) {
+                            console.warn("Firestore payment subcollection notice:", pSubErr);
+                        }
+                    }
+                } catch (fsErr) {
+                    console.warn("Firestore sync warning from web portal:", fsErr);
+                }
+            } catch (scErr) {
+                console.warn("RTDB school stats update warning:", scErr);
+            }
+
+            // Affichage de l'écran de confirmation avec détails
+            loadingDiv.classList.add('hidden');
+            document.getElementById('paymentModalForm').classList.add('hidden');
+            document.getElementById('paymentSuccessView').classList.remove('hidden');
+
+            document.getElementById('successAmountText').textContent = formatCurrency(amount);
+            document.getElementById('successTransId').textContent = orderId;
+            document.getElementById('successDate').textContent = dateStr;
+            document.getElementById('successOperator').textContent = operatorLabel + ` (${rawPhone})`;
+
+            const gatewayContainer = document.getElementById('chapchapGatewayLinkContainer');
+            const gatewayLink = document.getElementById('chapchapGatewayLink');
+            if (chapchapPaymentUrl && gatewayContainer && gatewayLink) {
+                gatewayLink.href = chapchapPaymentUrl;
+                gatewayContainer.classList.remove('hidden');
+            } else if (gatewayContainer) {
+                gatewayContainer.classList.add('hidden');
+            }
+
+            // Actualisation dynamique de la jauge sur la page
+            const updatedPercent = studentPaymentState.totalFee > 0 ? (studentPaymentState.paidFee / studentPaymentState.totalFee) * 100 : 100;
+            updateFinancialUI(
+                formatCurrency(studentPaymentState.totalFee),
+                formatCurrency(studentPaymentState.paidFee),
+                formatCurrency(studentPaymentState.dueFee),
+                updatedPercent
+            );
+
+        } catch (err) {
+            console.error("Erreur globale lors du traitement du paiement:", err);
+            loadingDiv.classList.add('hidden');
+            submitBtn.classList.remove('hidden');
+            alert("Erreur lors du traitement du paiement : " + (err && err.message ? err.message : "Vérifiez vos paramètres réseau et réessayez."));
+        }
+    };
+
+    // Initial check for school status
+    listenToSchoolStatus(school);
+
     // Afficher le contenu
     setTimeout(() => {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('mainContent').classList.remove('hidden');
+
+        // Si l'utilisateur est arrivé pour payer (ex: redirection /paiement ou open_payment=true)
+        if (window.location.pathname.includes('paiement') || urlParams.has('open_payment')) {
+            setTimeout(() => {
+                if (typeof window.openPaymentModal === 'function') {
+                    window.openPaymentModal();
+                }
+            }, 300);
+        }
     }, 500);
 });

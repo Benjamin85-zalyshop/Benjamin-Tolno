@@ -221,6 +221,10 @@ class SchoolRepository(private val schoolDao: SchoolDao) {
 
 }
 
+    suspend fun deleteSchoolAccountByName(name: String) {
+        schoolDao.deleteSchoolAccountByName(name)
+    }
+
     suspend fun getSchoolAccountByName(name: String): com.example.data.models.SchoolAccount? {
         return schoolDao.getSchoolAccountByName(name)
     

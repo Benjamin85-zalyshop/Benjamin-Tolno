@@ -35,8 +35,8 @@ service cloud.firestore {
         );
       }
 
-      allow read: if isUserInSchool();
-      allow write: if isFondateur(); // SEULS LES FONDATEURS PEUVENT MODIFIER LE LOGO/PRIX
+      allow read: if true;
+      allow write: if isFondateur() || isAdmin(); // SEULS LES FONDATEURS OU ADMIN PEUVENT MODIFIER LE LOGO/PRIX
 
       match /{subcollection}/{document=**} {
         allow read, write: if isUserInSchool();

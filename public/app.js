@@ -537,6 +537,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // Reset views
         document.getElementById('paymentModalForm').classList.remove('hidden');
         document.getElementById('paymentSuccessView').classList.add('hidden');
+        const unavailView = document.getElementById('paymentUnavailableView');
+        if (unavailView) unavailView.classList.add('hidden');
         document.getElementById('paymentLoading').classList.add('hidden');
         document.getElementById('submitPayBtn').classList.remove('hidden');
 
@@ -621,6 +623,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!studentPaymentState.isOnlinePaymentAllowed) {
             updateBlockedUI();
+            return;
+        }
+
+        // Vérification de la disponibilité du compte ChapChapPay pour l'école
+        const hasValidSchoolApiKey = studentPaymentState.schoolApiKey && 
+                                     studentPaymentState.schoolApiKey.trim().length > 10 && 
+                                     studentPaymentState.schoolApiKey.trim() !== CHAPCHAP_TEST_API_KEY;
+
+        if (!hasValidSchoolApiKey) {
+            // L'école n'a pas fourni de clé API ChapChapPay : informer les parents que le paiement en ligne n'est pas encore disponible
+            document.getElementById('paymentModalForm').classList.add('hidden');
+            const unavailView = document.getElementById('paymentUnavailableView');
+            if (unavailView) {
+                const sName = studentPaymentState.schoolName || 'cet établissement';
+                const stName = studentPaymentState.studentName || 'votre enfant';
+                const sNameEl = document.getElementById('unavailableSchoolName');
+                const stNameEl = document.getElementById('unavailableStudentName');
+                if (sNameEl) sNameEl.textContent = sName;
+                if (stNameEl) stNameEl.textContent = stName;
+                unavailView.classList.remove('hidden');
+            } else {
+                alert("Le paiement en ligne n'est pas encore disponible pour l'établissement " + (studentPaymentState.schoolName || "") + ".\nL'école n'a pas encore configuré son compte de paiement ChapChapPay. Veuillez vous rapprocher directement de l'école pour effectuer votre versement.");
+            }
             return;
         }
 

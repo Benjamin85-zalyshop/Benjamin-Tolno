@@ -260,6 +260,8 @@ fun RegisterScreen(
                         errorMessage = "Veuillez entrer le nom de l'école."
                     } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
                         errorMessage = "Veuillez entrer une adresse e-mail valide."
+                    } else if (email.trim().lowercase().startsWith("fin_") || email.trim().lowercase().startsWith("fin-")) {
+                        errorMessage = "L'adresse email ne peut pas commencer par 'fin_'. Ce préfixe est réservé à la connexion du Financier."
                     } else if (schoolAddress.trim().isBlank()) {
                         errorMessage = "Veuillez entrer l'adresse de l'école (Préfecture ou Sous-préfecture)."
                     } else if (founderPhone.trim().isBlank()) {

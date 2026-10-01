@@ -651,6 +651,26 @@ main {
                 </div>
             </div>
 
+            <!-- Vue Information Paiement Non Disponible (Quand la clé API ChapChapPay n'a pas été fournie par l'école) -->
+            <div id="paymentUnavailableView" class="hidden" style="text-align: center; padding: 1.25rem 0.5rem;">
+                <div style="width: 64px; height: 64px; background: #FEF3C7; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; color: #D97706; margin-bottom: 1rem;">
+                    ℹ️
+                </div>
+                <h3 style="font-size: 1.2rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;">Paiement en ligne non disponible</h3>
+                <p style="font-size: 0.9rem; color: #4B5563; margin-bottom: 1.25rem; line-height: 1.5;">
+                    Le service de paiement en ligne sécurisé par <strong>ChapChapPay</strong> n'est pas encore disponible pour l'établissement <strong id="unavailableSchoolName" style="color: #1D4ED8;"></strong>.
+                </p>
+                <div style="background: #FFFBEB; border: 1.5px solid #FCD34D; border-radius: 12px; padding: 1rem; text-align: left; margin-bottom: 1.5rem; font-size: 0.82rem; color: #92400E; line-height: 1.5;">
+                    <div style="font-weight: 700; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>📢</span> <span>Information aux parents :</span>
+                    </div>
+                    <span>L'établissement n'a pas encore configuré sa clé d'accès marchande ChapChapPay. Pour la sécurité de vos fonds, aucun paiement direct sur numéro de téléphone n'est autorisé. Veuillez vous rapprocher directement de l'économat ou de la direction de l'école pour effectuer le versement des frais de scolarité de <strong id="unavailableStudentName" style="color: #111827;">l'élève</strong>.</span>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="closePaymentModal()" style="width: 100%; padding: 0.85rem; font-weight: 700;">
+                    Compris, fermer
+                </button>
+            </div>
+
             <!-- Vue Succès du Paiement -->
             <div id="paymentSuccessView" class="hidden" style="text-align: center; padding: 1rem 0;">
                 <div style="width: 64px; height: 64px; background: #D1FAE5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; color: #10B981; margin-bottom: 1rem;">

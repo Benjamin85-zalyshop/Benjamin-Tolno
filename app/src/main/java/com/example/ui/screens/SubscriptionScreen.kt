@@ -5,11 +5,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CheckCircle
-import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Refresh
+import kotlinx.coroutines.launch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +32,7 @@ fun SubscriptionScreen(
     isPendingValidation: Boolean,
     onLogout: () -> Unit
 ) {
+    val schoolAcc by viewModel.schoolAccount.collectAsStateWithLifecycle()
     var schoolName by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var transactionId by remember { mutableStateOf("") }
@@ -38,14 +41,75 @@ fun SubscriptionScreen(
     val localContext = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var isLoadingChapChap by remember { mutableStateOf(false) }
+    var isCheckingPayment by remember { mutableStateOf(false) }
+    var showManualIdPrompt by remember { mutableStateOf(false) }
+    var manualOrderIdInput by remember { mutableStateOf("") }
     val pendingOrderId by viewModel.pendingOrderId.collectAsStateWithLifecycle()
-    val schoolAcc by viewModel.schoolAccount.collectAsStateWithLifecycle()
     val isLocked = schoolAcc?.isAppLocked == true
     val rejectionReason = schoolAcc?.rejectionReason
     val hasActive = schoolAcc?.hasActiveSubscription == true
+
+    val parsedCommFromReason = remember(schoolAcc?.lockReason) {
+        val r = schoolAcc?.lockReason ?: ""
+        val match = Regex("""(\d+)\s*GNF""").find(r)
+        match?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+    }
+    val actualDueCommission = remember(schoolAcc, parsedCommFromReason) {
+        val fromAcc = schoolAcc?.unpaidCommission ?: 0L
+        val fromCount = (schoolAcc?.onlinePaymentsCount ?: 0).toLong() * 3000L
+        maxOf(fromAcc, fromCount, parsedCommFromReason)
+    }
+    val targetAmount = if (isLocked) {
+        if (actualDueCommission > 0L) actualDueCommission.toDouble() else 3000.0
+    } else {
+        230000.0
+    }
+    val targetAmountFormatted = remember(targetAmount) {
+        java.text.NumberFormat.getInstance(java.util.Locale.FRANCE).format(targetAmount.toLong())
+    }
     
+    LaunchedEffect(schoolAcc) {
+        if (schoolName.isBlank() && schoolAcc != null) {
+            schoolName = schoolAcc?.displayName?.ifBlank { schoolAcc?.schoolName } ?: ""
+        }
+        if (phoneNumber.isBlank() && !schoolAcc?.paymentPhoneNumber.isNullOrBlank()) {
+            phoneNumber = schoolAcc?.paymentPhoneNumber ?: ""
+        }
+        if (transactionId.isBlank() && !schoolAcc?.transactionId.isNullOrBlank()) {
+            transactionId = schoolAcc?.transactionId ?: ""
+        }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.getPendingOrderId()
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val pId = viewModel.getPendingOrderId()
+                if (!pId.isNullOrBlank()) {
+                    if (isLocked) {
+                        viewModel.checkPendingCommissionPaymentStatus { res ->
+                            if (res == "SUCCESS") {
+                                android.widget.Toast.makeText(localContext, "Paiement ChapChapPay validé ! Votre accès est débloqué.", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
+                        viewModel.checkPendingPaymentStatus { res ->
+                            if (res == "SUCCESS") {
+                                android.widget.Toast.makeText(localContext, "Abonnement activé avec succès !", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
     
     Scaffold(
@@ -98,7 +162,59 @@ fun SubscriptionScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = {
+                        viewModel.forceSyncSchools()
+                        val currentAcc = schoolAcc
+                        if (currentAcc != null && currentAcc.isAppLocked) {
+                            val commMsg = if (currentAcc.unpaidCommission > 0L) " (Commissions dues : ${currentAcc.unpaidCommission} GNF)" else ""
+                            android.widget.Toast.makeText(localContext, "Accès suspendu par l'administration$commMsg. En attente de déblocage par l'admin.", android.widget.Toast.LENGTH_LONG).show()
+                        } else if (currentAcc != null && !currentAcc.isAppLocked && !currentAcc.isPendingValidation) {
+                            android.widget.Toast.makeText(localContext, "Votre accès a été validé et débloqué !", android.widget.Toast.LENGTH_LONG).show()
+                        } else {
+                            android.widget.Toast.makeText(localContext, "Votre demande est en cours de vérification par l'administrateur.", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(imageVector = Icons.Filled.Refresh, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (isLocked) "Vérifier la validation de ma commission" else "Vérifier la validation de mon paiement", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        if (isLocked) {
+                            viewModel.checkPendingCommissionPaymentStatus { res ->
+                                if (res == "SUCCESS") {
+                                    android.widget.Toast.makeText(localContext, "Commission validée avec succès ! Accès débloqué.", android.widget.Toast.LENGTH_LONG).show()
+                                } else {
+                                    android.widget.Toast.makeText(localContext, "Paiement de commission en cours de vérification.", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } else {
+                            viewModel.checkPendingPaymentStatus { res ->
+                                if (res == "SUCCESS") {
+                                    android.widget.Toast.makeText(localContext, "Paiement validé avec succès ! Accès débloqué.", android.widget.Toast.LENGTH_LONG).show()
+                                } else {
+                                    android.widget.Toast.makeText(localContext, "Paiement en cours de vérification.", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Vérifier le statut du paiement")
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
             } else {
                 if (isLocked) {
                     Text(
@@ -134,10 +250,10 @@ fun SubscriptionScreen(
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            if ((schoolAcc?.unpaidCommission ?: 0L) > 0) {
+                            if (isLocked) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Montant des commissions dues : ${schoolAcc?.unpaidCommission} GNF",
+                                    text = "Montant des commissions dues : $targetAmountFormatted GNF",
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error,
                                     style = MaterialTheme.typography.bodyMedium
@@ -187,17 +303,192 @@ fun SubscriptionScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // OPTION 1 : PAIEMENT EN LIGNE AUTOMATIQUE AVEC CHAPCHAPPAY
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isLocked) Color(0xFF7F1D1D).copy(alpha = 0.15f) else Color(0xFFD946EF).copy(alpha = 0.12f)
+                    ),
+                    border = BorderStroke(1.5.dp, if (isLocked) Color(0xFFDC2626) else Color(0xFFD946EF))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("⚡", fontSize = 20.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isLocked) "Option 1 : Déblocage Immédiat (ChapChapPay)" else "Option 1 : Paiement Instantané (ChapChapPay)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isLocked) Color(0xFFDC2626) else Color(0xFFD946EF)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = if (isLocked)
+                                "Réglez vos commissions en ligne par Orange Money ou MTN MoMo. Dès la confirmation, votre application est débloquée automatiquement sans délai d'attente !"
+                            else
+                                "Payez votre abonnement en toute sécurité par Orange Money, MTN MoMo ou carte bancaire avec activation immédiate de votre compte.",
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = {
+                                isLoadingChapChap = true
+                                coroutineScope.launch {
+                                    val prefix = if (isLocked) "COMM_" else "SUB_"
+                                    val orderId = "$prefix${System.currentTimeMillis()}"
+                                    val desc = if (isLocked) "Régularisation Commissions ScolaPay" else "Abonnement Annuel ScolaPay"
+                                    val result = com.example.utils.ChapChapPayApi.createPayment(targetAmount, desc, orderId)
+                                    isLoadingChapChap = false
+                                    if (result != null) {
+                                        viewModel.savePendingOrderId(orderId, result.operationId)
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(result.paymentUrl))
+                                        localContext.startActivity(intent)
+                                    } else {
+                                        android.widget.Toast.makeText(localContext, "Erreur lors de la création du lien ChapChapPay. Veuillez réessayer ou utiliser le paiement manuel.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isLocked) Color(0xFFDC2626) else Color(0xFFD946EF),
+                                contentColor = Color.White
+                            ),
+                            enabled = !isLoadingChapChap,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isLoadingChapChap) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text(
+                                    text = if (isLocked) "Payer $targetAmountFormatted GNF (ChapChapPay)" else "Payer 230 000 GNF (ChapChapPay)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = {
+                                isCheckingPayment = true
+                                if (isLocked) {
+                                    viewModel.checkPendingCommissionPaymentStatus { res ->
+                                        isCheckingPayment = false
+                                        when (res) {
+                                            "SUCCESS" -> {
+                                                android.widget.Toast.makeText(localContext, "Paiement validé avec succès ! Votre accès est débloqué.", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                            "PENDING" -> {
+                                                android.widget.Toast.makeText(localContext, "Paiement en cours de traitement par l'opérateur. Réessayez dans un instant.", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                            "FAILED" -> {
+                                                android.widget.Toast.makeText(localContext, "Paiement non confirmé. Vous pouvez vérifier avec votre référence.", android.widget.Toast.LENGTH_SHORT).show()
+                                                showManualIdPrompt = true
+                                            }
+                                            "NO_ORDER" -> {
+                                                showManualIdPrompt = true
+                                            }
+                                            else -> {
+                                                showManualIdPrompt = true
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    viewModel.checkPendingPaymentStatus { res ->
+                                        isCheckingPayment = false
+                                        when (res) {
+                                            "SUCCESS" -> {
+                                                android.widget.Toast.makeText(localContext, "Abonnement activé avec succès !", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                            "PENDING" -> {
+                                                android.widget.Toast.makeText(localContext, "Paiement en cours de traitement par l'opérateur. Réessayez dans quelques secondes.", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                            "FAILED" -> {
+                                                android.widget.Toast.makeText(localContext, "Paiement non confirmé.", android.widget.Toast.LENGTH_SHORT).show()
+                                                showManualIdPrompt = true
+                                            }
+                                            "NO_ORDER" -> {
+                                                showManualIdPrompt = true
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            enabled = !isCheckingPayment,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, if (isLocked) Color(0xFFDC2626) else Color(0xFFD946EF))
+                        ) {
+                            if (isCheckingPayment) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp), tint = if (isLocked) Color(0xFFDC2626) else Color(0xFFD946EF))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    if (isLocked) "Vérifier mon paiement & débloquer" else "Vérifier mon paiement & activer",
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isLocked) Color(0xFFDC2626) else Color(0xFFD946EF)
+                                )
+                            }
+                        }
+
+                        if (isLocked) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(
+                                onClick = {
+                                    val pendingId = viewModel.getPendingOrderId()
+                                    if (!pendingId.isNullOrBlank()) {
+                                        manualOrderIdInput = pendingId
+                                    }
+                                    showManualIdPrompt = true
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "Déjà payé les commissions ($targetAmountFormatted GNF) par ChapChapPay ? Vérifier ici",
+                                    color = Color(0xFF16A34A),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // OPTION 2 : PAIEMENT MANUEL PAR TRANSFERT DIRECT
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+                    Text("  OU PAIEMENT MANUEL  ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
-                    text = if (isLocked) "Régularisation du compte" else "Choisissez votre méthode de paiement",
+                    text = if (isLocked) "Option 2 : Transfert direct Orange Money / MTN MoMo" else "Option 2 : Dépôt direct",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.Start)
                 )
                 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = if (isLocked) "Veuillez régler le montant dû sur l'un des numéros ci-dessous :" else "Veuillez effectuer le dépôt sur l'un des numéros ci-dessous :",
+                    text = if (isLocked) "Veuillez effectuer le dépôt sur l'un des numéros ci-dessous, puis renseigner l'identifiant de la transaction (ID) reçu par SMS :" else "Veuillez effectuer le dépôt sur l'un des numéros ci-dessous, puis renseigner l'identifiant reçu par SMS :",
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Medium
@@ -215,7 +506,7 @@ fun SubscriptionScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
                 
                 Text(
                     text = if (isLocked) "Soumettre votre justificatif de régularisation" else "Soumettre votre paiement",
@@ -260,11 +551,12 @@ fun SubscriptionScreen(
                         value = transactionId,
                         onValueChange = { transactionId = it },
                         label = { Text("Identifiant de transaction (ID)") },
+                        placeholder = { Text("Ex: CI260924.1432.A12345 ou MP2409...") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
                     
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                     
                     Button(
                         onClick = {
@@ -273,14 +565,108 @@ fun SubscriptionScreen(
                             } else {
                                 errorMessage = null
                                 viewModel.submitSubscriptionRequest(phoneNumber, transactionId)
+                                if (isLocked) {
+                                    android.widget.Toast.makeText(localContext, "Justificatif de règlement envoyé ! L'administrateur débloquera votre accès après vérification.", android.widget.Toast.LENGTH_LONG).show()
+                                } else {
+                                    android.widget.Toast.makeText(localContext, "Demande d'abonnement envoyée pour validation par l'administrateur !", android.widget.Toast.LENGTH_LONG).show()
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
-                        Text(if (isLocked) "Envoyer le justificatif" else "Envoyer pour validation")
+                        Text(if (isLocked) "Envoyer le justificatif pour validation" else "Envoyer pour validation")
                     }
                 }
+                Spacer(modifier = Modifier.height(32.dp))
             }
-            Spacer(modifier = Modifier.height(32.dp))
         }
+
+    if (showManualIdPrompt) {
+        var isVerifyingManual by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!isVerifyingManual) showManualIdPrompt = false },
+            title = { Text("Vérification de la commande", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        text = "Veuillez saisir la référence de commande ChapChapPay générée lors de votre paiement (ou le numéro de transaction) pour vérifier l'encaissement :",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = manualOrderIdInput,
+                        onValueChange = { manualOrderIdInput = it },
+                        label = { Text("ID de commande / Référence") },
+                        placeholder = { Text("Ex: COMM_179... ou PAY_...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Le déblocage automatique intervient dès confirmation effective du paiement par le serveur sécurisé.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val inputId = manualOrderIdInput.trim()
+                        if (inputId.isBlank()) {
+                            android.widget.Toast.makeText(localContext, "Veuillez saisir votre référence de commande.", android.widget.Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        isVerifyingManual = true
+                        if (isLocked) {
+                            viewModel.checkPendingCommissionPaymentStatus(inputId) { res ->
+                                isVerifyingManual = false
+                                when (res) {
+                                    "SUCCESS" -> {
+                                        showManualIdPrompt = false
+                                        android.widget.Toast.makeText(localContext, "Paiement confirmé ! Votre accès est débloqué.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                    "PENDING" -> {
+                                        android.widget.Toast.makeText(localContext, "Paiement en cours de validation par l'opérateur.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                    else -> {
+                                        android.widget.Toast.makeText(localContext, "Aucun paiement validé trouvé pour cette référence. Vérifiez la saisie ou utilisez l'option 2.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        } else {
+                            viewModel.checkPendingPaymentStatus(inputId) { res ->
+                                isVerifyingManual = false
+                                when (res) {
+                                    "SUCCESS" -> {
+                                        showManualIdPrompt = false
+                                        android.widget.Toast.makeText(localContext, "Paiement confirmé ! Abonnement activé.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                    "PENDING" -> {
+                                        android.widget.Toast.makeText(localContext, "Paiement en cours de validation par l'opérateur.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                    else -> {
+                                        android.widget.Toast.makeText(localContext, "Aucun paiement validé trouvé pour cette référence.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isVerifyingManual,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
+                ) {
+                    if (isVerifyingManual) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Vérifier et Débloquer", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManualIdPrompt = false }, enabled = !isVerifyingManual) {
+                    Text("Annuler")
+                }
+            }
+        )
     }
+}
