@@ -597,6 +597,8 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById('paymentSuccessView').classList.add('hidden');
         const unavailView = document.getElementById('paymentUnavailableView');
         if (unavailView) unavailView.classList.add('hidden');
+        const merchantView = document.getElementById('paymentMerchantInstructionsView');
+        if (merchantView) merchantView.classList.add('hidden');
         document.getElementById('paymentLoading').classList.add('hidden');
         document.getElementById('submitPayBtn').classList.remove('hidden');
 
@@ -627,6 +629,39 @@ document.addEventListener("DOMContentLoaded", () => {
         const modal = document.getElementById('paymentModal');
         if (modal) modal.classList.add('hidden');
     };
+
+    window.copyMerchantNumber = function() {
+        const phoneEl = document.getElementById('merchantPhoneNumber');
+        if (!phoneEl) return;
+        const text = phoneEl.textContent.replace(/\s+/g, '');
+        const showSuccess = () => {
+            const toast = document.getElementById('copyToast');
+            if (toast) {
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            }
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(showSuccess).catch(() => {
+                fallbackCopy(text, showSuccess);
+            });
+        } else {
+            fallbackCopy(text, showSuccess);
+        }
+    };
+
+    function fallbackCopy(text, onSuccess) {
+        const temp = document.createElement('input');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        try {
+            document.execCommand('copy');
+            if (onSuccess) onSuccess();
+        } catch (e) {}
+        document.body.removeChild(temp);
+    }
 
     window.selectPaymentMethod = function(method) {
         studentPaymentState.selectedMethod = method;
@@ -753,18 +788,66 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            // Si l'API en ligne ChapChapPay est bloquée par la sécurité du navigateur (CORS)
+            // Si l'API en ligne ChapChapPay est bloquée par la sécurité du navigateur (CORS) :
+            // Afficher l'écran dédié avec le Numéro Marchand officiel, le montant exact et les boutons d'action
             loadingDiv.classList.add('hidden');
             submitBtn.classList.remove('hidden');
-            
-            const merchantPhone = studentPaymentState.schoolMerchantPhone;
-            let msg = "La passerelle de paiement en ligne ChapChapPay ne peut pas être ouverte directement depuis ce navigateur en raison des restrictions de sécurité CORS.\n\n";
-            if (merchantPhone) {
-                msg += `Pour régler les frais scolaires en toute sécurité, veuillez effectuer votre dépôt Orange Money ou MTN Mobile Money directement sur le compte marchand officiel de l'école :\n📞 Numéro Marchand : ${merchantPhone}\n\nUne fois le transfert effectué, l'école validera immédiatement le reçu.`;
-            } else {
-                msg += "Veuillez vous rapprocher directement de l'établissement pour effectuer votre versement en attendant la configuration du lien de paiement direct.";
+            document.getElementById('paymentModalForm').classList.add('hidden');
+
+            const merchantView = document.getElementById('paymentMerchantInstructionsView');
+            if (merchantView) {
+                const sName = studentPaymentState.schoolName || 'cet établissement';
+                const stName = studentPaymentState.studentName || 'l\'élève';
+                const mPhone = studentPaymentState.schoolMerchantPhone || '628376566';
+                const formattedAmt = formatCurrency(amount);
+
+                const elStName = document.getElementById('merchantStudentName');
+                const elScName = document.getElementById('merchantSchoolName');
+                const elPhone = document.getElementById('merchantPhoneNumber');
+                const elAmt = document.getElementById('merchantTransferAmount');
+                const elStepAmt = document.getElementById('merchantStepAmount');
+                const elStepSt = document.getElementById('merchantStepStudent');
+
+                if (elStName) elStName.textContent = stName;
+                if (elScName) elScName.textContent = sName;
+                if (elPhone) elPhone.textContent = mPhone;
+                if (elAmt) elAmt.textContent = formattedAmt;
+                if (elStepAmt) elStepAmt.textContent = formattedAmt;
+                if (elStepSt) elStepSt.textContent = stName;
+
+                const isOrange = studentPaymentState.selectedMethod === 'orange_money';
+                const badge = document.getElementById('merchantOperatorBadge');
+                const ussdBtn = document.getElementById('merchantUssdCallBtn');
+                const ussdText = document.getElementById('merchantUssdText');
+
+                if (badge && ussdBtn && ussdText) {
+                    if (isOrange) {
+                        badge.textContent = 'Orange Money';
+                        badge.style.background = '#FF7900';
+                        badge.style.color = 'white';
+                        ussdBtn.href = 'tel:*144#';
+                        ussdText.textContent = 'Composer le code Orange Money (*144#)';
+                    } else {
+                        badge.textContent = 'MTN MoMo';
+                        badge.style.background = '#FFCC00';
+                        badge.style.color = 'black';
+                        ussdBtn.href = 'tel:*440#';
+                        ussdText.textContent = 'Composer le code MTN MoMo (*440#)';
+                    }
+                }
+
+                // Bouton WhatsApp prérempli
+                const waBtn = document.getElementById('merchantWhatsAppBtn');
+                if (waBtn) {
+                    const cleanPhone = mPhone.replace(/[^0-9]/g, '');
+                    const waPhone = cleanPhone.startsWith('224') ? cleanPhone : '224' + cleanPhone;
+                    const gradeInfo = studentPaymentState.studentGrade ? ` (${studentPaymentState.studentGrade})` : '';
+                    const messageText = `Bonjour, je viens d'effectuer le paiement des frais de scolarité pour l'élève ${stName}${gradeInfo}.\nMontant : ${formattedAmt}\nNuméro marchand : ${mPhone}\nMerci de bien vouloir valider et me délivrer le reçu officiel.`;
+                    waBtn.href = `https://wa.me/${waPhone}?text=${encodeURIComponent(messageText)}`;
+                }
+
+                merchantView.classList.remove('hidden');
             }
-            alert(msg);
             return;
 
         } catch (err) {
