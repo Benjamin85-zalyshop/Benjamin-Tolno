@@ -34,7 +34,8 @@ data class SchoolAdminItem(
     val onlinePaymentsTotal: Long = 0L,
     val lockReason: String? = null,
     val chapchapApiKey: String = "",
-    val merchantPhone: String = ""
+    val merchantPhone: String = "",
+    val merchantCode: String = ""
 )
 
 class SchoolViewModel(
@@ -2567,11 +2568,15 @@ class SchoolViewModel(
         }
     }
 
-    fun updateSchoolMerchantConfig(email: String, schoolName: String, apiKey: String, merchantPhone: String) {
+    fun updateSchoolMerchantConfig(email: String, schoolName: String, apiKey: String, merchantPhone: String, merchantCode: String = "") {
         viewModelScope.launch {
             val cleanKey = schoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
             val cleanEmailKey = email.replace(Regex("[.#$\\[\\]/]"), "_").trim()
-            val payload = mapOf("chapchapApiKey" to apiKey.trim(), "merchantPhone" to merchantPhone.trim())
+            val payload = mapOf(
+                "chapchapApiKey" to apiKey.trim(),
+                "merchantPhone" to merchantPhone.trim(),
+                "merchantCode" to merchantCode.trim()
+            )
             firestore.collection("schools").document(email).set(
                 payload,
                 com.google.firebase.firestore.SetOptions.merge()
@@ -2590,7 +2595,7 @@ class SchoolViewModel(
         }
     }
 
-    fun saveMySchoolMerchantApiKey(apiKey: String, merchantPhone: String = "") {
+    fun saveMySchoolMerchantApiKey(apiKey: String, merchantPhone: String = "", merchantCode: String = "") {
         viewModelScope.launch {
             if (_userRole.value == "FINANCIER") {
                 android.util.Log.w("ScolaPay", "Access denied: Financier cannot modify school merchant configuration")
@@ -2600,7 +2605,11 @@ class SchoolViewModel(
             val sName = _schoolAccount.value?.displayName?.ifBlank { _schoolAccount.value?.schoolName } ?: return@launch
             val cleanKey = sName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
             val cleanEmailKey = email.replace(Regex("[.#$\\[\\]/]"), "_").trim()
-            val payload = mapOf("chapchapApiKey" to apiKey.trim(), "merchantPhone" to merchantPhone.trim())
+            val payload = mapOf(
+                "chapchapApiKey" to apiKey.trim(),
+                "merchantPhone" to merchantPhone.trim(),
+                "merchantCode" to merchantCode.trim()
+            )
 
             firestore.collection("schools").document(email).set(
                 payload,
@@ -2619,11 +2628,11 @@ class SchoolViewModel(
         }
     }
 
-    fun loadMySchoolMerchantConfig(onResult: (String, String) -> Unit) {
+    fun loadMySchoolMerchantConfig(onResult: (String, String, String) -> Unit) {
         viewModelScope.launch {
             if (_userRole.value == "FINANCIER") {
                 android.util.Log.w("ScolaPay", "Access denied: Financier cannot view school merchant configuration")
-                onResult("", "")
+                onResult("", "", "")
                 return@launch
             }
             val email = _schoolAccount.value?.schoolName ?: return@launch
@@ -2631,9 +2640,10 @@ class SchoolViewModel(
                 val doc = firestore.collection("schools").document(email).get().await()
                 val apiKey = doc.getString("chapchapApiKey") ?: ""
                 val phone = doc.getString("merchantPhone") ?: ""
-                onResult(apiKey, phone)
+                val code = doc.getString("merchantCode") ?: ""
+                onResult(apiKey, phone, code)
             } catch (e: Exception) {
-                onResult("", "")
+                onResult("", "", "")
             }
         }
     }

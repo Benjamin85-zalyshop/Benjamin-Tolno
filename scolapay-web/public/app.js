@@ -253,7 +253,9 @@ document.addEventListener("DOMContentLoaded", () => {
         currency: "GNF",
         selectedMethod: "orange_money",
         isOnlinePaymentAllowed: true,
-        schoolLockReason: ""
+        schoolLockReason: "",
+        schoolMerchantPhone: "",
+        schoolMerchantCode: ""
     };
 
     function updateFinancialUI(tFee, pFee, dFee, pCent) {
@@ -484,6 +486,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (sData.merchantPhone) {
                             studentPaymentState.schoolMerchantPhone = sData.merchantPhone.trim();
                         }
+                        if (sData.merchantCode) {
+                            studentPaymentState.schoolMerchantCode = sData.merchantCode.trim();
+                        }
                         if (sData.email) studentPaymentState.schoolEmail = sData.email;
                     }
                     updateBlockedUI();
@@ -513,6 +518,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (sData.merchantPhone) {
                             studentPaymentState.schoolMerchantPhone = sData.merchantPhone.trim();
                         }
+                        if (sData.merchantCode) {
+                            studentPaymentState.schoolMerchantCode = sData.merchantCode.trim();
+                        }
                     }
                     updateBlockedUI();
                 }, (err) => {
@@ -537,6 +545,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (fData.merchantPhone) {
                             studentPaymentState.schoolMerchantPhone = fData.merchantPhone.trim();
                         }
+                        if (fData.merchantCode) {
+                            studentPaymentState.schoolMerchantCode = fData.merchantCode.trim();
+                        }
                     }
                 }).catch(e => console.warn("Firestore school doc lookup notice:", e));
             } catch (e) {}
@@ -560,6 +571,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                         if (fData.merchantPhone) {
                             studentPaymentState.schoolMerchantPhone = fData.merchantPhone.trim();
+                        }
+                        if (fData.merchantCode) {
+                            studentPaymentState.schoolMerchantCode = fData.merchantCode.trim();
                         }
                     }
                 }).catch(e => console.warn("Firestore school lookup notice:", e));
@@ -630,6 +644,42 @@ document.addEventListener("DOMContentLoaded", () => {
         if (modal) modal.classList.add('hidden');
     };
 
+    window.copyShortCode = function() {
+        const el = document.getElementById('merchantShortCodeText');
+        if (!el) return;
+        const text = el.textContent.trim();
+        const showSuccess = () => {
+            const toast = document.getElementById('copyShortToast');
+            if (toast) {
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(showSuccess).catch(() => fallbackCopy(text, showSuccess));
+        } else {
+            fallbackCopy(text, showSuccess);
+        }
+    };
+
+    window.copyAmountNumber = function() {
+        const el = document.getElementById('merchantTransferAmount');
+        if (!el) return;
+        const text = el.textContent.replace(/[^0-9]/g, '');
+        const showSuccess = () => {
+            const toast = document.getElementById('copyToast');
+            if (toast) {
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(showSuccess).catch(() => fallbackCopy(text, showSuccess));
+        } else {
+            fallbackCopy(text, showSuccess);
+        }
+    };
+
     window.copyMerchantNumber = function() {
         const phoneEl = document.getElementById('merchantPhoneNumber');
         if (!phoneEl) return;
@@ -637,6 +687,29 @@ document.addEventListener("DOMContentLoaded", () => {
         const showSuccess = () => {
             const toast = document.getElementById('copyToast');
             if (toast) {
+                toast.textContent = "✓ Numéro marchand copié !";
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            }
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(showSuccess).catch(() => {
+                fallbackCopy(text, showSuccess);
+            });
+        } else {
+            fallbackCopy(text, showSuccess);
+        }
+    };
+
+    window.copyMerchantCode = function() {
+        const codeEl = document.getElementById('merchantCodeDisplay');
+        if (!codeEl) return;
+        const text = codeEl.textContent.trim();
+        const showSuccess = () => {
+            const toast = document.getElementById('copyToast');
+            if (toast) {
+                toast.textContent = "✓ Code marchand copié !";
                 toast.style.display = 'block';
                 setTimeout(() => { toast.style.display = 'none'; }, 3000);
             }
@@ -719,13 +792,18 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // Vérification de la disponibilité du compte ChapChapPay pour l'école
-        const hasValidSchoolApiKey = studentPaymentState.schoolApiKey && 
+        // Vérification de la configuration marchand de l'école (Code Marchand, Numéro Marchand ou clé API)
+        const hasValidSchoolApiKey = Boolean(studentPaymentState.schoolApiKey && 
                                      studentPaymentState.schoolApiKey.trim().length > 10 && 
-                                     studentPaymentState.schoolApiKey.trim() !== CHAPCHAP_TEST_API_KEY;
+                                     studentPaymentState.schoolApiKey.trim() !== CHAPCHAP_TEST_API_KEY);
+        const hasMerchantConfig = Boolean(
+            (studentPaymentState.schoolMerchantCode && studentPaymentState.schoolMerchantCode.trim().length > 0) ||
+            (studentPaymentState.schoolMerchantPhone && studentPaymentState.schoolMerchantPhone.trim().length > 0) ||
+            hasValidSchoolApiKey
+        );
 
-        if (!hasValidSchoolApiKey) {
-            // L'école n'a pas fourni de clé API ChapChapPay : informer les parents que le paiement en ligne n'est pas encore disponible
+        if (!hasMerchantConfig) {
+            // L'école n'a pas encore configuré son code marchand ou son compte de paiement
             document.getElementById('paymentModalForm').classList.add('hidden');
             const unavailView = document.getElementById('paymentUnavailableView');
             if (unavailView) {
@@ -737,7 +815,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (stNameEl) stNameEl.textContent = stName;
                 unavailView.classList.remove('hidden');
             } else {
-                alert("Le paiement en ligne n'est pas encore disponible pour l'établissement " + (studentPaymentState.schoolName || "") + ".\nL'école n'a pas encore configuré son compte de paiement ChapChapPay. Veuillez vous rapprocher directement de l'école pour effectuer votre versement.");
+                alert("Le paiement en ligne n'est pas encore configuré pour l'établissement " + (studentPaymentState.schoolName || "") + ".\nL'école n'a pas encore renseigné son code marchand ou numéro marchand.");
             }
             return;
         }
@@ -798,12 +876,18 @@ document.addEventListener("DOMContentLoaded", () => {
             if (merchantView) {
                 const sName = studentPaymentState.schoolName || 'cet établissement';
                 const stName = studentPaymentState.studentName || 'l\'élève';
-                const mPhone = studentPaymentState.schoolMerchantPhone || '628376566';
+                const mCode = (studentPaymentState.schoolMerchantCode && studentPaymentState.schoolMerchantCode.trim().length > 0)
+                    ? studentPaymentState.schoolMerchantCode.trim()
+                    : (studentPaymentState.schoolMerchantPhone || '458762');
+                const mPhone = (studentPaymentState.schoolMerchantPhone && studentPaymentState.schoolMerchantPhone.trim().length > 0)
+                    ? studentPaymentState.schoolMerchantPhone.trim()
+                    : (studentPaymentState.schoolMerchantCode || '628376566');
                 const formattedAmt = formatCurrency(amount);
 
                 const elStName = document.getElementById('merchantStudentName');
                 const elScName = document.getElementById('merchantSchoolName');
                 const elPhone = document.getElementById('merchantPhoneNumber');
+                const elCode = document.getElementById('merchantCodeDisplay');
                 const elAmt = document.getElementById('merchantTransferAmount');
                 const elStepAmt = document.getElementById('merchantStepAmount');
                 const elStepSt = document.getElementById('merchantStepStudent');
@@ -811,6 +895,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (elStName) elStName.textContent = stName;
                 if (elScName) elScName.textContent = sName;
                 if (elPhone) elPhone.textContent = mPhone;
+                if (elCode) elCode.textContent = mCode;
                 if (elAmt) elAmt.textContent = formattedAmt;
                 if (elStepAmt) elStepAmt.textContent = formattedAmt;
                 if (elStepSt) elStepSt.textContent = stName;
@@ -818,22 +903,38 @@ document.addEventListener("DOMContentLoaded", () => {
                 const isOrange = studentPaymentState.selectedMethod === 'orange_money';
                 const badge = document.getElementById('merchantOperatorBadge');
                 const ussdBtn = document.getElementById('merchantUssdCallBtn');
-                const ussdText = document.getElementById('merchantUssdText');
+                const ussdBtnText = document.getElementById('merchantUssdBtnText');
+                const shortCodeText = document.getElementById('merchantShortCodeText');
+                const menuCode = document.getElementById('merchantMenuCode');
+                const gradeLabel = document.getElementById('merchantStudentGradeLabel');
+                if (gradeLabel) gradeLabel.textContent = studentPaymentState.studentGrade || '';
 
-                if (badge && ussdBtn && ussdText) {
-                    if (isOrange) {
+                const cleanMCode = mCode.replace(/[^0-9]/g, '');
+                const cleanAmount = Math.round(amount);
+
+                if (isOrange) {
+                    if (badge) {
                         badge.textContent = 'Orange Money';
                         badge.style.background = '#FF7900';
                         badge.style.color = 'white';
-                        ussdBtn.href = 'tel:*144#';
-                        ussdText.textContent = 'Composer le code Orange Money (*144#)';
-                    } else {
+                    }
+                    // Formule officielle Orange Money Guinée : *144*6*code_Marchand*montant*code_secret#
+                    const fullShortCode = `*144*6*${cleanMCode}*${cleanAmount}#`;
+                    if (shortCodeText) shortCodeText.textContent = fullShortCode;
+                    if (menuCode) menuCode.textContent = '*144*6#';
+                    if (ussdBtn) ussdBtn.href = `tel:${encodeURIComponent(fullShortCode)}`;
+                    if (ussdBtnText) ussdBtnText.textContent = `Composer directement (${fullShortCode})`;
+                } else {
+                    if (badge) {
                         badge.textContent = 'MTN MoMo';
                         badge.style.background = '#FFCC00';
                         badge.style.color = 'black';
-                        ussdBtn.href = 'tel:*440#';
-                        ussdText.textContent = 'Composer le code MTN MoMo (*440#)';
                     }
+                    const fullShortCode = `*440*3*${cleanMCode}*${cleanAmount}#`;
+                    if (shortCodeText) shortCodeText.textContent = fullShortCode;
+                    if (menuCode) menuCode.textContent = '*440#';
+                    if (ussdBtn) ussdBtn.href = `tel:${encodeURIComponent(fullShortCode)}`;
+                    if (ussdBtnText) ussdBtnText.textContent = `Composer directement (${fullShortCode})`;
                 }
 
                 // Bouton WhatsApp prérempli
@@ -842,7 +943,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const cleanPhone = mPhone.replace(/[^0-9]/g, '');
                     const waPhone = cleanPhone.startsWith('224') ? cleanPhone : '224' + cleanPhone;
                     const gradeInfo = studentPaymentState.studentGrade ? ` (${studentPaymentState.studentGrade})` : '';
-                    const messageText = `Bonjour, je viens d'effectuer le paiement des frais de scolarité pour l'élève ${stName}${gradeInfo}.\nMontant : ${formattedAmt}\nNuméro marchand : ${mPhone}\nMerci de bien vouloir valider et me délivrer le reçu officiel.`;
+                    const messageText = `Bonjour, je viens d'effectuer le paiement des frais de scolarité pour l'élève ${stName}${gradeInfo}.\nMontant : ${formattedAmt}\nCode Marchand : ${mCode}\nNuméro marchand : ${mPhone}\nMerci de bien vouloir valider et me délivrer le reçu officiel.`;
                     waBtn.href = `https://wa.me/${waPhone}?text=${encodeURIComponent(messageText)}`;
                 }
 

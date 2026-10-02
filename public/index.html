@@ -651,20 +651,20 @@ main {
                 </div>
             </div>
 
-            <!-- Vue Information Paiement Non Disponible (Quand la clé API ChapChapPay n'a pas été fournie par l'école) -->
+            <!-- Vue Information Paiement Non Disponible (Quand aucun compte marchand n'a été configuré) -->
             <div id="paymentUnavailableView" class="hidden" style="text-align: center; padding: 1.25rem 0.5rem;">
                 <div style="width: 64px; height: 64px; background: #FEF3C7; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; color: #D97706; margin-bottom: 1rem;">
                     ℹ️
                 </div>
                 <h3 style="font-size: 1.2rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;">Paiement en ligne non disponible</h3>
                 <p style="font-size: 0.9rem; color: #4B5563; margin-bottom: 1.25rem; line-height: 1.5;">
-                    Le service de paiement en ligne sécurisé par <strong>ChapChapPay</strong> n'est pas encore disponible pour l'établissement <strong id="unavailableSchoolName" style="color: #1D4ED8;"></strong>.
+                    Le service de paiement mobile pour l'établissement <strong id="unavailableSchoolName" style="color: #1D4ED8;"></strong> n'est pas encore configuré.
                 </p>
                 <div style="background: #FFFBEB; border: 1.5px solid #FCD34D; border-radius: 12px; padding: 1rem; text-align: left; margin-bottom: 1.5rem; font-size: 0.82rem; color: #92400E; line-height: 1.5;">
                     <div style="font-weight: 700; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.4rem;">
                         <span>📢</span> <span>Information aux parents :</span>
                     </div>
-                    <span>L'établissement n'a pas encore configuré sa clé d'accès marchande ChapChapPay. Pour la sécurité de vos fonds, aucun paiement direct sur numéro de téléphone n'est autorisé. Veuillez vous rapprocher directement de l'économat ou de la direction de l'école pour effectuer le versement des frais de scolarité de <strong id="unavailableStudentName" style="color: #111827;">l'élève</strong>.</span>
+                    <span>L'établissement n'a pas encore renseigné son code marchand ou son compte de paiement mobile. Veuillez vous rapprocher directement de l'économat ou de la direction de l'école pour effectuer le versement des frais de scolarité de <strong id="unavailableStudentName" style="color: #111827;">l'élève</strong>.</span>
                 </div>
                 <button type="button" class="btn btn-primary" onclick="closePaymentModal()" style="width: 100%; padding: 0.85rem; font-weight: 700;">
                     Compris, fermer
@@ -673,68 +673,81 @@ main {
 
             <!-- Vue Instructions Paiement Marchand Direct (Orange Money & MTN MoMo) -->
             <div id="paymentMerchantInstructionsView" class="hidden" style="text-align: center; padding: 0.5rem 0;">
-                <div style="width: 56px; height: 56px; background: #ECFDF5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; margin-bottom: 0.75rem;">
+                <div style="width: 54px; height: 54px; background: #ECFDF5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 1.75rem; margin-bottom: 0.6rem;">
                     📲
                 </div>
-                <h3 style="font-size: 1.2rem; font-weight: 700; color: #111827; margin: 0 0 0.35rem 0;">Paiement Mobile Money</h3>
-                <p style="font-size: 0.85rem; color: #4B5563; margin: 0 0 1rem 0;">
-                    Réglez les frais de scolarité de <strong id="merchantStudentName" style="color: #111827;">l'élève</strong> directement vers le compte officiel de l'école :
+                <h3 style="font-size: 1.2rem; font-weight: 700; color: #111827; margin: 0 0 0.25rem 0;">Paiement Marchand Mobile Money</h3>
+                <p style="font-size: 0.82rem; color: #4B5563; margin: 0 0 0.75rem 0;">
+                    Frais de scolarité de <strong id="merchantStudentName" style="color: #111827;">l'élève</strong> (<span id="merchantStudentGradeLabel"></span>)
                 </p>
 
-                <!-- Carte Numéro Marchand avec bouton Copier -->
+                <!-- BANNIÈRE FORMULE OFFICIELLE GUINÉE -->
+                <div style="background: #EFF6FF; border: 1.5px solid #BFDBFE; border-radius: 10px; padding: 0.55rem 0.85rem; margin-bottom: 0.85rem; text-align: left; font-size: 0.75rem; color: #1E40AF; line-height: 1.4;">
+                    <span style="font-weight: 700;">💡 Formule officielle Orange Money : </span><br>
+                    <code style="font-size: 0.88rem; font-weight: 800; color: #1D4ED8; letter-spacing: 0.5px;">*144*6*code_Marchand*montant*code_secret#</code>
+                </div>
+
+                <!-- MÉTHODE 1 : SYNTAXE USSD GÉNÉRÉE DIRECTEMENT -->
                 <div style="background: #F0FDF4; border: 2px solid #86EFAC; border-radius: 14px; padding: 1rem; margin-bottom: 1rem; text-align: left;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                        <span style="font-size: 0.72rem; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">Compte Marchand Officiel</span>
-                        <span id="merchantOperatorBadge" style="background: #FF7900; color: white; font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 6px;">Orange Money</span>
+                        <span style="font-size: 0.72rem; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Syntaxe USSD générée</span>
+                        <span id="merchantOperatorBadge" style="background: #FF7900; color: white; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 6px;">Orange Money</span>
                     </div>
-                    <div style="font-size: 0.82rem; color: #374151; margin-bottom: 0.25rem;" id="merchantSchoolName">Établissement</div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span id="merchantPhoneNumber" style="font-size: 1.35rem; font-weight: 800; color: #0F172A; letter-spacing: 1px;">628 37 65 66</span>
-                        <button type="button" onclick="copyMerchantNumber()" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 8px; font-weight: 600;">
+                    <p style="font-size: 0.78rem; color: #374151; margin: 0 0 0.5rem 0;">Composez directement cette syntaxe pré-remplie sur votre téléphone :</p>
+                    
+                    <div style="background: white; border: 1.5px dashed #16A34A; border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                        <code id="merchantShortCodeText" style="font-size: 1.05rem; font-weight: 800; color: #166534; letter-spacing: 0.5px;">*144*6*458762*250000#</code>
+                        <button type="button" onclick="copyShortCode()" class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; font-weight: 600;">
                             📋 Copier
                         </button>
                     </div>
-                    <div id="copyToast" style="display: none; font-size: 0.75rem; color: #15803D; font-weight: 600; margin-top: 0.35rem;">
-                        ✓ Numéro copié dans le presse-papiers !
-                    </div>
-                </div>
 
-                <!-- Montant à transférer -->
-                <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 0.82rem; color: #1E40AF; font-weight: 600;">Montant à verser :</span>
-                    <strong id="merchantTransferAmount" style="font-size: 1.15rem; color: #1D4ED8;">0 GNF</strong>
-                </div>
-
-                <!-- Instructions étape par étape -->
-                <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 0.85rem 1rem; text-align: left; font-size: 0.8rem; color: #374151; margin-bottom: 1.25rem; line-height: 1.45;">
-                    <div style="font-weight: 700; margin-bottom: 0.5rem; color: #111827;">Étapes simples pour valider :</div>
-                    <div style="margin-bottom: 0.35rem;">
-                        <strong>1.</strong> Effectuez le transfert de <strong id="merchantStepAmount">0 GNF</strong> vers le numéro marchand ci-dessus.
-                    </div>
-                    <div style="margin-bottom: 0.35rem;">
-                        <strong>2.</strong> Mentionnez le nom de l'élève (<strong id="merchantStepStudent"></strong>) en référence.
-                    </div>
-                    <div>
-                        <strong>3.</strong> Informez l'école par WhatsApp pour recevoir votre reçu officiel immédiatement.
-                    </div>
-                </div>
-
-                <!-- Boutons d'action -->
-                <div style="display: flex; flex-direction: column; gap: 0.6rem;">
-                    <!-- Bouton Lancer USSD direct -->
-                    <a id="merchantUssdCallBtn" href="tel:*144#" class="btn" style="background: #111827; color: white; padding: 0.8rem; border-radius: 10px; font-weight: 600; text-decoration: none; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                    <!-- Bouton Lancer l'Appel direct -->
+                    <a id="merchantUssdCallBtn" href="tel:*144*6*458762*250000%23" class="btn" style="background: #15803D; color: white; padding: 0.75rem; border-radius: 10px; font-weight: 700; text-decoration: none; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; box-sizing: border-box;">
                         <span>📞</span>
-                        <span id="merchantUssdText">Composer le code Orange Money (*144#)</span>
+                        <span id="merchantUssdBtnText">Composer directement (*144*6*458762*250000#)</span>
                     </a>
+                    <div id="copyShortToast" style="display: none; font-size: 0.75rem; color: #15803D; font-weight: 600; margin-top: 0.35rem; text-align: center;">
+                        ✓ Syntaxe copiée ! Collez-la dans votre clavier d'appel puis tapez votre code secret.
+                    </div>
+                </div>
 
-                    <!-- Bouton WhatsApp -->
-                    <a id="merchantWhatsAppBtn" href="#" target="_blank" class="btn" style="background: #25D366; color: white; padding: 0.8rem; border-radius: 10px; font-weight: 600; text-decoration: none; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                <!-- MÉTHODE 2 : DÉTAILS DU COMPTE MARCHAND ÉCOLE -->
+                <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 0.85rem 1rem; text-align: left; font-size: 0.8rem; color: #374151; margin-bottom: 1rem; line-height: 1.5;">
+                    <div style="font-weight: 700; margin-bottom: 0.5rem; color: #111827;">📋 Informations Marchand de l'école</div>
+                    
+                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Code Marchand école : <strong id="merchantCodeDisplay" style="color: #166534; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.5px;">458762</strong></span>
+                        <button type="button" onclick="copyMerchantCode()" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; border-radius: 6px;">Copier</button>
+                    </div>
+
+                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Numéro Marchand / Flotte : <strong id="merchantPhoneNumber" style="color: #0F172A; font-size: 0.95rem;">628 37 65 66</strong></span>
+                        <button type="button" onclick="copyMerchantNumber()" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; border-radius: 6px;">Copier</button>
+                    </div>
+
+                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Montant à régler : <strong id="merchantTransferAmount" style="color: #1D4ED8; font-size: 0.95rem;">250 000 GNF</strong></span>
+                        <button type="button" onclick="copyAmountNumber()" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; border-radius: 6px;">Copier</button>
+                    </div>
+
+                    <div style="border-top: 1px dashed #E5E7EB; padding-top: 0.4rem; font-size: 0.75rem; color: #6B7280;">
+                        <span>🔒 Après avoir composé la syntaxe, entrez votre <strong>code secret</strong> Orange Money / MTN pour valider le transfert.</span>
+                    </div>
+
+                    <div id="copyToast" style="display: none; font-size: 0.75rem; color: #15803D; font-weight: 600; margin-top: 0.35rem;">
+                        ✓ Copié dans le presse-papiers !
+                    </div>
+                </div>
+
+                <!-- NOTIFICATION WHATSAPP À L'ÉCOLE POUR DÉLIVRANCE DU REÇU -->
+                <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                    <a id="merchantWhatsAppBtn" href="#" target="_blank" class="btn" style="background: #25D366; color: white; padding: 0.8rem; border-radius: 10px; font-weight: 700; text-decoration: none; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-sizing: border-box;">
                         <span>💬</span>
-                        <span>Informer l'école par WhatsApp</span>
+                        <span>Informer l'école par WhatsApp pour recevoir le reçu</span>
                     </a>
 
-                    <!-- Bouton Retour -->
-                    <button type="button" class="btn btn-outline" onclick="closePaymentModal()" style="padding: 0.75rem; border-radius: 10px; font-weight: 600;">
+                    <button type="button" class="btn btn-outline" onclick="closePaymentModal()" style="padding: 0.7rem; border-radius: 10px; font-weight: 600;">
                         Fermer
                     </button>
                 </div>

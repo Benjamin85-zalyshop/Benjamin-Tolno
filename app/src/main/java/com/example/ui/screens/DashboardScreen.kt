@@ -132,6 +132,7 @@ fun DashboardScreen(
     var showMerchantConfigDialog by remember { mutableStateOf(false) }
     var schoolChapChapKeyInput by remember { mutableStateOf("") }
     var schoolMerchantPhoneInput by remember { mutableStateOf("") }
+    var schoolMerchantCodeInput by remember { mutableStateOf("") }
     var selectedCurrency by remember { mutableStateOf(schoolAccount?.currency ?: "GNF") }
     var showInscriptionDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -1182,9 +1183,10 @@ fun DashboardScreen(
                                         iconColor = Color(0xFF2563EB),
                                         bgColor = Color(0xFFEFF6FF),
                                         onClick = {
-                                            viewModel.loadMySchoolMerchantConfig { k, p ->
+                                            viewModel.loadMySchoolMerchantConfig { k, p, c ->
                                                 schoolChapChapKeyInput = k
                                                 schoolMerchantPhoneInput = p
+                                                schoolMerchantCodeInput = c
                                             }
                                             showMerchantConfigDialog = true
                                         }
@@ -1202,9 +1204,10 @@ fun DashboardScreen(
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
                                     .clickable {
-                                        viewModel.loadMySchoolMerchantConfig { k, p ->
+                                        viewModel.loadMySchoolMerchantConfig { k, p, c ->
                                             schoolChapChapKeyInput = k
                                             schoolMerchantPhoneInput = p
+                                            schoolMerchantCodeInput = c
                                         }
                                         showMerchantConfigDialog = true
                                     },
@@ -1575,19 +1578,20 @@ fun DashboardScreen(
 
                     if (isUserFounder) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Paiements en Ligne Directs", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Text("Paiements en Ligne & Mobile Money", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                         OutlinedButton(
                             onClick = { 
                                 showSettingsDialog = false
-                                viewModel.loadMySchoolMerchantConfig { k, p ->
+                                viewModel.loadMySchoolMerchantConfig { k, p, c ->
                                     schoolChapChapKeyInput = k
                                     schoolMerchantPhoneInput = p
+                                    schoolMerchantCodeInput = c
                                 }
                                 showMerchantConfigDialog = true
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("💳 Compte Marchand de l'école (ChapChapPay)")
+                            Text("💳 Compte Marchand & Code USSD (*144*6#)")
                         }
                     }
                 }
@@ -1601,19 +1605,20 @@ fun DashboardScreen(
     if (showMerchantConfigDialog && isUserFounder) {
         AlertDialog(
             onDismissRequest = { showMerchantConfigDialog = false },
-            title = { Text("Compte Marchand ChapChapPay", fontWeight = FontWeight.Bold) },
+            title = { Text("Compte Marchand & Paiement Mobile", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Renseignez ici votre clé API Marchand ChapChapPay. Tous les paiements des parents effectués par Orange Money ou MTN Mobile Money seront versés DIRECTEMENT sur le compte marchand de votre école, sans intermédiaire.",
+                        text = "Renseignez ici le Code Marchand et le Numéro Marchand de l'école. Sur le portail parents, la syntaxe officielle sera générée automatiquement : *144*6*Code_Marchand*Montant*Code_Secret#",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.DarkGray
                     )
                     OutlinedTextField(
-                        value = schoolChapChapKeyInput,
-                        onValueChange = { schoolChapChapKeyInput = it },
-                        label = { Text("Clé API ChapChapPay (CCP-Api-Key)") },
-                        placeholder = { Text("Ex: 8a4b2c...") },
+                        value = schoolMerchantCodeInput,
+                        onValueChange = { schoolMerchantCodeInput = it },
+                        label = { Text("Code Marchand de l'école (Ex: 458762)") },
+                        placeholder = { Text("Ex: 458762") },
+                        supportingText = { Text("Code à 5 ou 6 chiffres fourni par Orange Money") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -1622,15 +1627,45 @@ fun DashboardScreen(
                         onValueChange = { schoolMerchantPhoneInput = it },
                         label = { Text("Numéro Orange Money / MTN Marchand") },
                         placeholder = { Text("Ex: 628XXXXXX") },
+                        supportingText = { Text("Numéro de téléphone marchand ou contact WhatsApp") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
+                    OutlinedTextField(
+                        value = schoolChapChapKeyInput,
+                        onValueChange = { schoolChapChapKeyInput = it },
+                        label = { Text("Clé API ChapChapPay (Optionnelle)") },
+                        placeholder = { Text("Ex: 8a4b2c...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    if (schoolMerchantCodeInput.isNotBlank()) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                            border = BorderStroke(1.dp, Color(0xFF86EFAC)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "Aperçu syntaxe parent (ex pour 250 000 GNF) :",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF166534)
+                                )
+                                Text(
+                                    text = "*144*6*${schoolMerchantCodeInput.trim()}*250000#",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF15803D)
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.saveMySchoolMerchantApiKey(schoolChapChapKeyInput, schoolMerchantPhoneInput)
+                        viewModel.saveMySchoolMerchantApiKey(schoolChapChapKeyInput, schoolMerchantPhoneInput, schoolMerchantCodeInput)
                         Toast.makeText(context, "Compte marchand enregistré avec succès !", Toast.LENGTH_SHORT).show()
                         showMerchantConfigDialog = false
                     }
