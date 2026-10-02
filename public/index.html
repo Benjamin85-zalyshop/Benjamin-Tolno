@@ -565,7 +565,7 @@ main {
     </div>
     <!-- Modal Paiement en Ligne Orange Money Marchand -->
     <div id="paymentModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 440px; text-align: left; padding: 1.5rem; border-radius: 20px; box-sizing: border-box; width: 92%;">
+        <div class="modal-content" style="max-width: 440px; text-align: left; padding: 1.25rem 1rem; border-radius: 20px; box-sizing: border-box; width: 94%;">
             <span class="close" onclick="closePaymentModal()">&times;</span>
             
             <div id="paymentModalForm">
@@ -681,22 +681,29 @@ main {
                 </p>
 
                 <!-- BANNIÈRE FORMULE OFFICIELLE GUINÉE -->
-                <div style="background: #FFF7ED; border: 1.5px solid #FDBA74; border-radius: 10px; padding: 0.55rem 0.85rem; margin-bottom: 0.85rem; text-align: left; font-size: 0.75rem; color: #9A3412; line-height: 1.4;">
-                    <span style="font-weight: 700;">💡 Formule officielle Orange Money Guinée : </span><br>
-                    <code style="font-size: 0.88rem; font-weight: 800; color: #C2410C; letter-spacing: 0.5px;">*144*6*code_Marchand*montant*code_secret#</code>
+                <div style="background: #FFF7ED; border: 1.5px solid #FDBA74; border-radius: 12px; padding: 0.65rem 0.75rem; margin-bottom: 0.85rem; text-align: left; box-sizing: border-box; width: 100%;">
+                    <div style="font-size: 0.74rem; font-weight: 700; color: #9A3412; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.35rem;">
+                        <span>💡</span>
+                        <span>Formule officielle Orange Money Guinée :</span>
+                    </div>
+                    <div style="background: white; border: 1px dashed #FB923C; border-radius: 8px; padding: 0.45rem 0.5rem; text-align: center; box-sizing: border-box; width: 100%;">
+                        <div style="font-family: monospace; font-size: clamp(0.72rem, 3.2vw, 0.84rem); font-weight: 800; color: #C2410C; letter-spacing: 0.2px; word-break: break-word; line-height: 1.45;">
+                            *144*6*<span style="background: #FEF3C7; color: #B45309; padding: 0.1rem 0.25rem; border-radius: 4px; display: inline-block;">code_Marchand</span>*<span style="background: #E0E7FF; color: #3730A3; padding: 0.1rem 0.25rem; border-radius: 4px; display: inline-block;">montant</span>*<span style="background: #FEE2E2; color: #991B1B; padding: 0.1rem 0.25rem; border-radius: 4px; display: inline-block;">code_secret</span>#
+                        </div>
+                    </div>
                 </div>
 
                 <!-- MÉTHODE 1 : SYNTAXE USSD GÉNÉRÉE DIRECTEMENT -->
-                <div style="background: #F0FDF4; border: 2px solid #86EFAC; border-radius: 14px; padding: 1rem; margin-bottom: 1rem; text-align: left;">
+                <div style="background: #F0FDF4; border: 2px solid #86EFAC; border-radius: 14px; padding: 1rem; margin-bottom: 1rem; text-align: left; box-sizing: border-box; width: 100%;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
                         <span style="font-size: 0.72rem; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Syntaxe USSD générée</span>
                         <span id="merchantOperatorBadge" style="background: #FF7900; color: white; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 6px;">Orange Money</span>
                     </div>
                     <p style="font-size: 0.78rem; color: #374151; margin: 0 0 0.5rem 0;">Composez directement cette syntaxe pré-remplie sur votre téléphone :</p>
                     
-                    <div style="background: white; border: 1.5px dashed #16A34A; border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-                        <code id="merchantShortCodeText" style="font-size: 1.05rem; font-weight: 800; color: #166534; letter-spacing: 0.5px;">*144*6*346789*250000#</code>
-                        <button type="button" onclick="copyShortCode()" class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; font-weight: 600;">
+                    <div style="background: white; border: 1.5px dashed #16A34A; border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; box-sizing: border-box; width: 100%;">
+                        <code id="merchantShortCodeText" style="font-size: clamp(0.9rem, 4vw, 1.05rem); font-weight: 800; color: #166534; letter-spacing: 0.3px; word-break: break-all; min-width: 0; flex: 1;">*144*6*346789*250000#</code>
+                        <button type="button" onclick="copyShortCode()" class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">
                             📋 Copier
                         </button>
                     </div>
