@@ -716,17 +716,20 @@ main {
                         <span style="font-size: 0.72rem; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Syntaxe USSD générée</span>
                         <span id="merchantOperatorBadge" style="background: #FF7900; color: white; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 6px;">Orange Money</span>
                     </div>
-                    <p style="font-size: 0.78rem; color: #374151; margin: 0 0 0.5rem 0;">Composez directement cette syntaxe pré-remplie sur votre téléphone :</p>
+                    <p style="font-size: 0.78rem; color: #374151; margin: 0 0 0.6rem 0;">Composez directement cette syntaxe pré-remplie sur votre téléphone :</p>
                     
-                    <div style="background: white; border: 1.5px dashed #16A34A; border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; box-sizing: border-box; width: 100%;">
-                        <code id="merchantShortCodeText" style="font-size: clamp(0.9rem, 4vw, 1.05rem); font-weight: 800; color: #166534; letter-spacing: 0.3px; word-break: break-all; min-width: 0; flex: 1;">*144*6*346789*250000#</code>
-                        <button type="button" onclick="copyShortCode()" class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">
-                            📋 Copier
+                    <!-- Cadre Syntaxe avec Code horizontal complet et Bouton Copier dédié -->
+                    <div style="background: white; border: 1.5px dashed #16A34A; border-radius: 10px; padding: 0.75rem; margin-bottom: 0.75rem; box-sizing: border-box; width: 100%; text-align: center;">
+                        <div id="merchantShortCodeText" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: clamp(1.05rem, 4.5vw, 1.35rem); font-weight: 900; color: #166534; letter-spacing: 0.8px; white-space: nowrap; word-break: keep-all; overflow-x: auto; padding: 0.2rem 0; margin-bottom: 0.55rem; width: 100%; box-sizing: border-box;">*144*6*346789*250000#</div>
+                        
+                        <button type="button" onclick="copyShortCode()" style="background: #DCFCE7; color: #166534; border: 1.5px solid #86EFAC; width: 100%; padding: 0.55rem 0.75rem; border-radius: 8px; font-weight: 700; font-size: 0.84rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; box-sizing: border-box;">
+                            <span>📋</span>
+                            <span>Copier la syntaxe</span>
                         </button>
                     </div>
 
                     <!-- Bouton Lancer l'Appel direct -->
-                    <a id="merchantUssdCallBtn" href="tel:*144*6*346789*250000%23" class="btn" style="background: #FF7900; color: white; padding: 0.75rem; border-radius: 10px; font-weight: 700; text-decoration: none; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; box-sizing: border-box; text-align: center;">
+                    <a id="merchantUssdCallBtn" href="tel:*144*6*346789*250000%23" style="background: #FF7900; color: white; padding: 0.75rem; border-radius: 10px; font-weight: 700; text-decoration: none; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; box-sizing: border-box; text-align: center;">
                         <span>📞</span>
                         <span id="merchantUssdBtnText" style="word-break: break-all;">Composer *144*6*...#</span>
                     </a>
@@ -739,19 +742,19 @@ main {
                 <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 0.85rem 1rem; text-align: left; font-size: 0.8rem; color: #374151; margin-bottom: 1rem; line-height: 1.5;">
                     <div style="font-weight: 700; margin-bottom: 0.5rem; color: #111827;">📋 Informations Orange Money Marchand</div>
                     
-                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
-                        <span>Code Marchand école : <strong id="merchantCodeDisplay" style="color: #EA580C; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.5px;">346789</strong></span>
-                        <button type="button" onclick="copyMerchantCode()" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; border-radius: 6px;">Copier</button>
+                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span style="min-width: 0;">Code Marchand école : <strong id="merchantCodeDisplay" style="color: #EA580C; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.5px;">346789</strong></span>
+                        <button type="button" onclick="copyMerchantCode()" style="background: white; border: 1.5px solid #EA580C; color: #EA580C; padding: 0.25rem 0.6rem; font-size: 0.75rem; border-radius: 6px; font-weight: 700; cursor: pointer; flex-shrink: 0; width: auto;">Copier</button>
                     </div>
 
-                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
-                        <span>Numéro Orange Money école : <strong id="merchantPhoneNumber" style="color: #0F172A; font-size: 0.95rem;">660 37 78 87</strong></span>
-                        <button type="button" onclick="copyMerchantNumber()" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; border-radius: 6px;">Copier</button>
+                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span style="min-width: 0;">Numéro Orange Money école : <strong id="merchantPhoneNumber" style="color: #0F172A; font-size: 0.95rem;">660 37 78 87</strong></span>
+                        <button type="button" onclick="copyMerchantNumber()" style="background: white; border: 1.5px solid #0F172A; color: #0F172A; padding: 0.25rem 0.6rem; font-size: 0.75rem; border-radius: 6px; font-weight: 700; cursor: pointer; flex-shrink: 0; width: auto;">Copier</button>
                     </div>
 
-                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
-                        <span>Montant à régler : <strong id="merchantTransferAmount" style="color: #1D4ED8; font-size: 0.95rem;">250 000 GNF</strong></span>
-                        <button type="button" onclick="copyAmountNumber()" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; border-radius: 6px;">Copier</button>
+                    <div style="margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span style="min-width: 0;">Montant à régler : <strong id="merchantTransferAmount" style="color: #1D4ED8; font-size: 0.95rem;">250 000 GNF</strong></span>
+                        <button type="button" onclick="copyAmountNumber()" style="background: white; border: 1.5px solid #1D4ED8; color: #1D4ED8; padding: 0.25rem 0.6rem; font-size: 0.75rem; border-radius: 6px; font-weight: 700; cursor: pointer; flex-shrink: 0; width: auto;">Copier</button>
                     </div>
 
                     <div style="border-top: 1px dashed #E5E7EB; padding-top: 0.4rem; font-size: 0.75rem; color: #6B7280;">
@@ -804,7 +807,7 @@ main {
         </div>
     </div>
 
-    <script type="module" src="app.js?v=25"></script>
+    <script type="module" src="app.js?v=26"></script>
 
 </body>
 </html>
