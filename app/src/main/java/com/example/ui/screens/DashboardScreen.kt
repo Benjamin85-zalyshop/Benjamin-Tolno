@@ -1236,18 +1236,18 @@ fun DashboardScreen(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Compte Marchand ChapChapPay",
+                                                text = "Compte Marchand Orange Money",
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 15.sp,
                                                 color = Color(0xFF14532D)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Surface(
-                                                color = Color(0xFF16A34A),
+                                                color = Color(0xFFFF7900),
                                                 shape = RoundedCornerShape(4.dp)
                                             ) {
                                                 Text(
-                                                    text = "DIRECT",
+                                                    text = "*144*6#",
                                                     fontSize = 9.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color.White,
@@ -1257,7 +1257,7 @@ fun DashboardScreen(
                                         }
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = "Recevez l'argent des parents directement sur votre compte Orange Money / MTN",
+                                            text = "Recevez les frais de scolarité directement sur le compte Orange Money Marchand de l'école",
                                             fontSize = 12.sp,
                                             color = Color(0xFF166534),
                                             lineHeight = 16.sp
@@ -1605,19 +1605,19 @@ fun DashboardScreen(
     if (showMerchantConfigDialog && isUserFounder) {
         AlertDialog(
             onDismissRequest = { showMerchantConfigDialog = false },
-            title = { Text("Compte Marchand & Paiement Mobile", fontWeight = FontWeight.Bold) },
+            title = { Text("Compte Marchand Orange Money", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Renseignez ici le Code Marchand et le Numéro Marchand de l'école. Sur le portail parents, la syntaxe officielle sera générée automatiquement : *144*6*Code_Marchand*Montant*Code_Secret#",
+                        text = "Renseignez ici le Code Marchand et le Numéro Orange Money de l'école. Sur le portail parents, la syntaxe officielle Orange Money sera générée automatiquement : *144*6*Code_Marchand*Montant*Code_Secret#",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.DarkGray
                     )
                     OutlinedTextField(
                         value = schoolMerchantCodeInput,
                         onValueChange = { schoolMerchantCodeInput = it },
-                        label = { Text("Code Marchand de l'école (Ex: 458762)") },
-                        placeholder = { Text("Ex: 458762") },
+                        label = { Text("Code Marchand de l'école (Ex: 346789)") },
+                        placeholder = { Text("Ex: 346789") },
                         supportingText = { Text("Code à 5 ou 6 chiffres fourni par Orange Money") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
@@ -1625,17 +1625,9 @@ fun DashboardScreen(
                     OutlinedTextField(
                         value = schoolMerchantPhoneInput,
                         onValueChange = { schoolMerchantPhoneInput = it },
-                        label = { Text("Numéro Orange Money / MTN Marchand") },
-                        placeholder = { Text("Ex: 628XXXXXX") },
-                        supportingText = { Text("Numéro de téléphone marchand ou contact WhatsApp") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = schoolChapChapKeyInput,
-                        onValueChange = { schoolChapChapKeyInput = it },
-                        label = { Text("Clé API ChapChapPay (Optionnelle)") },
-                        placeholder = { Text("Ex: 8a4b2c...") },
+                        label = { Text("Numéro Orange Money Marchand (Ex: 660377887)") },
+                        placeholder = { Text("Ex: 660377887") },
+                        supportingText = { Text("Numéro de téléphone marchand ou contact WhatsApp de l'école") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -1647,7 +1639,7 @@ fun DashboardScreen(
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text(
-                                    text = "Aperçu syntaxe parent (ex pour 250 000 GNF) :",
+                                    text = "Aperçu syntaxe parent Orange Money (ex pour 250 000 GNF) :",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color(0xFF166534)
                                 )
@@ -1665,7 +1657,7 @@ fun DashboardScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.saveMySchoolMerchantApiKey(schoolChapChapKeyInput, schoolMerchantPhoneInput, schoolMerchantCodeInput)
+                        viewModel.saveMySchoolMerchantApiKey("", schoolMerchantPhoneInput, schoolMerchantCodeInput)
                         Toast.makeText(context, "Compte marchand enregistré avec succès !", Toast.LENGTH_SHORT).show()
                         showMerchantConfigDialog = false
                     }
