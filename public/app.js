@@ -860,7 +860,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const fullShortCode = `*144*6*${cleanMCode}*${cleanAmount}#`;
                 if (shortCodeText) shortCodeText.textContent = fullShortCode;
                 if (ussdBtn) ussdBtn.href = `tel:${encodeURIComponent(fullShortCode)}`;
-                if (ussdBtnText) ussdBtnText.textContent = `Composer directement (${fullShortCode})`;
+                if (ussdBtnText) ussdBtnText.textContent = `Composer ${fullShortCode}`;
 
                 // Bouton WhatsApp prérempli
                 const waBtn = document.getElementById('merchantWhatsAppBtn');
