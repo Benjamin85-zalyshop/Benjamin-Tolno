@@ -84,7 +84,9 @@ object QrCodeUtils {
         paidFee: String = "",
         dueFee: String = "",
         percent: String = "",
-        schoolEmail: String = ""
+        schoolEmail: String = "",
+        schoolAddress: String = "",
+        schoolPhone: String = ""
     ): String {
         val matricule = if (remoteId.length >= 5) remoteId.take(5).uppercase() else studentId.toString()
         val safeName = try { java.net.URLEncoder.encode(name, "UTF-8") } catch (e: Exception) { name }
@@ -102,6 +104,8 @@ object QrCodeUtils {
         if (dueFee.isNotEmpty()) url += "&dueFee=${java.net.URLEncoder.encode(dueFee, "UTF-8")}"
         if (percent.isNotEmpty()) url += "&percent=${java.net.URLEncoder.encode(percent, "UTF-8")}"
         if (schoolEmail.isNotEmpty()) url += "&email=${java.net.URLEncoder.encode(schoolEmail, "UTF-8")}"
+        if (schoolAddress.isNotEmpty()) url += "&addr=${java.net.URLEncoder.encode(schoolAddress, "UTF-8")}"
+        if (schoolPhone.isNotEmpty()) url += "&phone=${java.net.URLEncoder.encode(schoolPhone, "UTF-8")}"
         
         return url
     }

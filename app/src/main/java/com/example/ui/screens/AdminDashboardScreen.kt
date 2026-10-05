@@ -61,7 +61,7 @@ fun AdminDashboardScreen(
     val localContext = androidx.compose.ui.platform.LocalContext.current
     var showLockDialog by remember { mutableStateOf(false) }
     var schoolToLock by remember { mutableStateOf<SchoolAdminItem?>(null) }
-    var lockCommissionInput by remember { mutableStateOf("") }
+    var lockReasonInput by remember { mutableStateOf("") }
     var showWhatsAppDialog by remember { mutableStateOf(false) }
     var schoolForWhatsApp by remember { mutableStateOf<SchoolAdminItem?>(null) }
     var whatsappMessage by remember { mutableStateOf("") }
@@ -359,11 +359,10 @@ fun AdminDashboardScreen(
                             onToggleAppLock = { locked ->
                                 if (locked) {
                                     schoolToLock = item
-                                    val calcDue = if (item.unpaidCommission > 0L) item.unpaidCommission else (item.onlinePaymentsCount.toLong() * 3000L).coerceAtLeast(3000L)
-                                    lockCommissionInput = calcDue.toString()
+                                    lockReasonInput = ""
                                     showLockDialog = true
                                 } else {
-                                    viewModel.toggleSchoolAppLock(item.email, item.displayName.ifEmpty { item.schoolName }, false)
+                                    viewModel.toggleSchoolAppLock(item.email, item.displayName.ifEmpty { item.schoolName }, false, reason = "")
                                     android.widget.Toast.makeText(localContext, "Application déverrouillée pour ${item.displayName.ifEmpty { item.schoolName }}", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             },
@@ -814,58 +813,85 @@ fun AdminDashboardScreen(
             onDismissRequest = { showLockDialog = false },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFD97706))
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFDC2626))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Verrouiller l'application", fontWeight = FontWeight.Bold)
+                    Text("Verrouiller l'accès de l'école", fontWeight = FontWeight.Bold)
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Vous allez verrouiller l'application pour ${s.displayName.ifEmpty { s.schoolName }}.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        "Indiquez le montant de la commission impayée à réclamer sur l'écran de verrouillage :",
+                        "Établissement concerné :",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(
-                        value = lockCommissionInput,
-                        onValueChange = { lockCommissionInput = it.filter { char -> char.isDigit() } },
-                        label = { Text("Montant réclamé (GNF)") },
-                        placeholder = { Text("Ex: 96000") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                    Text(
+                        text = s.displayName.ifEmpty { s.schoolName },
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (s.onlinePaymentsCount > 0) {
-                        Text(
-                            "Statistiques : ${s.onlinePaymentsCount} paiements perçus (${s.onlinePaymentsTotal} GNF encaissés).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF0F56E3)
-                        )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "Indiquez le motif du verrouillage (ce message sera affiché à la direction de l'école) :",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    OutlinedTextField(
+                        value = lockReasonInput,
+                        onValueChange = { lockReasonInput = it },
+                        label = { Text("Motif du verrouillage") },
+                        placeholder = { Text("Ex: Abonnement annuel expiré, facture non régularisée...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4
+                    )
+                    Text("Suggestions rapides :", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(
+                            "Abonnement annuel expiré. Merci de renouveler pour réactiver vos accès.",
+                            "Suspension administrative du compte ScolaPay.",
+                            "Facture de prestation de service impayée. Merci de régulariser."
+                        ).forEach { suggestion ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { lockReasonInput = suggestion }
+                            ) {
+                                Text(
+                                    text = suggestion,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val enteredAmount = lockCommissionInput.toLongOrNull() ?: 3000L
+                        val enteredReason = lockReasonInput.trim().ifEmpty {
+                            "Accès à l'application ScolaPay suspendu par l'administration."
+                        }
                         viewModel.toggleSchoolAppLock(
-                            s.email,
-                            s.displayName.ifEmpty { s.schoolName },
+                            email = s.email,
+                            schoolName = s.displayName.ifEmpty { s.schoolName },
                             locked = true,
-                            customAmount = enteredAmount
+                            reason = enteredReason
                         )
                         showLockDialog = false
                         android.widget.Toast.makeText(
                             localContext,
-                            "Application verrouillée avec une commission de $enteredAmount GNF",
+                            "Application verrouillée pour ${s.displayName.ifEmpty { s.schoolName }}",
                             android.widget.Toast.LENGTH_SHORT
                         ).show()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    enabled = lockReasonInput.isNotBlank()
                 ) {
                     Text("Confirmer le verrouillage")
                 }
@@ -1135,24 +1161,22 @@ fun SchoolRequestCard(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            val isLockedOrBlocked = !item.onlinePaymentEnabled || item.isAppLocked
             val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-            val cardBg = if (isDark) {
-                if (isLockedOrBlocked) Color(0xFF3B1212) else Color(0xFF0F2E1B)
+            val lockCardBg = if (isDark) {
+                if (item.isAppLocked) Color(0xFF3B1212) else Color(0xFF1E293B)
             } else {
-                if (isLockedOrBlocked) Color(0xFFFEF2F2) else Color(0xFFF0FDF4)
+                if (item.isAppLocked) Color(0xFFFEF2F2) else Color(0xFFF8FAFC)
             }
-            val cardBorder = if (isLockedOrBlocked) Color(0xFFFCA5A5) else Color(0xFFBBF7D0)
-            val titleTextColor = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
-            val subTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+            val lockCardBorder = if (item.isAppLocked) Color(0xFFFCA5A5) else Color(0xFFE2E8F0)
+            val lockTitleColor = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
 
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = cardBg,
-                    contentColor = titleTextColor
+                    containerColor = lockCardBg,
+                    contentColor = lockTitleColor
                 ),
-                border = BorderStroke(1.dp, cardBorder),
+                border = BorderStroke(1.dp, lockCardBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
@@ -1162,22 +1186,27 @@ fun SchoolRequestCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("💳", fontSize = 16.sp)
+                            Icon(
+                                imageVector = if (item.isAppLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                                contentDescription = null,
+                                tint = if (item.isAppLocked) Color(0xFFDC2626) else Color(0xFF16A34A),
+                                modifier = Modifier.size(18.dp)
+                            )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Paiements Web & Commissions",
+                                text = "Accès à l'application",
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleSmall,
-                                color = titleTextColor
+                                color = lockTitleColor
                             )
                         }
                         Surface(
-                            color = if (item.onlinePaymentEnabled) Color(0xFF16A34A).copy(alpha = 0.15f) else Color(0xFFDC2626).copy(alpha = 0.15f),
-                            contentColor = if (item.onlinePaymentEnabled) Color(0xFF16A34A) else Color(0xFFDC2626),
+                            color = if (item.isAppLocked) Color(0xFFDC2626).copy(alpha = 0.15f) else Color(0xFF16A34A).copy(alpha = 0.15f),
+                            contentColor = if (item.isAppLocked) Color(0xFFDC2626) else Color(0xFF16A34A),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = if (item.onlinePaymentEnabled) "PORTAIL ACTIF" else "PORTAIL BLOQUÉ",
+                                text = if (item.isAppLocked) "VERROUILLÉ" else "AUTORISÉ",
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1185,88 +1214,48 @@ fun SchoolRequestCard(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text("Collecte en ligne (Option B)", style = MaterialTheme.typography.bodySmall, color = subTextColor)
-                            Text("${item.onlinePaymentsTotal} GNF (${item.onlinePaymentsCount} paiements)", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, color = titleTextColor)
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("Commission due à zalytechno", style = MaterialTheme.typography.bodySmall, color = subTextColor)
-                            Text(
-                                text = "${item.unpaidCommission} GNF",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (item.unpaidCommission > 0) Color(0xFFDC2626) else Color(0xFF16A34A)
-                            )
-                        }
+                    if (item.isAppLocked) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Motif : ${item.lockReason?.ifBlank { "Accès suspendu par l'administration" } ?: "Accès suspendu par l'administration"}",
+                            color = Color(0xFFDC2626),
+                            fontWeight = FontWeight.Medium,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     if (item.isAppLocked) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("⚠️ Accès application mobile verrouillé pour cet établissement", color = Color(0xFFDC2626), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Interrupteurs / Kill-Switches
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = { onToggleOnlinePayment(!item.onlinePaymentEnabled) },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (item.onlinePaymentEnabled) Color(0xFFDC2626) else Color(0xFF16A34A)
-                            ),
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        Button(
+                            onClick = { onToggleAppLock(false) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                         ) {
+                            Icon(Icons.Default.LockOpen, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (item.onlinePaymentEnabled) "Bloquer Paiement" else "Débloquer Paiement",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
+                                text = "Déverrouiller l'application",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-
+                    } else {
                         OutlinedButton(
-                            onClick = {
-                                onToggleAppLock(!item.isAppLocked)
-                            },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (item.isAppLocked) Color(0xFF16A34A) else Color(0xFFD97706)
-                            ),
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                            onClick = { onToggleAppLock(true) },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
+                            border = BorderStroke(1.dp, Color(0xFFDC2626)),
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                         ) {
+                            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (item.isAppLocked) "Déverrouiller App" else "Verrouiller App",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
+                                text = "Verrouiller l'application",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                        }
-                    }
-
-                    Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (item.founderPhone.isNotBlank()) {
-                            Button(
-                                onClick = onSendCommissionInvoice,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                            ) {
-                                Text("📲 Facture WhatsApp", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
-                            }
-                        }
-                        if (item.unpaidCommission > 0) {
-                            Button(
-                                onClick = onResetCommission,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                            ) {
-                                Text("✓ Encaissé (Solde 0)", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
-                            }
                         }
                     }
                 }

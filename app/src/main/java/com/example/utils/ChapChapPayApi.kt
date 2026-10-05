@@ -3,6 +3,7 @@ package com.example.utils
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -93,40 +94,16 @@ object ChapChapPayApi {
     }
 
     private fun extractStatusCode(jsonObject: JSONObject): String {
-        var code = ""
-        if (jsonObject.has("status")) {
-            val status = jsonObject.get("status")
-            if (status is JSONObject) {
-                code = status.optString("code", "").lowercase()
-            } else {
-                code = status.toString().lowercase()
-            }
-        } else if (jsonObject.has("code")) {
-            code = jsonObject.optString("code", "").lowercase()
-        }
-
-        // Si une transaction valide existe
-        if (jsonObject.has("transaction") && !jsonObject.isNull("transaction")) {
-            val tx = jsonObject.optJSONObject("transaction")
-            if (tx != null) {
-                val txStatus = tx.optString("status", "").lowercase()
-                if (txStatus in listOf("success", "successful", "completed", "approved", "paid")) {
-                    return "SUCCESS"
-                }
-                if (tx.has("transaction_id") || tx.has("id")) {
-                    val txId = tx.optString("transaction_id", tx.optString("id", ""))
-                    if (txId.isNotBlank() && code !in listOf("failed", "cancelled", "canceled", "rejected", "expired")) {
-                        return "SUCCESS"
-                    }
-                }
-            }
+        // Direct boolean flags
+        if (jsonObject.optBoolean("paid", false) || jsonObject.optBoolean("is_paid", false) || jsonObject.optBoolean("success", false)) {
+            return "SUCCESS"
         }
 
         val successCodes = setOf(
             "completed", "successful", "success", "approved", "paid",
             "done", "valid", "valide", "validé", "validee",
             "effectue", "effectué", "effectuée", "settled", "accepted",
-            "confirmed", "1", "ok", "true"
+            "confirmed", "1", "ok", "true", "paye", "payé", "payee", "payée"
         )
         val pendingCodes = setOf(
             "new", "pending", "processing", "in_progress", "created",
@@ -138,11 +115,65 @@ object ChapChapPayApi {
             "refused", "annulé", "annule", "echoue", "échoué", "0"
         )
 
+        var code = ""
+        var statusMethod: String? = null
+        if (jsonObject.has("status")) {
+            val status = jsonObject.get("status")
+            if (status is JSONObject) {
+                code = status.optString("code", "").lowercase()
+                statusMethod = status.optString("payment_method", "").takeIf { it.isNotBlank() && it != "null" }
+            } else {
+                code = status.toString().lowercase()
+            }
+        } else if (jsonObject.has("code")) {
+            code = jsonObject.optString("code", "").lowercase()
+        }
+
+        val paymentStatus = jsonObject.optString("payment_status", "").lowercase()
+        val state = jsonObject.optString("state", "").lowercase()
+        val result = jsonObject.optString("result", "").lowercase()
+
+        for (candidate in listOf(code, paymentStatus, state, result)) {
+            if (candidate in successCodes) return "SUCCESS"
+            if (candidate in failedCodes) return "FAILED"
+        }
+
+        // Si payment_method est renseigné et que ce n'est pas failed
+        if (statusMethod != null && code !in failedCodes && code != "new") {
+            return "SUCCESS"
+        }
+
+        // Vérification de la section transaction
+        if (jsonObject.has("transaction") && !jsonObject.isNull("transaction")) {
+            val txObj = jsonObject.opt("transaction")
+            if (txObj is JSONObject) {
+                val txStatus = txObj.optString("status", txObj.optString("state", "")).lowercase()
+                if (txStatus in successCodes) {
+                    return "SUCCESS"
+                }
+                val txId = txObj.optString("transaction_id", txObj.optString("id", ""))
+                if (txId.isNotBlank() && code !in failedCodes && txStatus !in failedCodes) {
+                    return "SUCCESS"
+                }
+            } else if (txObj is JSONArray && txObj.length() > 0) {
+                return "SUCCESS"
+            } else if (txObj is String && txObj.isNotBlank() && code !in failedCodes) {
+                return "SUCCESS"
+            }
+        }
+
+        if (jsonObject.has("transactions") && !jsonObject.isNull("transactions")) {
+            val txArr = jsonObject.optJSONArray("transactions")
+            if (txArr != null && txArr.length() > 0) {
+                return "SUCCESS"
+            }
+        }
+
         return when {
             code in successCodes -> "SUCCESS"
             code in failedCodes -> "FAILED"
             code in pendingCodes -> "PENDING"
-            else -> "PENDING" // En cas de doute, ne pas déclarer en échec prématurément
+            else -> "PENDING"
         }
     }
 
@@ -150,13 +181,15 @@ object ChapChapPayApi {
         val cleanId = identifier.trim()
         if (cleanId.isBlank()) return@withContext "FAILED"
 
-        // 1. Si l'identifiant ressemble à un identifiant de commande (ex: COMM_..., SUB_..., PAY_...)
         val endpoints = mutableListOf<String>()
         if (cleanId.startsWith("COMM_") || cleanId.startsWith("SUB_") || cleanId.startsWith("PAY_")) {
             endpoints.add("https://chapchappay.com/api/ecommerce/order/$cleanId")
             endpoints.add("https://chapchappay.com/api/ecommerce/$cleanId")
+            val cleanNumeric = cleanId.substringAfter("_")
+            if (cleanNumeric.isNotBlank() && cleanNumeric != cleanId) {
+                endpoints.add("https://chapchappay.com/api/ecommerce/order/$cleanNumeric")
+            }
         } else {
-            // Probablement un operation_id (UUID ou référence ChapChapPay)
             endpoints.add("https://chapchappay.com/api/ecommerce/$cleanId")
             endpoints.add("https://chapchappay.com/api/ecommerce/order/$cleanId")
         }
@@ -170,7 +203,6 @@ object ChapChapPayApi {
             }
         }
 
-        // Si non trouvé ou erreur de connexion temporaire, garder PENDING pour ne pas supprimer la commande
         return@withContext "PENDING"
     }
 

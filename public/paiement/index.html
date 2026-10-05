@@ -3,60 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScolaPay - Redirection Paiement</title>
+    <title>ScolaPay - Confirmation du Paiement</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #F3F4F6;
+            background-color: #F8FAFC;
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            color: #1F2937;
+            color: #1E293B;
+            padding: 1rem;
         }
         .card {
             background: white;
-            padding: 2rem;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 2.5rem 1.5rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             text-align: center;
-            max-width: 400px;
-            width: 90%;
+            max-width: 440px;
+            width: 100%;
         }
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #E5E7EB;
-            border-top-color: #1D4ED8;
+        .icon {
+            width: 64px;
+            height: 64px;
+            background: #DCFCE7;
+            color: #16A34A;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.25rem auto;
+            font-size: 32px;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        h2 {
+            margin: 0 0 0.5rem 0;
+            color: #0F172A;
+            font-size: 1.4rem;
+        }
+        p {
+            font-size: 0.95rem;
+            color: #64748B;
+            line-height: 1.5;
+            margin: 0 0 1.5rem 0;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #1D4ED8;
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .btn:hover {
+            background-color: #1E40AF;
         }
     </style>
 </head>
 <body>
     <div class="card">
-        <div class="spinner"></div>
-        <h3 style="margin-bottom: 0.5rem; color: #1D4ED8;">Ouverture du module de paiement...</h3>
-        <p style="font-size: 0.9rem; color: #6B7280; line-height: 1.4;">Veuillez patienter pendant la redirection vers le paiement sécurisé de la scolarité.</p>
+        <div class="icon">✓</div>
+        <h2>Paiement Pris en Compte</h2>
+        <p>Merci pour votre règlement via ChapChapPay. Votre abonnement est en cours d'activation automatique dans votre application ScolaPay.</p>
+        <a id="open-app-btn" class="btn" href="scolapay://paiement/return">Ouvrir l'application ScolaPay</a>
     </div>
 
     <script>
         (function() {
-            var search = window.location.search;
-            if (!search || search.length < 5) {
-                var cached = sessionStorage.getItem('scolapay_last_query') || localStorage.getItem('scolapay_last_query');
-                if (cached) {
-                    search = cached.startsWith('?') ? cached : ('?' + cached);
-                }
+            var search = window.location.search || '';
+            var appUrl = "scolapay://paiement/return" + search;
+            
+            var btn = document.getElementById('open-app-btn');
+            if (btn) {
+                btn.href = appUrl;
             }
-            var delim = search ? (search.includes('?') ? '&' : '?') : '?';
-            var finalUrl = '/' + (search || '') + delim + 'open_payment=true';
-            window.location.replace(finalUrl);
+
+            // Redirection automatique vers l'application mobile Android
+            try {
+                window.location.href = appUrl;
+            } catch(e) {}
         })();
     </script>
 </body>

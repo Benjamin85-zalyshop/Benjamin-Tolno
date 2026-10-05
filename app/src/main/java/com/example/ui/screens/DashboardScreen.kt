@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
@@ -209,6 +210,7 @@ fun DashboardScreen(
     val isPendingValidation by viewModel.isPendingValidation.collectAsStateWithLifecycle()
     val schoolAcc by viewModel.schoolAccount.collectAsStateWithLifecycle()
     val rejectionReason = schoolAcc?.rejectionReason
+    val isSubscribed = hasActiveSubscription || (schoolAcc?.hasActiveSubscription == true && ((schoolAcc?.subscriptionExpiryDate ?: 0L) <= 0L || (schoolAcc?.subscriptionExpiryDate ?: 0L) > System.currentTimeMillis()))
 
     var showDirectSubscriptionDialog by remember { mutableStateOf(false) }
 
@@ -451,7 +453,7 @@ fun DashboardScreen(
                             }
                         }
 
-                        if (isTrialActive && !hasActiveSubscription) {
+                        if (isTrialActive && !isSubscribed) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -540,7 +542,7 @@ fun DashboardScreen(
                                     }
                                     
                                     Text(
-                                        text = "Vous bénéficiez de 3 mois d'essai gratuit. Profitez de notre offre spéciale de lancement : abonnez-vous maintenant pour seulement 230 000 $currency/an au lieu de 500 000 $currency !",
+                                        text = "Vous bénéficiez de 3 mois d'essai gratuit. Profitez de notre offre spéciale : abonnez-vous maintenant pour 3 000 $currency (test) !",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = Color(0xFF4F46E5), // Elegant indigo/blue text for promotional info
                                         fontSize = 13.5.sp
@@ -555,7 +557,7 @@ fun DashboardScreen(
                                                     viewModel.checkPendingPaymentStatus { status ->
                                                         isCheckingStatus = false
                                                         if (status == "SUCCESS") {
-                                                            android.widget.Toast.makeText(context, "Paiement validé avec succès !", android.widget.Toast.LENGTH_SHORT).show()
+                                                            android.widget.Toast.makeText(context, "Paiement validé avec succès ! Abonnement activé.", android.widget.Toast.LENGTH_LONG).show()
                                                         } else if (status == "FAILED") {
                                                             android.widget.Toast.makeText(context, "Paiement échoué ou annulé. Vous pouvez réessayer.", android.widget.Toast.LENGTH_SHORT).show()
                                                         } else {
@@ -607,7 +609,7 @@ fun DashboardScreen(
                                                     tint = Color.White
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (230 000 $currency)", fontWeight = FontWeight.Bold, color = Color.White)
+                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (3 000 $currency)", fontWeight = FontWeight.Bold, color = Color.White)
                                             }
                                         }
                                     }
@@ -2561,7 +2563,7 @@ fun DashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Profitez de notre offre spéciale à 230 000 $currency/an au lieu de 500 000 $currency.",
+                        text = "Profitez de notre offre spéciale d'abonnement à 3 000 $currency au lieu de 300 000 $currency.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF4B5563)
                     )
@@ -2598,12 +2600,13 @@ fun DashboardScreen(
                         isLoadingChapChap = true
                         coroutineScope.launch {
                             val orderId = "SUB_${System.currentTimeMillis()}"
-                            val chapChapUrl = com.example.utils.ChapChapPayApi.createPaymentOperation(230000.0, "Abonnement Annuel ScolaPay", orderId)
+                            val result = com.example.utils.ChapChapPayApi.createPayment(3000.0, "Abonnement Annuel ScolaPay", orderId)
                             isLoadingChapChap = false
-                            if (chapChapUrl != null) {
-                                viewModel.savePendingOrderId(orderId)
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(chapChapUrl))
+                            if (result != null) {
+                                viewModel.savePendingOrderId(result.orderId ?: orderId, result.operationId)
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.paymentUrl))
                                 context.startActivity(intent)
+                                showDirectSubscriptionDialog = false
                             } else {
                                 Toast.makeText(context, "Erreur lors de la création du lien de paiement Chap Chap Pay.", Toast.LENGTH_LONG).show()
                             }
@@ -2619,7 +2622,7 @@ fun DashboardScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Payer avec Chap Chap Pay", fontWeight = FontWeight.Bold)
+                        Text("Payer avec Chap Chap Pay (3 000 GNF)", fontWeight = FontWeight.Bold)
                     }
                 }
             },

@@ -37,6 +37,35 @@ window.toggleSection = function(id) {
     }
 };
 
+// Manage School Contact details (Address & Phone Number for Bulletin Header)
+let currentSchoolAddress = '';
+let currentSchoolPhone = '';
+
+function renderPdfSchoolContact() {
+    const contactEl = document.getElementById('pdfSchoolContact');
+    if (!contactEl) return;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const addr = (currentSchoolAddress || urlParams.get('addr') || urlParams.get('address') || urlParams.get('schoolAddress') || '').trim();
+    const rawPhone = (currentSchoolPhone || urlParams.get('phone') || urlParams.get('schoolPhone') || urlParams.get('tel') || '').trim();
+    
+    let parts = [];
+    if (addr) {
+        parts.push(`<span id="pdfSchoolAddress">${addr}</span>`);
+    }
+    if (rawPhone) {
+        const formattedPhone = rawPhone.toLowerCase().startsWith('tél') ? rawPhone : `Tél : ${rawPhone}`;
+        parts.push(`<span id="pdfSchoolPhone">${formattedPhone}</span>`);
+    }
+    
+    if (parts.length > 0) {
+        contactEl.innerHTML = parts.join(' <span id="pdfSchoolContactSep">•</span> ');
+        contactEl.style.display = 'block';
+    } else {
+        contactEl.innerHTML = '<span id="pdfSchoolPhone">ScolaPay</span>';
+    }
+}
+
 window.downloadPdf = function() {
     const btn = document.getElementById('downloadPdfBtn');
     if (btn) btn.style.display = 'none';
@@ -44,12 +73,22 @@ window.downloadPdf = function() {
     const term = urlParams.get('term') || '1er Trimestre';
     const schoolName = urlParams.get('school') || 'ScolaPay';
     document.getElementById('pdfSchoolName').textContent = schoolName;
-    if (document.getElementById('pdfSchoolLogoInitial')) { document.getElementById('pdfSchoolLogoInitial').textContent = schoolName.charAt(0).toUpperCase(); }
+    if (document.getElementById('pdfSchoolLogoInitial')) { 
+        document.getElementById('pdfSchoolLogoInitial').textContent = schoolName.charAt(0).toUpperCase(); 
+    }
     document.getElementById('pdfTermInfo').textContent = `${term} • Année : 2025 - 2026`;
     document.getElementById('pdfStudentName').textContent = urlParams.get('name') || 'Élève';
     document.getElementById('pdfStudentMat').textContent = urlParams.get('mat') || 'N/A';
     document.getElementById('pdfStudentSection').textContent = urlParams.get('section') || 'LE PRIMAIRE';
     document.getElementById('pdfStudentGrade').textContent = urlParams.get('grade') || '2ème Année';
+    
+    if (urlParams.get('phone') || urlParams.get('schoolPhone') || urlParams.get('tel')) {
+        currentSchoolPhone = urlParams.get('phone') || urlParams.get('schoolPhone') || urlParams.get('tel');
+    }
+    if (urlParams.get('addr') || urlParams.get('address') || urlParams.get('schoolAddress')) {
+        currentSchoolAddress = urlParams.get('addr') || urlParams.get('address') || urlParams.get('schoolAddress');
+    }
+    renderPdfSchoolContact();
     
     const qrData = encodeURIComponent(window.location.href);
     document.getElementById('pdfQrCode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}" alt="QR" style="width:100%;height:100%;" crossorigin="anonymous">`;
@@ -88,10 +127,10 @@ window.downloadPdf = function() {
                 tr.style.borderBottom = '1px solid #E5E7EB';
                 if (index % 2 !== 0) tr.style.background = '#F9FAFB';
                 tr.innerHTML = `
-                    <td style="padding: 10px 16px; font-weight: 500; font-size: 13px;">${matName}</td>
-                    <td style="padding: 10px 16px; text-align: center; color: #0047FF; font-weight: 600; font-size: 13px;">${coeff}</td>
-                    <td style="padding: 10px 16px; text-align: center; color: #0047FF; font-weight: 600; font-size: 13px;">${!isNaN(note) ? note.toFixed(2) : '-'}</td>
-                    <td style="padding: 10px 16px; color: #4B5563; font-size: 13px;">${mention}</td>
+                    <td style="padding: 6px 10px; font-weight: 500; font-size: 11.5px;">${matName}</td>
+                    <td style="padding: 6px 10px; text-align: center; color: #0047FF; font-weight: 600; font-size: 11.5px;">${coeff}</td>
+                    <td style="padding: 6px 10px; text-align: center; color: #0047FF; font-weight: 600; font-size: 11.5px;">${!isNaN(note) ? note.toFixed(2) : '-'}</td>
+                    <td style="padding: 6px 10px; color: #4B5563; font-size: 11.5px;">${mention}</td>
                 `;
                 pdfTbody.appendChild(tr);
             }
@@ -129,30 +168,85 @@ window.downloadPdf = function() {
     template.style.width = '800px';
     template.style.transform = 'scale(1)';
     template.style.transformOrigin = 'top left';
-    template.style.zIndex = '999998'; // Just below overlay
+    template.style.zIndex = '999998';
     
     setTimeout(() => {
         const elementToCapture = document.getElementById('pdfContent');
-        const opt = {
-            margin: [10, 0, 10, 0],
-            filename: 'bulletin_de_notes.pdf',
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0, windowWidth: 800 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        
+        const finishPdf = () => {
+            if (btn) btn.style.display = 'block';
+            template.style.display = 'none';
+            if (overlay.parentNode) document.body.removeChild(overlay);
+            window.scrollTo(0, originalScroll);
         };
-        html2pdf().set(opt).from(elementToCapture).save().then(() => {
-            if (btn) btn.style.display = 'block';
-            template.style.display = 'none';
-            document.body.removeChild(overlay);
-            window.scrollTo(0, originalScroll);
-        }).catch(err => {
-            console.error(err);
-            if (btn) btn.style.display = 'block';
-            template.style.display = 'none';
-            document.body.removeChild(overlay);
-            window.scrollTo(0, originalScroll);
-        });
-    }, 1500); // Wait 1.5s for QR Code image to fully load
+
+        const renderCanvasToSinglePagePdf = (canvas) => {
+            try {
+                const JsPdfConstructor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+                if (!JsPdfConstructor) {
+                    throw new Error("jsPDF not loaded");
+                }
+                const pdf = new JsPdfConstructor('p', 'mm', 'a4');
+                const pdfWidth = 210;
+                const pdfHeight = 297;
+                const margin = 8;
+                const maxWidth = pdfWidth - (margin * 2); // 194 mm
+                const maxHeight = pdfHeight - (margin * 2); // 281 mm
+                
+                let imgWidth = maxWidth;
+                let imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                // STRICT SINGLE PAGE: If height exceeds printable area, scale down to fit on 1 page!
+                if (imgHeight > maxHeight) {
+                    imgHeight = maxHeight;
+                    imgWidth = (canvas.width * imgHeight) / canvas.height;
+                }
+                
+                const posX = (pdfWidth - imgWidth) / 2;
+                const posY = (pdfHeight - imgHeight) / 2;
+                
+                const imgData = canvas.toDataURL('image/jpeg', 0.98);
+                pdf.addImage(imgData, 'JPEG', posX, posY, imgWidth, imgHeight);
+                pdf.save('bulletin_de_notes.pdf');
+                finishPdf();
+            } catch (err) {
+                console.warn("Direct jsPDF failed, falling back to html2pdf:", err);
+                const opt = {
+                    margin: [6, 4, 6, 4],
+                    filename: 'bulletin_de_notes.pdf',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0, windowWidth: 800 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(elementToCapture).save().then(finishPdf).catch(e => {
+                    console.error(e);
+                    finishPdf();
+                });
+            }
+        };
+
+        if (window.html2canvas) {
+            window.html2canvas(elementToCapture, {
+                scale: 2,
+                useCORS: true,
+                scrollY: 0,
+                scrollX: 0,
+                windowWidth: 800
+            }).then(renderCanvasToSinglePagePdf).catch(err => {
+                console.error("html2canvas error:", err);
+                finishPdf();
+            });
+        } else {
+            const opt = {
+                margin: [6, 4, 6, 4],
+                filename: 'bulletin_de_notes.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0, windowWidth: 800 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(elementToCapture).save().then(finishPdf).catch(finishPdf);
+        }
+    }, 1500);
 };
 window.showQrBadge = function() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -377,10 +471,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     document.getElementById('pdfSchoolName').textContent = data.schoolName;
                 }
                 if (data.schoolAddress) {
-                    document.getElementById('pdfSchoolContact').textContent = data.schoolAddress;
-                } else if (data.schoolName) {
-                    // Fallback to old contact string from Android if needed, but Android now sends schoolAddress
+                    currentSchoolAddress = data.schoolAddress;
                 }
+                if (data.schoolPhone) {
+                    currentSchoolPhone = data.schoolPhone;
+                } else if (data.founderPhone) {
+                    currentSchoolPhone = data.founderPhone;
+                } else if (data.phone) {
+                    currentSchoolPhone = data.phone;
+                }
+                renderPdfSchoolContact();
                 if (data.currency) {
                     window.schoolCurrency = data.currency;
                 }
@@ -485,6 +585,20 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (sData.merchantCode) {
                             studentPaymentState.schoolMerchantCode = sData.merchantCode.trim();
                         }
+                        if (sData.phone && !currentSchoolPhone) {
+                            currentSchoolPhone = sData.phone.trim();
+                            renderPdfSchoolContact();
+                        } else if (sData.founderPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = sData.founderPhone.trim();
+                            renderPdfSchoolContact();
+                        } else if (sData.schoolPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = sData.schoolPhone.trim();
+                            renderPdfSchoolContact();
+                        }
+                        if (sData.address && !currentSchoolAddress) {
+                            currentSchoolAddress = sData.address.trim();
+                            renderPdfSchoolContact();
+                        }
                         if (sData.email) studentPaymentState.schoolEmail = sData.email;
                     }
                     updateBlockedUI();
@@ -517,6 +631,20 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (sData.merchantCode) {
                             studentPaymentState.schoolMerchantCode = sData.merchantCode.trim();
                         }
+                        if (sData.phone && !currentSchoolPhone) {
+                            currentSchoolPhone = sData.phone.trim();
+                            renderPdfSchoolContact();
+                        } else if (sData.founderPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = sData.founderPhone.trim();
+                            renderPdfSchoolContact();
+                        } else if (sData.schoolPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = sData.schoolPhone.trim();
+                            renderPdfSchoolContact();
+                        }
+                        if (sData.address && !currentSchoolAddress) {
+                            currentSchoolAddress = sData.address.trim();
+                            renderPdfSchoolContact();
+                        }
                     }
                     updateBlockedUI();
                 }, (err) => {
@@ -543,6 +671,20 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                         if (fData.merchantCode) {
                             studentPaymentState.schoolMerchantCode = fData.merchantCode.trim();
+                        }
+                        if (fData.phone && !currentSchoolPhone) {
+                            currentSchoolPhone = fData.phone.trim();
+                            renderPdfSchoolContact();
+                        } else if (fData.founderPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = fData.founderPhone.trim();
+                            renderPdfSchoolContact();
+                        } else if (fData.schoolPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = fData.schoolPhone.trim();
+                            renderPdfSchoolContact();
+                        }
+                        if (fData.address && !currentSchoolAddress) {
+                            currentSchoolAddress = fData.address.trim();
+                            renderPdfSchoolContact();
                         }
                     }
                 }).catch(e => console.warn("Firestore school doc lookup notice:", e));

@@ -146,15 +146,40 @@ class SchoolViewModel(
     
     val balance: StateFlow<Long> = combine(totalCollected, totalExpenses) { col, exp -> col - exp }.stateIn(viewModelScope, SharingStarted.Lazily, 0L)
     
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val hasActiveSubscription: StateFlow<Boolean> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getSubscriptionStatus(id) else flowOf(false)
-    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    val hasActiveSubscription: StateFlow<Boolean> = _schoolAccount.map { account ->
+        val now = System.currentTimeMillis()
+        val isGlobalSub = sharedPrefs.getBoolean("is_globally_subscribed", false) && (sharedPrefs.getLong("global_sub_expiry", 0L) <= 0 || sharedPrefs.getLong("global_sub_expiry", 0L) > now)
+        if (isGlobalSub) return@map true
+        if (account == null) return@map false
+        val norm = normalizeSyncKey(account.schoolName)
+        val normDisp = normalizeSyncKey(account.displayName)
+        val rawEmail = account.schoolName.trim()
+        val baseEmail = if (rawEmail.startsWith("fin_") || rawEmail.startsWith("fin-")) rawEmail.substring(4) else rawEmail
+        val normBase = normalizeSyncKey(baseEmail)
+
+        val prefActive = sharedPrefs.getBoolean("sub_active_$norm", false) ||
+            (normDisp.isNotBlank() && sharedPrefs.getBoolean("sub_active_$normDisp", false)) ||
+            (normBase.isNotBlank() && sharedPrefs.getBoolean("sub_active_$normBase", false)) ||
+            sharedPrefs.getBoolean("sub_active_${account.id}", false)
+        val prefExpiry = maxOf(
+            sharedPrefs.getLong("sub_expiry_$norm", 0L),
+            if (normDisp.isNotBlank()) sharedPrefs.getLong("sub_expiry_$normDisp", 0L) else 0L,
+            if (normBase.isNotBlank()) sharedPrefs.getLong("sub_expiry_$normBase", 0L) else 0L
+        )
+        val isPrefValid = prefActive && (prefExpiry <= 0 || prefExpiry > now)
+        val isAccountValid = account.hasActiveSubscription && (account.subscriptionExpiryDate <= 0 || account.subscriptionExpiryDate > now)
+        isPrefValid || isAccountValid
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val isPendingValidation: StateFlow<Boolean> = _currentSchoolId.flatMapLatest { id ->
-        if (id != null) repository.getPendingValidationStatus(id) else flowOf(false)
-    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    val isPendingValidation: StateFlow<Boolean> = _schoolAccount.map { account ->
+        if (account == null) return@map false
+        val now = System.currentTimeMillis()
+        val isGlobalSub = sharedPrefs.getBoolean("is_globally_subscribed", false) && (sharedPrefs.getLong("global_sub_expiry", 0L) <= 0 || sharedPrefs.getLong("global_sub_expiry", 0L) > now)
+        if (isGlobalSub || account.hasActiveSubscription) return@map false
+        val norm = normalizeSyncKey(account.schoolName)
+        val prefActive = sharedPrefs.getBoolean("sub_active_$norm", false)
+        if (prefActive) false else account.isPendingValidation
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val trialDaysRemaining: StateFlow<Long> = _schoolAccount.map { account ->
         if (account == null) return@map 90L
         val now = System.currentTimeMillis()
@@ -162,7 +187,7 @@ class SchoolViewModel(
         val elapsed = (now - accountCreatedAt).coerceAtLeast(0L)
         val trialDuration = 90L * 24L * 60L * 60L * 1000L
         ((trialDuration - elapsed) / (24L * 60L * 60L * 1000L)).coerceAtLeast(0L)
-    }.stateIn(viewModelScope, SharingStarted.Lazily, 90L)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 90L)
 
     val isTrialActive: StateFlow<Boolean> = _schoolAccount.map { account ->
         if (account == null) return@map true
@@ -171,29 +196,49 @@ class SchoolViewModel(
         val elapsed = (now - accountCreatedAt).coerceAtLeast(0L)
         val trialDuration = 90L * 24L * 60L * 60L * 1000L
         elapsed < trialDuration
-    }.stateIn(viewModelScope, SharingStarted.Lazily, true)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val isAppAccessGranted: StateFlow<Boolean> = _schoolAccount.map { account ->
+        val now = System.currentTimeMillis()
+        val isGlobalSub = sharedPrefs.getBoolean("is_globally_subscribed", false) && (sharedPrefs.getLong("global_sub_expiry", 0L) <= 0 || sharedPrefs.getLong("global_sub_expiry", 0L) > now)
+        if (isGlobalSub) return@map true
         if (account == null) return@map true
+
+        val norm = normalizeSyncKey(account.schoolName)
+        val normDisp = normalizeSyncKey(account.displayName)
+        val rawEmail = account.schoolName.trim()
+        val baseEmail = if (rawEmail.startsWith("fin_") || rawEmail.startsWith("fin-")) rawEmail.substring(4) else rawEmail
+        val normBase = normalizeSyncKey(baseEmail)
+
+        val prefActive = sharedPrefs.getBoolean("sub_active_$norm", false) ||
+            (normDisp.isNotBlank() && sharedPrefs.getBoolean("sub_active_$normDisp", false)) ||
+            (normBase.isNotBlank() && sharedPrefs.getBoolean("sub_active_$normBase", false)) ||
+            sharedPrefs.getBoolean("sub_active_${account.id}", false)
+        val prefExpiry = maxOf(
+            sharedPrefs.getLong("sub_expiry_$norm", 0L),
+            if (normDisp.isNotBlank()) sharedPrefs.getLong("sub_expiry_$normDisp", 0L) else 0L,
+            if (normBase.isNotBlank()) sharedPrefs.getLong("sub_expiry_$normBase", 0L) else 0L
+        )
+        val isPrefValid = prefActive && (prefExpiry <= 0 || prefExpiry > now)
+        val subActive = (account.hasActiveSubscription && (account.subscriptionExpiryDate <= 0 || account.subscriptionExpiryDate > now)) || isPrefValid
+
+        // Si l'abonnement annuel est actif, accès débloqué et garanti !
+        if (subActive) {
+            return@map true
+        }
 
         // Blocage si l'accès est suspendu / verrouillé par l'administrateur
         if (account.isAppLocked) {
             return@map false
         }
 
-        val now = System.currentTimeMillis()
         val accountCreatedAt = if (account.createdAt > 0L) account.createdAt else now
         val elapsed = (now - accountCreatedAt).coerceAtLeast(0L)
         val trialDuration = 90L * 24L * 60L * 60L * 1000L
         val trialActive = elapsed < trialDuration
         
-        val isExpired = account.hasActiveSubscription && account.subscriptionExpiryDate > 0 && account.subscriptionExpiryDate <= now
-        val subActive = account.hasActiveSubscription && !isExpired
-
-        val granted = trialActive || subActive
-        android.util.Log.d("ScolaPay_Access", "account: ${account.schoolName}, unpaidComm: ${account.unpaidCommission}, isLocked: ${account.isAppLocked}, granted: $granted")
-        granted
-    }.stateIn(viewModelScope, SharingStarted.Lazily, true)
+        trialActive
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     
     fun getPendingOrderId(): String? {
         if (_pendingOrderId.value.isNullOrBlank()) {
@@ -766,6 +811,9 @@ class SchoolViewModel(
                 updateData["schoolName"] = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
                 updateData["schoolEmail"] = account.schoolName
                 updateData["schoolAddress"] = account.address
+                if (account.founderPhone.isNotBlank()) {
+                    updateData["schoolPhone"] = account.founderPhone
+                }
                 if (account.logoBase64 != null) {
                     updateData["logoBase64"] = account.logoBase64!!
                 }
@@ -884,6 +932,9 @@ class SchoolViewModel(
                         finalUpdateData["schoolName"] = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
                     }
                     finalUpdateData["schoolAddress"] = account.address
+                    if (account.founderPhone.isNotBlank()) {
+                        finalUpdateData["schoolPhone"] = account.founderPhone
+                    }
                     if (account.logoBase64 != null) {
                         finalUpdateData["logoBase64"] = account.logoBase64!!
                     }
@@ -922,9 +973,32 @@ class SchoolViewModel(
     }
 
     fun unlockSchoolDefinitively() {
-        val account = _schoolAccount.value ?: return
+        val oneYearLater = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000L
+        val currentAcc = _schoolAccount.value
+        if (currentAcc != null) {
+            val fastUpdated = currentAcc.copy(
+                isAppLocked = false,
+                lockReason = "",
+                unpaidCommission = 0L,
+                hasActiveSubscription = true,
+                isPendingValidation = false,
+                subscriptionExpiryDate = maxOf(currentAcc.subscriptionExpiryDate, oneYearLater)
+            )
+            _schoolAccount.value = fastUpdated
+        }
+        
+        sharedPrefs.edit()
+            .putBoolean("is_globally_subscribed", true)
+            .putLong("global_sub_expiry", oneYearLater)
+            .apply()
+
+        clearPendingOrderId()
+
         viewModelScope.launch {
-            val oneYearLater = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000L
+            val account = _schoolAccount.value
+                ?: repository.getAllSchoolAccounts().firstOrNull()
+                ?: return@launch
+
             val updated = account.copy(
                 isAppLocked = false,
                 lockReason = "",
@@ -934,15 +1008,57 @@ class SchoolViewModel(
                 subscriptionExpiryDate = maxOf(account.subscriptionExpiryDate, oneYearLater)
             )
             repository.updateSchoolAccount(updated)
+            repository.unlockSchoolByNameOrId(account.schoolName, account.id, updated.subscriptionExpiryDate)
+            if (account.displayName.isNotBlank()) {
+                repository.unlockSchoolByNameOrId(account.displayName, account.id, updated.subscriptionExpiryDate)
+            }
             _schoolAccount.value = updated
             clearPendingOrderId()
 
             val auth = FirebaseAuth.getInstance()
             val currentAuthEmail = auth.currentUser?.email
             val candidateKeys = mutableSetOf<String>()
-            if (account.schoolName.isNotBlank()) candidateKeys.add(account.schoolName.trim())
+            val rawName = account.schoolName.trim()
+            val baseEmail = if (rawName.startsWith("fin_") || rawName.startsWith("fin-")) rawName.substring(4) else rawName
+
+            candidateKeys.add(rawName)
+            candidateKeys.add(baseEmail)
+            candidateKeys.add("fin_$baseEmail")
             if (account.displayName.isNotBlank()) candidateKeys.add(account.displayName.trim())
-            if (!currentAuthEmail.isNullOrBlank()) candidateKeys.add(currentAuthEmail.trim())
+            if (!currentAuthEmail.isNullOrBlank()) {
+                candidateKeys.add(currentAuthEmail.trim())
+                val baseAuth = if (currentAuthEmail.startsWith("fin_") || currentAuthEmail.startsWith("fin-")) currentAuthEmail.substring(4) else currentAuthEmail
+                candidateKeys.add(baseAuth)
+                candidateKeys.add("fin_$baseAuth")
+            }
+
+            for (k in candidateKeys) {
+                val normK = normalizeSyncKey(k)
+                sharedPrefs.edit()
+                    .putBoolean("sub_active_$normK", true)
+                    .putLong("sub_expiry_$normK", updated.subscriptionExpiryDate)
+                    .apply()
+                setCommissionSettled(k, true, 999999)
+            }
+
+            // Also update any matching account in local Room database!
+            try {
+                val allAccounts = repository.getAllSchoolAccounts()
+                for (acc in allAccounts) {
+                    val accBase = if (acc.schoolName.startsWith("fin_") || acc.schoolName.startsWith("fin-")) acc.schoolName.substring(4) else acc.schoolName
+                    if (acc.id == account.id || acc.schoolName.equals(rawName, ignoreCase = true) || acc.schoolName.equals(baseEmail, ignoreCase = true) || accBase.equals(baseEmail, ignoreCase = true) || (account.displayName.isNotBlank() && acc.displayName.equals(account.displayName, ignoreCase = true))) {
+                        val upAcc = acc.copy(
+                            isAppLocked = false,
+                            lockReason = "",
+                            unpaidCommission = 0L,
+                            hasActiveSubscription = true,
+                            isPendingValidation = false,
+                            subscriptionExpiryDate = maxOf(acc.subscriptionExpiryDate, oneYearLater)
+                        )
+                        repository.updateSchoolAccount(upAcc)
+                    }
+                }
+            } catch (eLocal: Exception) {}
 
             val payload = mapOf(
                 "isAppLocked" to false,
@@ -1003,13 +1119,16 @@ class SchoolViewModel(
             ?: _pendingOrderId.value
             ?: sharedPrefs.getString("pending_order_id", null)
             ?: sharedPrefs.getString("pending_operation_id", null)
-        if (orderId.isNullOrBlank()) {
+        val opId = sharedPrefs.getString("pending_operation_id", null)
+        val lastComm = sharedPrefs.getString("last_comm_order_id", null)
+
+        val idList = listOfNotNull(orderId, opId, lastComm, customOrderId).distinct()
+        if (idList.isEmpty()) {
             onResult("NO_ORDER")
             return
         }
-        val opId = sharedPrefs.getString("pending_operation_id", null)
         viewModelScope.launch {
-            val status = com.example.utils.ChapChapPayApi.checkMultipleIds(orderId, opId)
+            val status = com.example.utils.ChapChapPayApi.checkMultipleIds(*idList.toTypedArray())
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 if (status == "SUCCESS") {
                     unlockSchoolDefinitively()
@@ -1262,10 +1381,18 @@ class SchoolViewModel(
                         updatedAccount = updatedAccount.copy(founderPhone = remotePhone)
                         isUpdated = true
                     }
-                    val isSettled = isCommissionSettled(updatedAccount.schoolName) || isCommissionSettled(updatedAccount.displayName)
-                    val effectiveHasSub = hasSub
-                    val effectivePending = pendingVal
-                    val effectiveSubExpiry = subExpiry
+                    val normName = normalizeSyncKey(updatedAccount.schoolName)
+                    val normDisp = normalizeSyncKey(updatedAccount.displayName)
+                    val now = System.currentTimeMillis()
+                    val isGlobalSub = sharedPrefs.getBoolean("is_globally_subscribed", false) && (sharedPrefs.getLong("global_sub_expiry", 0L) <= 0 || sharedPrefs.getLong("global_sub_expiry", 0L) > now)
+                    val isPrefSubActive = isGlobalSub || (sharedPrefs.getBoolean("sub_active_$normName", false) && (sharedPrefs.getLong("sub_expiry_$normName", 0L) <= 0 || sharedPrefs.getLong("sub_expiry_$normName", 0L) > now)) ||
+                        (normDisp.isNotBlank() && sharedPrefs.getBoolean("sub_active_$normDisp", false) && (sharedPrefs.getLong("sub_expiry_$normDisp", 0L) <= 0 || sharedPrefs.getLong("sub_expiry_$normDisp", 0L) > now)) ||
+                        (updatedAccount.hasActiveSubscription && (updatedAccount.subscriptionExpiryDate <= 0 || updatedAccount.subscriptionExpiryDate > now))
+
+                    val isSettled = isCommissionSettled(updatedAccount.schoolName) || isCommissionSettled(updatedAccount.displayName) || isPrefSubActive
+                    val effectiveHasSub = if (isPrefSubActive) true else hasSub
+                    val effectivePending = if (isPrefSubActive) false else pendingVal
+                    val effectiveSubExpiry = if (isPrefSubActive) maxOf(subExpiry, maxOf(updatedAccount.subscriptionExpiryDate, sharedPrefs.getLong("sub_expiry_$normName", 0L))) else subExpiry
 
                     if (effectiveHasSub != updatedAccount.hasActiveSubscription || effectivePending != updatedAccount.isPendingValidation || effectiveSubExpiry != updatedAccount.subscriptionExpiryDate) {
                         updatedAccount = updatedAccount.copy(
@@ -1290,9 +1417,9 @@ class SchoolViewModel(
                     val remoteOnlineTotal = snapshot.getLong("onlinePaymentsTotal") ?: updatedAccount.onlinePaymentsTotal
                     val remoteLockReason = snapshot.getString("lockReason") ?: updatedAccount.lockReason
 
-                    val effectiveIsAppLocked = if (isSettled) false else remoteIsAppLocked
-                    val effectiveCommission = if (isSettled) 0L else remoteCommission
-                    val effectiveLockReason = if (isSettled) "" else remoteLockReason
+                    val effectiveIsAppLocked = if (isSettled || isPrefSubActive) false else remoteIsAppLocked
+                    val effectiveCommission = if (isSettled || isPrefSubActive) 0L else remoteCommission
+                    val effectiveLockReason = if (isSettled || isPrefSubActive) "" else remoteLockReason
 
                     if (remoteOnlinePayment != updatedAccount.onlinePaymentEnabled ||
                         effectiveIsAppLocked != updatedAccount.isAppLocked ||
@@ -1688,16 +1815,14 @@ class SchoolViewModel(
                     val isLocallySettled = isCommissionSettled(email) || isCommissionSettled(displayName) || (existing != null && (isCommissionSettled(existing.schoolName) || isCommissionSettled(existing.displayName)))
                     val settledCount = maxOf(getCommissionSettledCount(email), getCommissionSettledCount(displayName), existing?.let { getCommissionSettledCount(it.schoolName) } ?: 0)
                     val effectiveIsLocked = isAppLocked
-                    val effectiveLock = lockReason ?: ""
-                    val parsedCommFromReason = Regex("""(\d+)\s*GNF""").find(effectiveLock)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-                    val calcComm = (onlinePaymentsCount * 3000L)
-                    val effectiveComm = if (effectiveIsLocked) {
-                        maxOf(unpaidCommission, calcComm, parsedCommFromReason)
-                    } else {
-                        if (isLocallySettled && settledCount >= onlinePaymentsCount) 0L else maxOf(unpaidCommission, calcComm)
-                    }
-                    val effectiveSub = hasActiveSubscription
-                    val effectiveSubExpiry = subscriptionExpiryDate
+                    val rawLock = lockReason ?: ""
+                    val effectiveLock = if (rawLock.contains("commission", ignoreCase = true) || rawLock.contains("chapchap", ignoreCase = true)) {
+                        "Accès à l'application ScolaPay suspendu par l'administration."
+                    } else rawLock
+                    val rawDocBase = if (email.startsWith("fin_") || email.startsWith("fin-")) email.substring(4) else email
+                    val effectiveComm = 0L
+                    val effectiveSub = hasActiveSubscription || (existing != null && existing.hasActiveSubscription && existing.subscriptionExpiryDate > System.currentTimeMillis())
+                    val effectiveSubExpiry = maxOf(subscriptionExpiryDate, existing?.subscriptionExpiryDate ?: 0L)
                     val effectivePending = isPendingValidation
 
                     if (existing != null) {
@@ -1717,14 +1842,15 @@ class SchoolViewModel(
                             createdAt = createdAt,
                             onlinePaymentEnabled = onlinePaymentEnabled,
                             isAppLocked = effectiveIsLocked,
-                            unpaidCommission = effectiveComm,
+                            unpaidCommission = 0L,
                             onlinePaymentsCount = maxOf(existing.onlinePaymentsCount, onlinePaymentsCount),
                             onlinePaymentsTotal = maxOf(existing.onlinePaymentsTotal, onlinePaymentsTotal),
                             lockReason = effectiveLock
                         )
                         repository.updateSchoolAccount(updatedSchool)
                         val curAcc = _schoolAccount.value
-                        if (curAcc != null && (curAcc.schoolName.equals(email, ignoreCase = true) || curAcc.displayName.equals(displayName, ignoreCase = true) || curAcc.id == existing.id)) {
+                        val curBase = curAcc?.schoolName?.let { if (it.startsWith("fin_") || it.startsWith("fin-")) it.substring(4) else it }
+                        if (curAcc != null && (curAcc.schoolName.equals(email, ignoreCase = true) || curAcc.schoolName.equals(rawDocBase, ignoreCase = true) || (curBase != null && curBase.equals(rawDocBase, ignoreCase = true)) || curAcc.displayName.equals(displayName, ignoreCase = true) || curAcc.id == existing.id)) {
                             _schoolAccount.value = updatedSchool
                         }
                     } else if (email.contains("@")) {
@@ -1854,23 +1980,22 @@ class SchoolViewModel(
                         val lockReason = doc.getString("lockReason")
                         
                         val cleanDocEmail = email.lowercase().trim()
-                        if (!cleanDocEmail.contains("@") || cleanDocEmail.startsWith("fin_") || cleanDocEmail.startsWith("fin-") || cleanDocEmail == "dore") continue
+                        if (!cleanDocEmail.contains("@") || cleanDocEmail == "dore") continue
 
+                        val rawDocBase = if (cleanDocEmail.startsWith("fin_") || cleanDocEmail.startsWith("fin-")) cleanDocEmail.substring(4) else cleanDocEmail
                         val existing = repository.getSchoolAccountByName(email)
-                            ?: repository.getAllSchoolAccounts().find { it.schoolName.equals(email, ignoreCase = true) || (it.displayName.isNotBlank() && it.displayName.equals(displayName, ignoreCase = true)) }
+                            ?: repository.getSchoolAccountByName(rawDocBase)
+                            ?: repository.getAllSchoolAccounts().find { it.schoolName.equals(email, ignoreCase = true) || it.schoolName.equals(rawDocBase, ignoreCase = true) || (it.displayName.isNotBlank() && it.displayName.equals(displayName, ignoreCase = true)) }
                         val isLocallySettled = isCommissionSettled(email) || isCommissionSettled(displayName) || (existing != null && (isCommissionSettled(existing.schoolName) || isCommissionSettled(existing.displayName)))
                         val settledCount = maxOf(getCommissionSettledCount(email), getCommissionSettledCount(displayName), existing?.let { getCommissionSettledCount(it.schoolName) } ?: 0)
                         val effectiveIsLocked = isAppLocked
-                        val effectiveLock = lockReason ?: ""
-                        val parsedCommFromReason = Regex("""(\d+)\s*GNF""").find(effectiveLock)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-                        val calcComm = (onlinePaymentsCount * 3000L)
-                        val effectiveComm = if (effectiveIsLocked) {
-                            maxOf(unpaidCommission, calcComm, parsedCommFromReason)
-                        } else {
-                            if (isLocallySettled && settledCount >= onlinePaymentsCount) 0L else maxOf(unpaidCommission, calcComm)
-                        }
-                        val effectiveSub = hasActiveSubscription
-                        val effectiveSubExpiry = subscriptionExpiryDate
+                        val rawLock = lockReason ?: ""
+                        val effectiveLock = if (rawLock.contains("commission", ignoreCase = true) || rawLock.contains("chapchap", ignoreCase = true)) {
+                            "Accès à l'application ScolaPay suspendu par l'administration."
+                        } else rawLock
+                        val effectiveComm = 0L
+                        val effectiveSub = hasActiveSubscription || (existing != null && existing.hasActiveSubscription && existing.subscriptionExpiryDate > System.currentTimeMillis())
+                        val effectiveSubExpiry = maxOf(subscriptionExpiryDate, existing?.subscriptionExpiryDate ?: 0L)
                         val effectivePending = isPendingValidation
 
                         if (existing != null) {
@@ -1890,14 +2015,15 @@ class SchoolViewModel(
                                 createdAt = createdAt,
                                 onlinePaymentEnabled = onlinePaymentEnabled,
                                 isAppLocked = effectiveIsLocked,
-                                unpaidCommission = effectiveComm,
+                                unpaidCommission = 0L,
                                 onlinePaymentsCount = maxOf(existing.onlinePaymentsCount, onlinePaymentsCount),
                                 onlinePaymentsTotal = maxOf(existing.onlinePaymentsTotal, onlinePaymentsTotal),
                                 lockReason = effectiveLock
                             )
                             repository.updateSchoolAccount(updatedSchool)
                             val curAcc = _schoolAccount.value
-                            if (curAcc != null && (curAcc.schoolName.equals(email, ignoreCase = true) || curAcc.displayName.equals(displayName, ignoreCase = true) || curAcc.id == existing.id)) {
+                            val curBase = curAcc?.schoolName?.let { if (it.startsWith("fin_") || it.startsWith("fin-")) it.substring(4) else it }
+                            if (curAcc != null && (curAcc.schoolName.equals(email, ignoreCase = true) || curAcc.schoolName.equals(rawDocBase, ignoreCase = true) || (curBase != null && curBase.equals(rawDocBase, ignoreCase = true)) || curAcc.displayName.equals(displayName, ignoreCase = true) || curAcc.id == existing.id)) {
                                 _schoolAccount.value = updatedSchool
                             }
                         } else if (cleanDocEmail.contains("@") && !cleanDocEmail.startsWith("fin_") && !cleanDocEmail.startsWith("fin-") && cleanDocEmail != "dore") {
@@ -2003,17 +2129,15 @@ class SchoolViewModel(
                     }
 
                     val settledCount = maxOf(getCommissionSettledCount(acc.schoolName), getCommissionSettledCount(acc.displayName))
-                    val isLocallyUnlocked = (isCommissionSettled(acc.schoolName) || isCommissionSettled(acc.displayName)) && settledCount >= bestCount
-                    val calcComm = if (settledCount > 0) maxOf(0L, (bestCount - settledCount) * 3000L) else (bestCount * 3000L)
-                    val finalComm = if (isLocallyUnlocked && calcComm == 0L) 0L else maxOf(bestComm, calcComm)
+                    val effectiveIsLocked = bestIsLocked
+                    val rawLock = if (!effectiveIsLocked) "" else (bestLockReason ?: "")
+                    val effectiveLockReason = if (rawLock.contains("commission", ignoreCase = true) || rawLock.contains("chapchap", ignoreCase = true)) {
+                        "Accès à l'application ScolaPay suspendu par l'administration."
+                    } else rawLock
 
-                    val effectiveIsLocked = if (isLocallyUnlocked) false else bestIsLocked
-                    val effectiveLockReason = if (!effectiveIsLocked) "" else bestLockReason
-                    val effectiveComm = if (isLocallyUnlocked && calcComm == 0L) 0L else finalComm
-
-                    if (effectiveComm != acc.unpaidCommission || bestCount != acc.onlinePaymentsCount || bestTotal != acc.onlinePaymentsTotal || bestOnlineEnabled != acc.onlinePaymentEnabled || effectiveIsLocked != acc.isAppLocked) {
+                    if (acc.unpaidCommission != 0L || bestCount != acc.onlinePaymentsCount || bestTotal != acc.onlinePaymentsTotal || bestOnlineEnabled != acc.onlinePaymentEnabled || effectiveIsLocked != acc.isAppLocked || effectiveLockReason != (acc.lockReason ?: "")) {
                         val updated = acc.copy(
-                            unpaidCommission = effectiveComm,
+                            unpaidCommission = 0L,
                             onlinePaymentsCount = bestCount,
                             onlinePaymentsTotal = bestTotal,
                             onlinePaymentEnabled = bestOnlineEnabled,
@@ -2116,20 +2240,17 @@ class SchoolViewModel(
                 val settledCount = maxOf(getCommissionSettledCount(acc.schoolName), getCommissionSettledCount(acc.displayName))
                 val isSettled = (isCommissionSettled(acc.schoolName) || isCommissionSettled(acc.displayName)) && settledCount >= finalCount
 
-                val calculatedComm = if (settledCount > 0) {
-                    maxOf(0L, (finalCount - settledCount) * 3000L)
-                } else {
-                    finalCount * 3000L
-                }
-                val finalCommission = if (isSettled && calculatedComm == 0L) 0L else maxOf(calculatedComm, acc.unpaidCommission)
                 val finalIsLocked = acc.isAppLocked
-                val finalLockReason = acc.lockReason
+                val rawLock = acc.lockReason ?: ""
+                val finalLockReason = if (rawLock.contains("commission", ignoreCase = true) || rawLock.contains("chapchap", ignoreCase = true)) {
+                    "Accès à l'application ScolaPay suspendu par l'administration."
+                } else rawLock
 
-                if (finalCount != acc.onlinePaymentsCount || finalTotal != acc.onlinePaymentsTotal || finalCommission != acc.unpaidCommission || finalIsLocked != acc.isAppLocked) {
+                if (finalCount != acc.onlinePaymentsCount || finalTotal != acc.onlinePaymentsTotal || acc.unpaidCommission != 0L || finalIsLocked != acc.isAppLocked || finalLockReason != (acc.lockReason ?: "")) {
                     val updated = acc.copy(
                         onlinePaymentsCount = finalCount,
                         onlinePaymentsTotal = finalTotal,
-                        unpaidCommission = finalCommission,
+                        unpaidCommission = 0L,
                         isAppLocked = finalIsLocked,
                         lockReason = finalLockReason
                     )
@@ -2139,11 +2260,11 @@ class SchoolViewModel(
                     try {
                         firestore.collection("schools").document(acc.schoolName).set(
                             mapOf(
-                                "unpaidCommission" to finalCommission,
+                                "unpaidCommission" to 0L,
                                 "onlinePaymentsCount" to finalCount,
                                 "onlinePaymentsTotal" to finalTotal,
                                 "isAppLocked" to finalIsLocked,
-                                "lockReason" to (finalLockReason ?: "")
+                                "lockReason" to finalLockReason
                             ),
                             com.google.firebase.firestore.SetOptions.merge()
                         )
@@ -2156,11 +2277,11 @@ class SchoolViewModel(
                     try {
                         rtdb.getReference("schools").child(schoolKey).updateChildren(
                             mapOf(
-                                "unpaidCommission" to finalCommission,
+                                "unpaidCommission" to 0L,
                                 "onlinePaymentsCount" to finalCount,
                                 "onlinePaymentsTotal" to finalTotal,
                                 "isAppLocked" to finalIsLocked,
-                                "lockReason" to (finalLockReason ?: "")
+                                "lockReason" to finalLockReason
                             )
                         )
                     } catch (eR: Exception) {}
@@ -2221,30 +2342,46 @@ class SchoolViewModel(
             }
 
             if (matchedAccount != null) {
+                val normName = normalizeSyncKey(matchedAccount.schoolName)
+                val normDisp = normalizeSyncKey(matchedAccount.displayName)
+                val now = System.currentTimeMillis()
+                val isGlobalSub = sharedPrefs.getBoolean("is_globally_subscribed", false) && (sharedPrefs.getLong("global_sub_expiry", 0L) <= 0 || sharedPrefs.getLong("global_sub_expiry", 0L) > now)
+                val isPrefSubActive = isGlobalSub || (sharedPrefs.getBoolean("sub_active_$normName", false) && (sharedPrefs.getLong("sub_expiry_$normName", 0L) <= 0 || sharedPrefs.getLong("sub_expiry_$normName", 0L) > now)) ||
+                    (normDisp.isNotBlank() && sharedPrefs.getBoolean("sub_active_$normDisp", false) && (sharedPrefs.getLong("sub_expiry_$normDisp", 0L) <= 0 || sharedPrefs.getLong("sub_expiry_$normDisp", 0L) > now)) ||
+                    (matchedAccount.hasActiveSubscription && (matchedAccount.subscriptionExpiryDate <= 0 || matchedAccount.subscriptionExpiryDate > now))
+
                 val newCount = maxOf(matchedAccount.onlinePaymentsCount, rtdbCount)
                 val newTotal = maxOf(matchedAccount.onlinePaymentsTotal, rtdbTotal)
-                val settledCount = maxOf(getCommissionSettledCount(matchedAccount.schoolName), getCommissionSettledCount(matchedAccount.displayName))
-                val isLocallyUnlocked = (isCommissionSettled(matchedAccount.schoolName) || isCommissionSettled(matchedAccount.displayName)) && settledCount >= newCount
-                val calcComm = if (settledCount > 0) maxOf(0L, (newCount - settledCount) * 3000L) else (newCount * 3000L)
-                val newCommission = if (isLocallyUnlocked && calcComm == 0L) 0L else maxOf(matchedAccount.unpaidCommission, rtdbCommission, calcComm)
                 val newOnlineEnabled = rtdbOnlinePaymentEnabled ?: matchedAccount.onlinePaymentEnabled
-                val effectiveIsLocked = if (isLocallyUnlocked) false else (rtdbIsAppLocked ?: matchedAccount.isAppLocked)
-                val effectiveLockReason = if (!effectiveIsLocked) "" else (rtdbLockReason ?: matchedAccount.lockReason)
-                val effectiveCommission = if (isLocallyUnlocked && calcComm == 0L) 0L else newCommission
+                val effectiveIsLocked = if (isPrefSubActive) false else (rtdbIsAppLocked ?: matchedAccount.isAppLocked)
+                val rawLock = if (!effectiveIsLocked) "" else (rtdbLockReason ?: matchedAccount.lockReason ?: "")
+                val effectiveLockReason = if (isPrefSubActive) "" else if (rawLock.contains("commission", ignoreCase = true) || rawLock.contains("chapchap", ignoreCase = true)) {
+                    "Accès à l'application ScolaPay suspendu par l'administration."
+                } else rawLock
 
-                if (effectiveCommission != matchedAccount.unpaidCommission ||
+                val effectiveHasSub = if (isPrefSubActive) true else matchedAccount.hasActiveSubscription
+                val effectivePending = if (isPrefSubActive) false else matchedAccount.isPendingValidation
+                val effectiveExpiry = if (isPrefSubActive) maxOf(matchedAccount.subscriptionExpiryDate, sharedPrefs.getLong("sub_expiry_$normName", 0L)) else matchedAccount.subscriptionExpiryDate
+
+                if (matchedAccount.unpaidCommission != 0L ||
                     newCount != matchedAccount.onlinePaymentsCount ||
                     newTotal != matchedAccount.onlinePaymentsTotal ||
                     newOnlineEnabled != matchedAccount.onlinePaymentEnabled ||
-                    effectiveIsLocked != matchedAccount.isAppLocked) {
+                    effectiveIsLocked != matchedAccount.isAppLocked ||
+                    effectiveLockReason != (matchedAccount.lockReason ?: "") ||
+                    effectiveHasSub != matchedAccount.hasActiveSubscription ||
+                    effectivePending != matchedAccount.isPendingValidation) {
 
                     val updated = matchedAccount.copy(
-                        unpaidCommission = effectiveCommission,
+                        unpaidCommission = 0L,
                         onlinePaymentsCount = newCount,
                         onlinePaymentsTotal = newTotal,
                         onlinePaymentEnabled = newOnlineEnabled,
                         isAppLocked = effectiveIsLocked,
-                        lockReason = effectiveLockReason
+                        lockReason = effectiveLockReason,
+                        hasActiveSubscription = effectiveHasSub,
+                        subscriptionExpiryDate = effectiveExpiry,
+                        isPendingValidation = effectivePending
                     )
                     repository.updateSchoolAccount(updated)
                     if (_schoolAccount.value?.id == matchedAccount.id) {
@@ -2255,11 +2392,12 @@ class SchoolViewModel(
                     try {
                         firestore.collection("schools").document(matchedAccount.schoolName).set(
                             mapOf(
-                                "unpaidCommission" to effectiveCommission,
+                                "unpaidCommission" to 0L,
                                 "onlinePaymentsCount" to newCount,
                                 "onlinePaymentsTotal" to newTotal,
                                 "onlinePaymentEnabled" to newOnlineEnabled,
-                                "isAppLocked" to effectiveIsLocked
+                                "isAppLocked" to effectiveIsLocked,
+                                "lockReason" to effectiveLockReason
                             ),
                             com.google.firebase.firestore.SetOptions.merge()
                         )
@@ -2446,47 +2584,19 @@ class SchoolViewModel(
                 ?: repository.getAllSchoolAccounts().find { it.schoolName.equals(email, ignoreCase = true) || (it.displayName.isNotBlank() && it.displayName.equals(schoolName, ignoreCase = true)) }
             val effectiveLocked = locked
 
-            val currentUnpaid = account?.unpaidCommission ?: 0L
-            val paymentsCount = account?.onlinePaymentsCount ?: 0
-            val calcComm = paymentsCount.toLong() * 3000L
-            val dueComm = if (effectiveLocked) {
-                if (customAmount != null && customAmount > 0L) {
-                    customAmount
-                } else if (currentUnpaid > 0L) {
-                    currentUnpaid
-                } else if (calcComm > 0L) {
-                    calcComm
+            val cleanReason = if (effectiveLocked) {
+                val inputReason = reason?.trim() ?: ""
+                if (inputReason.isNotBlank() && !inputReason.contains("commission", ignoreCase = true) && !inputReason.contains("chapchap", ignoreCase = true)) {
+                    inputReason
                 } else {
-                    3000L
+                    "Accès à l'application ScolaPay suspendu par l'administration."
                 }
-            } else {
-                0L
-            }
-
-            if (effectiveLocked) {
-                setCommissionSettled(email, false, 0)
-                if (account != null) {
-                    setCommissionSettled(account.schoolName, false, 0)
-                    if (account.displayName.isNotBlank()) setCommissionSettled(account.displayName, false, 0)
-                }
-            } else {
-                val curCount = account?.onlinePaymentsCount ?: 0
-                setCommissionSettled(email, true, curCount)
-                if (account != null) {
-                    setCommissionSettled(account.schoolName, true, curCount)
-                    if (account.displayName.isNotBlank()) setCommissionSettled(account.displayName, true, curCount)
-                }
-            }
-
-            val defaultReason = reason ?: if (effectiveLocked) {
-                if (dueComm > 0L) "Accès à l'application ScolaPay suspendu pour facture de commission impayée ($dueComm GNF). Merci de régulariser."
-                else "Accès à l'application ScolaPay suspendu par l'administration. Merci de contacter le support zalytechno."
             } else ""
 
             val updated = account?.copy(
                 isAppLocked = effectiveLocked,
-                lockReason = defaultReason,
-                unpaidCommission = dueComm
+                lockReason = cleanReason,
+                unpaidCommission = 0L
             )
             if (updated != null) {
                 repository.updateSchoolAccount(updated)
@@ -2500,8 +2610,8 @@ class SchoolViewModel(
 
             val firestorePayload = mapOf(
                 "isAppLocked" to effectiveLocked,
-                "lockReason" to defaultReason,
-                "unpaidCommission" to dueComm
+                "lockReason" to cleanReason,
+                "unpaidCommission" to 0L
             )
 
             if (cleanEmailDoc.contains("@") && !cleanEmailDoc.startsWith("fin_")) {
@@ -3003,19 +3113,38 @@ class SchoolViewModel(
 
         // Toujours synchroniser les identifiants frais depuis Firestore pour garantir le mot de passe actuel
         try {
-            val doc = firestore.collection("schools").document(cleanEmail).get().await()
+            var doc = firestore.collection("schools").document(cleanEmail).get().await()
+            if (!doc.exists()) {
+                doc = firestore.collection("schools").document(rawInput).get().await()
+            }
+            if (!doc.exists() && !cleanEmail.startsWith("fin_")) {
+                doc = firestore.collection("schools").document("fin_$cleanEmail").get().await()
+            }
             if (doc.exists()) {
                 val dn = doc.getString("displayName") ?: cleanEmail
                 val pw = doc.getString("passwordHash") ?: ""
                 val finPw = doc.getString("financierPasswordHash") ?: ""
                 val addr = doc.getString("address") ?: ""
                 val phone = doc.getString("founderPhone") ?: ""
-                val subExpiry = doc.getLong("subscriptionExpiryDate")
+                var subExpiry = doc.getLong("subscriptionExpiryDate")
                 val isPending = doc.getBoolean("isPendingValidation") ?: false
-                val hasSub = doc.getBoolean("hasActiveSubscription") ?: false
+                var hasSub = doc.getBoolean("hasActiveSubscription") ?: false
                 val onlineEnabled = doc.getBoolean("onlinePaymentEnabled") ?: true
-                val isLocked = doc.getBoolean("isAppLocked") ?: false
+                var isLocked = doc.getBoolean("isAppLocked") ?: false
                 val unpComm = doc.getLong("unpaidCommission") ?: 0L
+
+                // If not subscribed, check counterpart doc (e.g. fin_ or base)
+                if (!hasSub) {
+                    try {
+                        val otherKey = if (cleanEmail.startsWith("fin_")) cleanEmail.substring(4) else "fin_$cleanEmail"
+                        val otherDoc = firestore.collection("schools").document(otherKey).get().await()
+                        if (otherDoc.exists() && otherDoc.getBoolean("hasActiveSubscription") == true) {
+                            hasSub = true
+                            isLocked = otherDoc.getBoolean("isAppLocked") ?: false
+                            subExpiry = otherDoc.getLong("subscriptionExpiryDate") ?: subExpiry
+                        }
+                    } catch (eOther: Exception) {}
+                }
 
                 if (accountFound != null) {
                     val updated = accountFound.copy(

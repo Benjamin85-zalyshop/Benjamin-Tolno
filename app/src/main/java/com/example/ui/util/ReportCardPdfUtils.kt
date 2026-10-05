@@ -242,7 +242,9 @@ object ReportCardPdfUtils {
                 totalFee = totalFee,
                 paidFee = paidFee,
                 dueFee = dueFee,
-                percent = percent
+                percent = percent,
+                schoolAddress = schoolAddress,
+                schoolPhone = schoolPhone
             )
             val qrBmp = QrCodeUtils.generateQrBitmap(qrData, 150)
             if (qrBmp != null) {

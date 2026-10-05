@@ -127,13 +127,18 @@ class MainActivity : ComponentActivity() {
                             val uri = newIntent.data
                             if (uri != null && (uri.scheme == "scolapay" || uri.scheme == "https") && (uri.host == "paiement" || uri.host == "scolapay.gn" || uri.host == "scolapay-b6289.web.app")) {
                                 if (uri.path?.contains("success") == true || uri.path?.contains("return") == true) {
-                                    viewModel.checkPendingPaymentStatus { status ->
+                                    val returnedOrderId = uri.getQueryParameter("order_id") ?: uri.getQueryParameter("operation_id")
+                                    val returnedOpId = uri.getQueryParameter("operation_id")
+                                    if (!returnedOrderId.isNullOrBlank()) {
+                                        viewModel.savePendingOrderId(returnedOrderId, returnedOpId)
+                                    }
+                                    viewModel.checkPendingPaymentStatus(returnedOrderId) { status ->
                                         if (status == "SUCCESS") {
                                             android.widget.Toast.makeText(applicationContext, "Paiement Chap Chap Pay réussi, abonnement activé !", android.widget.Toast.LENGTH_LONG).show()
                                         } else if (status == "FAILED") {
                                             android.widget.Toast.makeText(applicationContext, "Paiement échoué ou annulé. Vous pouvez réessayer.", android.widget.Toast.LENGTH_LONG).show()
                                         } else {
-                                            android.widget.Toast.makeText(applicationContext, "Paiement en attente de validation.", android.widget.Toast.LENGTH_LONG).show()
+                                            android.widget.Toast.makeText(applicationContext, "Paiement en cours de confirmation...", android.widget.Toast.LENGTH_LONG).show()
                                         }
                                     }
                                     newIntent.data = null // Clear intent

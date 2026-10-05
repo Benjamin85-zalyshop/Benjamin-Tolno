@@ -178,6 +178,9 @@ interface SchoolDao {
     @Query("SELECT COUNT(*) FROM school_accounts")
     suspend fun getAccountCount(): Int
     
+    @Query("UPDATE school_accounts SET hasActiveSubscription = 1, isPendingValidation = 0, isAppLocked = 0, lockReason = '', unpaidCommission = 0, subscriptionExpiryDate = :expiryDate WHERE LOWER(schoolName) = LOWER(:schoolName) OR (id = :schoolId AND :schoolId > 0)")
+    suspend fun unlockSchoolByNameOrId(schoolName: String, schoolId: Int, expiryDate: Long)
+
     @Query("UPDATE school_accounts SET hasActiveSubscription = 1, isPendingValidation = 0, subscriptionExpiryDate = :expiryDate WHERE id = :schoolId")
     suspend fun activateSubscription(schoolId: Int, expiryDate: Long)
 
