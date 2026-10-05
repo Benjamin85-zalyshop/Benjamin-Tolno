@@ -134,7 +134,7 @@ fun AcademicScreen(
                 schoolName = schoolName ?: "",
                 schoolLogoBase64 = schoolLogoBase64,
                 schoolAddress = schoolAccount?.address ?: "",
-                schoolPhone = schoolAccount?.founderPhone ?: "",
+                schoolPhone = schoolAccount?.founderPhone?.takeIf { it.isNotBlank() } ?: schoolAccount?.paymentPhoneNumber ?: "",
                 subjects = classSubjects,
                 studentGrades = studentGrades,
                 summary = summary,

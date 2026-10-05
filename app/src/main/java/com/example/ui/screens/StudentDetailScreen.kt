@@ -104,7 +104,9 @@ fun StudentDetailScreen(
             uri?.let {
                 if (student != null) {
                     val studentClassFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
-                    generatePdf(context, student, studentPayments, schoolName ?: "", studentClassFee, schoolLogoBase64, it, currency)
+                    val sAddress = schoolAccount?.address ?: ""
+                    val sPhone = schoolAccount?.founderPhone?.takeIf { it.isNotBlank() } ?: schoolAccount?.paymentPhoneNumber ?: ""
+                    generatePdf(context, student, studentPayments, schoolName ?: "", studentClassFee, schoolLogoBase64, it, currency, sAddress, sPhone)
                     Toast.makeText(context, "PDF généré avec succès", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -118,6 +120,8 @@ fun StudentDetailScreen(
                 if (student != null) {
                     val matricule = if (student.remoteId.length >= 5) student.remoteId.take(5).uppercase() else student.id.toString()
                     val studentClassFee = classFees.find { it.grade == student.grade }?.feeAmount ?: 0L
+                    val sAddress = schoolAccount?.address ?: ""
+                    val sPhone = schoolAccount?.founderPhone?.takeIf { it.isNotBlank() } ?: schoolAccount?.paymentPhoneNumber ?: ""
                     generateStudentIdCardPdf(
                         context, 
                         student, 
@@ -129,7 +133,9 @@ fun StudentDetailScreen(
                         grades,
                         subjects,
                         students,
-                        it
+                        it,
+                        sAddress,
+                        sPhone
                     )
                     Toast.makeText(context, "Carte Scolaire PDF générée avec succès", Toast.LENGTH_SHORT).show()
                 }
@@ -909,7 +915,9 @@ fun generatePdf(
     studentClassFee: Long,
     schoolLogoBase64: String?,
     uri: android.net.Uri,
-    currency: String = "GNF"
+    currency: String = "GNF",
+    schoolAddress: String = "",
+    schoolPhone: String = ""
 ) {
     val pdfDocument = android.graphics.pdf.PdfDocument()
     val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, 1).create() // A4 size
@@ -966,7 +974,9 @@ fun generatePdf(
             paidFee = formattedPaid,
             dueFee = formattedDue,
             percent = qrPercent.toString(),
-            schoolName = schoolName ?: ""
+            schoolName = schoolName,
+            schoolAddress = schoolAddress,
+            schoolPhone = schoolPhone
         )
         val qrBmp = com.example.ui.util.QrCodeUtils.generateQrBitmap(qrData, 200)
         if (qrBmp != null) {
@@ -1247,7 +1257,9 @@ fun generateStudentIdCardPdf(
     grades: List<com.example.data.models.StudentGrade>,
     subjects: List<com.example.data.models.Subject>,
     studentsList: List<com.example.data.models.Student>,
-    uri: android.net.Uri
+    uri: android.net.Uri,
+    schoolAddress: String = "",
+    schoolPhone: String = ""
 ) {
     val pdfDocument = android.graphics.pdf.PdfDocument()
     val cardWidth = 340
@@ -1454,7 +1466,9 @@ fun generateStudentIdCardPdf(
             rank = rankStr,
             size = sizeStr,
             mention = mentionStr,
-            schoolName = schoolName ?: ""
+            schoolName = schoolName,
+            schoolAddress = schoolAddress,
+            schoolPhone = schoolPhone
         )
         val qrBmp = com.example.ui.util.QrCodeUtils.generateQrBitmap(qrData, 200)
         if (qrBmp != null) {

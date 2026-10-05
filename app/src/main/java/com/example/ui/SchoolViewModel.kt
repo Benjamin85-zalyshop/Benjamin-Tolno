@@ -806,17 +806,41 @@ class SchoolViewModel(
                 "totalFee" to totalFee,
                 "paidFee" to totalPaid
             )
-            val account = _schoolAccount.value
+            val account = _schoolAccount.value ?: repository.getFirstSchoolAccount()
             if (account != null) {
-                updateData["schoolName"] = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+                val sSchoolName = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
+                updateData["schoolName"] = sSchoolName
                 updateData["schoolEmail"] = account.schoolName
                 updateData["schoolAddress"] = account.address
-                if (account.founderPhone.isNotBlank()) {
-                    updateData["schoolPhone"] = account.founderPhone
+                updateData["address"] = account.address
+                val sPhone = account.founderPhone.takeIf { it.isNotBlank() } ?: account.paymentPhoneNumber ?: ""
+                if (sPhone.isNotBlank()) {
+                    updateData["schoolPhone"] = sPhone
+                    updateData["founderPhone"] = sPhone
+                    updateData["phone"] = sPhone
                 }
                 if (account.logoBase64 != null) {
                     updateData["logoBase64"] = account.logoBase64!!
                 }
+
+                try {
+                    val rtdb = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                    val schoolSyncData = mutableMapOf<String, Any>(
+                        "schoolName" to sSchoolName,
+                        "displayName" to sSchoolName,
+                        "address" to account.address,
+                        "schoolAddress" to account.address
+                    )
+                    if (sPhone.isNotBlank()) {
+                        schoolSyncData["phone"] = sPhone
+                        schoolSyncData["founderPhone"] = sPhone
+                        schoolSyncData["schoolPhone"] = sPhone
+                    }
+                    val cleanEmail = account.schoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+                    val cleanName = sSchoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+                    if (cleanEmail.isNotBlank()) rtdb.getReference("schools").child(cleanEmail).updateChildren(schoolSyncData)
+                    if (cleanName.isNotBlank() && cleanName != cleanEmail) rtdb.getReference("schools").child(cleanName).updateChildren(schoolSyncData)
+                } catch (e: Exception) {}
             }
             
             com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
@@ -922,22 +946,42 @@ class SchoolViewModel(
                 if (student.photoBase64 != null) {
                     finalUpdateData["photoBase64"] = student.photoBase64!!
                 }
-                val account = _schoolAccount.value
+                val account = _schoolAccount.value ?: repository.getFirstSchoolAccount()
                 val sName = _schoolName.value
-                if (sName != null && sName.isNotBlank()) {
-                    finalUpdateData["schoolName"] = sName
-                }
+                val sSchoolName = sName?.takeIf { it.isNotBlank() } ?: account?.displayName?.takeIf { it.isNotBlank() } ?: account?.schoolName ?: "ScolaPay"
+                finalUpdateData["schoolName"] = sSchoolName
                 if (account != null) {
-                    if (!finalUpdateData.containsKey("schoolName")) {
-                        finalUpdateData["schoolName"] = account.displayName.takeIf { it.isNotBlank() } ?: account.schoolName
-                    }
+                    finalUpdateData["schoolEmail"] = account.schoolName
                     finalUpdateData["schoolAddress"] = account.address
-                    if (account.founderPhone.isNotBlank()) {
-                        finalUpdateData["schoolPhone"] = account.founderPhone
+                    finalUpdateData["address"] = account.address
+                    val sPhone = account.founderPhone.takeIf { it.isNotBlank() } ?: account.paymentPhoneNumber ?: ""
+                    if (sPhone.isNotBlank()) {
+                        finalUpdateData["schoolPhone"] = sPhone
+                        finalUpdateData["founderPhone"] = sPhone
+                        finalUpdateData["phone"] = sPhone
                     }
                     if (account.logoBase64 != null) {
                         finalUpdateData["logoBase64"] = account.logoBase64!!
                     }
+
+                    try {
+                        val rtdb = com.google.firebase.database.FirebaseDatabase.getInstance("https://scolapay-b6289-default-rtdb.europe-west1.firebasedatabase.app")
+                        val schoolSyncData = mutableMapOf<String, Any>(
+                            "schoolName" to sSchoolName,
+                            "displayName" to sSchoolName,
+                            "address" to account.address,
+                            "schoolAddress" to account.address
+                        )
+                        if (sPhone.isNotBlank()) {
+                            schoolSyncData["phone"] = sPhone
+                            schoolSyncData["founderPhone"] = sPhone
+                            schoolSyncData["schoolPhone"] = sPhone
+                        }
+                        val cleanEmail = account.schoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+                        val cleanName = sSchoolName.replace(Regex("[.#$\\[\\]/]"), "_").trim()
+                        if (cleanEmail.isNotBlank()) rtdb.getReference("schools").child(cleanEmail).updateChildren(schoolSyncData)
+                        if (cleanName.isNotBlank() && cleanName != cleanEmail) rtdb.getReference("schools").child(cleanName).updateChildren(schoolSyncData)
+                    } catch (e: Exception) {}
                 }
 
                 // Sync to RTDB so parents can read it without Firestore permission issues

@@ -47,7 +47,15 @@ function renderPdfSchoolContact() {
     
     const urlParams = new URLSearchParams(window.location.search);
     const addr = (currentSchoolAddress || urlParams.get('addr') || urlParams.get('address') || urlParams.get('schoolAddress') || '').trim();
-    const rawPhone = (currentSchoolPhone || urlParams.get('phone') || urlParams.get('schoolPhone') || urlParams.get('tel') || '').trim();
+    const rawPhone = (
+        currentSchoolPhone || 
+        urlParams.get('phone') || 
+        urlParams.get('schoolPhone') || 
+        urlParams.get('tel') || 
+        urlParams.get('merchantPhone') || 
+        (typeof studentPaymentState !== 'undefined' && studentPaymentState.schoolMerchantPhone) || 
+        ''
+    ).trim();
     
     let parts = [];
     if (addr) {
@@ -55,14 +63,28 @@ function renderPdfSchoolContact() {
     }
     if (rawPhone) {
         const formattedPhone = rawPhone.toLowerCase().startsWith('tél') ? rawPhone : `Tél : ${rawPhone}`;
-        parts.push(`<span id="pdfSchoolPhone">${formattedPhone}</span>`);
+        parts.push(`<span id="pdfSchoolPhone" style="font-weight: 600;">${formattedPhone}</span>`);
+    } else {
+        const existingPhoneEl = document.getElementById('pdfSchoolPhone');
+        if (existingPhoneEl && existingPhoneEl.textContent && existingPhoneEl.textContent.trim().length > 3 && !existingPhoneEl.textContent.includes('ScolaPay')) {
+            parts.push(`<span id="pdfSchoolPhone" style="font-weight: 600;">${existingPhoneEl.textContent.trim()}</span>`);
+        }
     }
     
     if (parts.length > 0) {
         contactEl.innerHTML = parts.join(' <span id="pdfSchoolContactSep">•</span> ');
         contactEl.style.display = 'block';
     } else {
-        contactEl.innerHTML = '<span id="pdfSchoolPhone">ScolaPay</span>';
+        contactEl.innerHTML = '<span id="pdfSchoolAddress">Guinée</span> <span id="pdfSchoolContactSep">•</span> <span id="pdfSchoolPhone">ScolaPay</span>';
+    }
+
+    const headerContactEl = document.getElementById('schoolContactHeader');
+    if (headerContactEl) {
+        const textParts = [];
+        if (addr) textParts.push(addr);
+        if (rawPhone) textParts.push(rawPhone.toLowerCase().startsWith('tél') ? rawPhone : `Tél : ${rawPhone}`);
+        headerContactEl.textContent = textParts.join(' • ');
+        headerContactEl.style.display = textParts.length > 0 ? 'block' : 'none';
     }
 }
 
@@ -82,11 +104,13 @@ window.downloadPdf = function() {
     document.getElementById('pdfStudentSection').textContent = urlParams.get('section') || 'LE PRIMAIRE';
     document.getElementById('pdfStudentGrade').textContent = urlParams.get('grade') || '2ème Année';
     
-    if (urlParams.get('phone') || urlParams.get('schoolPhone') || urlParams.get('tel')) {
-        currentSchoolPhone = urlParams.get('phone') || urlParams.get('schoolPhone') || urlParams.get('tel');
+    const pParam = urlParams.get('phone') || urlParams.get('schoolPhone') || urlParams.get('tel') || urlParams.get('merchantPhone');
+    if (pParam) {
+        currentSchoolPhone = pParam;
     }
-    if (urlParams.get('addr') || urlParams.get('address') || urlParams.get('schoolAddress')) {
-        currentSchoolAddress = urlParams.get('addr') || urlParams.get('address') || urlParams.get('schoolAddress');
+    const aParam = urlParams.get('addr') || urlParams.get('address') || urlParams.get('schoolAddress');
+    if (aParam) {
+        currentSchoolAddress = aParam;
     }
     renderPdfSchoolContact();
     
@@ -203,7 +227,7 @@ window.downloadPdf = function() {
                 }
                 
                 const posX = (pdfWidth - imgWidth) / 2;
-                const posY = (pdfHeight - imgHeight) / 2;
+                const posY = margin; // Start cleanly at top margin (8mm) like an official school bulletin, NOT vertically centered!
                 
                 const imgData = canvas.toDataURL('image/jpeg', 0.98);
                 pdf.addImage(imgData, 'JPEG', posX, posY, imgWidth, imgHeight);
@@ -212,7 +236,7 @@ window.downloadPdf = function() {
             } catch (err) {
                 console.warn("Direct jsPDF failed, falling back to html2pdf:", err);
                 const opt = {
-                    margin: [6, 4, 6, 4],
+                    margin: [8, 8, 8, 8],
                     filename: 'bulletin_de_notes.pdf',
                     image: { type: 'jpeg', quality: 0.98 },
                     html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0, windowWidth: 800 },
@@ -479,6 +503,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     currentSchoolPhone = data.founderPhone;
                 } else if (data.phone) {
                     currentSchoolPhone = data.phone;
+                } else if (data.merchantPhone) {
+                    currentSchoolPhone = data.merchantPhone;
                 }
                 renderPdfSchoolContact();
                 if (data.currency) {
@@ -585,20 +611,21 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (sData.merchantCode) {
                             studentPaymentState.schoolMerchantCode = sData.merchantCode.trim();
                         }
-                        if (sData.phone && !currentSchoolPhone) {
+                        if (sData.phone) {
                             currentSchoolPhone = sData.phone.trim();
-                            renderPdfSchoolContact();
-                        } else if (sData.founderPhone && !currentSchoolPhone) {
+                        } else if (sData.founderPhone) {
                             currentSchoolPhone = sData.founderPhone.trim();
-                            renderPdfSchoolContact();
-                        } else if (sData.schoolPhone && !currentSchoolPhone) {
+                        } else if (sData.schoolPhone) {
                             currentSchoolPhone = sData.schoolPhone.trim();
-                            renderPdfSchoolContact();
+                        } else if (sData.merchantPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = sData.merchantPhone.trim();
                         }
-                        if (sData.address && !currentSchoolAddress) {
+                        if (sData.address) {
                             currentSchoolAddress = sData.address.trim();
-                            renderPdfSchoolContact();
+                        } else if (sData.schoolAddress) {
+                            currentSchoolAddress = sData.schoolAddress.trim();
                         }
+                        renderPdfSchoolContact();
                         if (sData.email) studentPaymentState.schoolEmail = sData.email;
                     }
                     updateBlockedUI();
@@ -631,20 +658,21 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (sData.merchantCode) {
                             studentPaymentState.schoolMerchantCode = sData.merchantCode.trim();
                         }
-                        if (sData.phone && !currentSchoolPhone) {
+                        if (sData.phone) {
                             currentSchoolPhone = sData.phone.trim();
-                            renderPdfSchoolContact();
-                        } else if (sData.founderPhone && !currentSchoolPhone) {
+                        } else if (sData.founderPhone) {
                             currentSchoolPhone = sData.founderPhone.trim();
-                            renderPdfSchoolContact();
-                        } else if (sData.schoolPhone && !currentSchoolPhone) {
+                        } else if (sData.schoolPhone) {
                             currentSchoolPhone = sData.schoolPhone.trim();
-                            renderPdfSchoolContact();
+                        } else if (sData.merchantPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = sData.merchantPhone.trim();
                         }
-                        if (sData.address && !currentSchoolAddress) {
+                        if (sData.address) {
                             currentSchoolAddress = sData.address.trim();
-                            renderPdfSchoolContact();
+                        } else if (sData.schoolAddress) {
+                            currentSchoolAddress = sData.schoolAddress.trim();
                         }
+                        renderPdfSchoolContact();
                     }
                     updateBlockedUI();
                 }, (err) => {
@@ -672,20 +700,21 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (fData.merchantCode) {
                             studentPaymentState.schoolMerchantCode = fData.merchantCode.trim();
                         }
-                        if (fData.phone && !currentSchoolPhone) {
+                        if (fData.phone) {
                             currentSchoolPhone = fData.phone.trim();
-                            renderPdfSchoolContact();
-                        } else if (fData.founderPhone && !currentSchoolPhone) {
+                        } else if (fData.founderPhone) {
                             currentSchoolPhone = fData.founderPhone.trim();
-                            renderPdfSchoolContact();
-                        } else if (fData.schoolPhone && !currentSchoolPhone) {
+                        } else if (fData.schoolPhone) {
                             currentSchoolPhone = fData.schoolPhone.trim();
-                            renderPdfSchoolContact();
+                        } else if (fData.merchantPhone && !currentSchoolPhone) {
+                            currentSchoolPhone = fData.merchantPhone.trim();
                         }
-                        if (fData.address && !currentSchoolAddress) {
+                        if (fData.address) {
                             currentSchoolAddress = fData.address.trim();
-                            renderPdfSchoolContact();
+                        } else if (fData.schoolAddress) {
+                            currentSchoolAddress = fData.schoolAddress.trim();
                         }
+                        renderPdfSchoolContact();
                     }
                 }).catch(e => console.warn("Firestore school doc lookup notice:", e));
             } catch (e) {}
