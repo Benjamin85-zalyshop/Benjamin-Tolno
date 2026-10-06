@@ -219,7 +219,8 @@ fun DashboardScreen(
         return
     }
 
-    if (!isAppAccessGranted) {
+    val isExplicitlyLocked = schoolAcc?.isAppLocked == true && (!schoolAcc?.lockReason.isNullOrBlank() || (schoolAcc?.unpaidCommission ?: 0L) > 0L)
+    if (!isAppAccessGranted || isExplicitlyLocked) {
         SubscriptionScreen(viewModel = viewModel, isPendingValidation = isPendingValidation, onLogout = onLogout)
         return
     }
@@ -542,7 +543,7 @@ fun DashboardScreen(
                                     }
                                     
                                     Text(
-                                        text = "Vous bénéficiez de 3 mois d'essai gratuit. Profitez de notre offre spéciale : abonnez-vous maintenant pour 3 000 $currency (test) !",
+                                        text = "Vous bénéficiez de 3 mois d'essai gratuit. Abonnez-vous maintenant pour 300 000 $currency !",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = Color(0xFF4F46E5), // Elegant indigo/blue text for promotional info
                                         fontSize = 13.5.sp
@@ -609,7 +610,7 @@ fun DashboardScreen(
                                                     tint = Color.White
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (3 000 $currency)", fontWeight = FontWeight.Bold, color = Color.White)
+                                                Text(if (!rejectionReason.isNullOrBlank()) "Soumettre à nouveau" else "S'abonner maintenant (300 000 $currency)", fontWeight = FontWeight.Bold, color = Color.White)
                                             }
                                         }
                                     }
@@ -2563,7 +2564,7 @@ fun DashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Profitez de notre offre spéciale d'abonnement à 3 000 $currency au lieu de 300 000 $currency.",
+                        text = "Abonnement annuel à 300 000 $currency pour un accès illimité à toutes les fonctionnalités de ScolaPay.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF4B5563)
                     )
@@ -2600,7 +2601,7 @@ fun DashboardScreen(
                         isLoadingChapChap = true
                         coroutineScope.launch {
                             val orderId = "SUB_${System.currentTimeMillis()}"
-                            val result = com.example.utils.ChapChapPayApi.createPayment(3000.0, "Abonnement Annuel ScolaPay", orderId)
+                            val result = com.example.utils.ChapChapPayApi.createPayment(300000.0, "Abonnement Annuel ScolaPay", orderId)
                             isLoadingChapChap = false
                             if (result != null) {
                                 viewModel.savePendingOrderId(result.orderId ?: orderId, result.operationId)
@@ -2622,7 +2623,7 @@ fun DashboardScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Payer avec Chap Chap Pay (3 000 GNF)", fontWeight = FontWeight.Bold)
+                        Text("Payer avec Chap Chap Pay (300 000 GNF)", fontWeight = FontWeight.Bold)
                     }
                 }
             },

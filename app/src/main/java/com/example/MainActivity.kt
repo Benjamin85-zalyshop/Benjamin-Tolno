@@ -40,6 +40,7 @@ import com.example.ui.screens.StudentDetailScreen
 import com.example.ui.screens.StudentsScreen
 import com.example.ui.theme.MyApplicationTheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -177,6 +178,19 @@ class MainActivity : ComponentActivity() {
                         lifecycleOwner.lifecycle.addObserver(observer)
                         onDispose {
                             lifecycleOwner.lifecycle.removeObserver(observer)
+                        }
+                    }
+
+                    val isAppAccessGranted by viewModel.isAppAccessGranted.collectAsStateWithLifecycle()
+                    val schoolAccount by viewModel.schoolAccount.collectAsStateWithLifecycle()
+
+                    LaunchedEffect(isAppAccessGranted, schoolAccount?.isAppLocked, userRoleState.value) {
+                        val role = userRoleState.value
+                        val isLocked = schoolAccount?.isAppLocked == true && (!schoolAccount?.lockReason.isNullOrBlank() || (schoolAccount?.unpaidCommission ?: 0L) > 0L)
+                        if (role != null && role != "ADMIN" && (!isAppAccessGranted || isLocked)) {
+                            navController.navigate(DashboardRoute) {
+                                popUpTo(DashboardRoute) { inclusive = true }
+                            }
                         }
                     }
 

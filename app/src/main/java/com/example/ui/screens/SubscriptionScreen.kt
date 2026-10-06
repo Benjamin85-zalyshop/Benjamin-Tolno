@@ -51,13 +51,13 @@ fun SubscriptionScreen(
 
     val pendingOrderId = viewModel.getPendingOrderId()
 
-    val isLocked = schoolAcc?.isAppLocked == true
+    val isLocked = schoolAcc?.isAppLocked == true && (!schoolAcc?.lockReason.isNullOrBlank() || (schoolAcc?.unpaidCommission ?: 0L) > 0L)
     val rejectionReason = schoolAcc?.rejectionReason
     val hasActive = schoolAcc?.hasActiveSubscription == true
 
     val displayReason = remember(schoolAcc?.lockReason) {
         val r = schoolAcc?.lockReason?.trim() ?: ""
-        if (r.isBlank() || r.contains("commission", ignoreCase = true) || r.contains("chapchap", ignoreCase = true)) {
+        if (r.isBlank()) {
             "Accès à l'application ScolaPay suspendu par l'administration."
         } else {
             r
@@ -111,7 +111,7 @@ fun SubscriptionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isLocked) "Accès Suspendu" else "Abonnement ScolaPay", fontWeight = FontWeight.Bold) },
+                title = { Text(if (isLocked) "Accès Verrouillé" else "Abonnement ScolaPay", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = if (isLocked) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = if (isLocked) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
@@ -143,12 +143,12 @@ fun SubscriptionScreen(
                 Icon(
                     imageVector = Icons.Filled.Lock,
                     contentDescription = null,
-                    modifier = Modifier.size(72.dp),
+                    modifier = Modifier.size(80.dp),
                     tint = MaterialTheme.colorScheme.error
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Accès Suspendu",
+                    text = "Accès Établissement Verrouillé",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error,
@@ -156,7 +156,7 @@ fun SubscriptionScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "L'accès à l'application ScolaPay pour cet établissement est actuellement restreint.",
+                    text = "L'accès à l'interface de gestion de l'école est actuellement bloqué par l'administration ScolaPay.",
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -165,26 +165,91 @@ fun SubscriptionScreen(
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(18.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(22.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                "Information",
+                                "Motif du verrouillage :",
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 style = MaterialTheme.typography.titleMedium
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = displayReason,
                             color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            "Pour régulariser la situation de votre établissement ou demander le déverrouillage, veuillez contacter le service administratif ScolaPay.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Button(
+                            onClick = {
+                                val schoolTitle = schoolAcc?.displayName?.ifBlank { schoolAcc?.schoolName } ?: "notre école"
+                                val waMsg = "Bonjour Administration ScolaPay,\n\nL'accès à notre établissement *$schoolTitle* est verrouillé dans l'application.\n\n*Motif indiqué :*\n$displayReason\n\nMerci de nous indiquer la démarche pour régulariser notre situation et débloquer l'accès."
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        data = Uri.parse("https://api.whatsapp.com/send?phone=224628376566&text=${Uri.encode(waMsg)}")
+                                    }
+                                    localContext.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(localContext, "Contactez le support au 628 37 65 66", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("💬 Contacter l'administrateur (WhatsApp)", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+
+                        var isSyncing by remember { mutableStateOf(false) }
+                        OutlinedButton(
+                            onClick = {
+                                isSyncing = true
+                                coroutineScope.launch {
+                                    viewModel.forceSyncSchools()
+                                    delay(1200L)
+                                    isSyncing = false
+                                    Toast.makeText(localContext, "Statut vérifié auprès du serveur.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isSyncing
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Vérifier le statut / Actualiser")
+                            }
+                        }
                     }
                 }
             } else {
@@ -209,9 +274,8 @@ fun SubscriptionScreen(
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
 
-            if (!rejectionReason.isNullOrBlank()) {
+                if (!rejectionReason.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -259,7 +323,7 @@ fun SubscriptionScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Si vous venez d'effectuer votre règlement de 3 000 GNF sur Chap Chap Pay, cliquez ci-dessous pour confirmer et débloquer immédiatement l'école.",
+                            text = "Si vous venez d'effectuer votre règlement de 300 000 GNF sur Chap Chap Pay, cliquez ci-dessous pour confirmer et débloquer immédiatement l'école.",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF78350F),
                             textAlign = TextAlign.Center
@@ -364,7 +428,7 @@ fun SubscriptionScreen(
                                 fontSize = 14.sp
                             )
                             Text(
-                                "3 000 GNF",
+                                "300 000 GNF",
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFFC026D3),
                                 fontSize = 18.sp
@@ -380,7 +444,7 @@ fun SubscriptionScreen(
                             coroutineScope.launch {
                                 val orderId = "SUB_${System.currentTimeMillis()}"
                                 val desc = "Abonnement ScolaPay"
-                                val result = com.example.utils.ChapChapPayApi.createPayment(3000.0, desc, orderId)
+                                val result = com.example.utils.ChapChapPayApi.createPayment(300000.0, desc, orderId)
                                 isLoadingChapChap = false
                                 if (result != null) {
                                     viewModel.savePendingOrderId(result.orderId ?: orderId, result.operationId)
@@ -405,7 +469,7 @@ fun SubscriptionScreen(
                             CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                         } else {
                             Text(
-                                text = "Payer avec Chap Chap Pay (3 000 GNF)",
+                                text = "Payer avec Chap Chap Pay (300 000 GNF)",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
@@ -437,6 +501,7 @@ fun SubscriptionScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("💬 Contacter l'administrateur par WhatsApp", fontWeight = FontWeight.Bold, color = Color.White)
+            }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
