@@ -6,20 +6,21 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'benjamintolno7@gmail.com';
     }
 
+    // L'administrateur suprême a accès à tout
     match /{document=**} {
       allow read, write: if isAdmin();
     }
 
-    // --- AJOUT POUR LE PORTAIL WEB DES PARENTS (QR CODE) ---
-    // Autorise la lecture de la collection racine "students" pour les bulletins
+    // --- PORTAIL WEB DES PARENTS (QR CODE) ---
+    // Lecture publique autorisée pour le scan du QR Code (Vérification des Bulletins scolaires)
     match /students/{studentId} {
       allow read: if true;
+      // Écriture réservée aux écoles authentifiées ou à l'administrateur
       allow write: if request.auth != null;
     }
 
     match /schools/{schoolId} {
 
-      // Le créateur du compte (l'email principal) ou un utilisateur enregistré
       function isUserInSchool() {
         return request.auth != null && (
           request.auth.token.email == schoolId ||
@@ -27,30 +28,35 @@ service cloud.firestore {
         );
       }
 
-      // Le créateur du compte (l'email principal) ou un Fondateur enregistré
       function isFondateur() {
         return request.auth != null && (
           request.auth.token.email == schoolId ||
-          get(/databases/$(database)/documents/schools/$(schoolId)/users/$(request.auth.uid)).data.role == 'FONDATEUR'
+          (exists(/databases/$(database)/documents/schools/$(schoolId)/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/schools/$(schoolId)/users/$(request.auth.uid)).data.role == 'FONDATEUR')
         );
       }
 
+      // Lecture publique des informations de base de l'école (nom, logo, contact, frais)
+      // Indispensable pour le portail web des parents lors du scan QR code et pour la connexion
       allow read: if true;
-      allow write: if isFondateur() || isAdmin(); // SEULS LES FONDATEURS OU ADMIN PEUVENT MODIFIER LE LOGO/PRIX
+      // Seuls le fondateur de l'école ou l'administrateur peuvent modifier la configuration de l'école
+      allow write: if isFondateur() || isAdmin();
 
+      // Sous-collections privées et sensibles (paiements, dépenses, notes, etc.)
+      // Strictement réservées au personnel de CETTE école
       match /{subcollection}/{document=**} {
-        allow read, write: if isUserInSchool();
+        allow read, write: if isUserInSchool() || isAdmin();
       }
 
       match /users/{userId} {
-        allow write: if request.auth != null && request.auth.uid == userId;
-        allow read: if isUserInSchool();
+        allow write: if request.auth != null && (request.auth.uid == userId || isFondateur() || isAdmin());
+        allow read: if isUserInSchool() || isAdmin();
       }
 
-      // Copie interne de l'école
+      // Élèves internes rattachés à une école spécifique
       match /students/{studentId} {
-        allow read: if true;
-        allow write: if request.auth != null;
+        allow read: if true; // Permet la lecture publique pour la vérification du QR Code
+        allow write: if isUserInSchool() || isAdmin(); // Seuls les membres de cette école peuvent inscrire/modifier
       }
     }
   }

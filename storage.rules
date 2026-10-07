@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'benjamintolno7@gmail.com';
+    }
+
+    // Règle pour les photos d'identité des élèves
+    match /schools/{schoolId}/eleves/{studentId}/{allPaths=**} {
+      // Lecture publique pour l'affichage de la photo sur le bulletin web via QR code
+      allow read: if true;
+      
+      // Sécurisation : Seul un membre authentifié ou l'admin peut uploader. Max 200 Ko, image uniquement
+      allow write: if (request.auth != null || isAdmin())
+                   && request.resource.size < 200 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Règle pour les reçus de paiement des inscriptions
+    match /schools/{schoolId}/recus/{recuId}/{allPaths=**} {
+      // Seuls les membres authentifiés ou l'admin peuvent consulter les reçus financiers
+      allow read: if request.auth != null || isAdmin();
+      
+      // Sécurisation : Max 1 Mo, image ou PDF uniquement
+      allow write: if (request.auth != null || isAdmin())
+                   && request.resource.size < 1 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+    }
+  }
+}
