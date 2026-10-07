@@ -290,7 +290,7 @@ fun DashboardScreen(
                                         putExtra(android.content.Intent.EXTRA_SUBJECT, "ScolaPay")
                                         putExtra(
                                             android.content.Intent.EXTRA_TEXT,
-                                            "Découvrez ScolaPay, l'application moderne de gestion financière scolaire ! Elle permet de gérer facilement la scolarité et les inscriptions, d'envoyer des reçus PDF professionnels avec logo, de faire des appels directs aux parents et d'envoyer des relances automatiques par WhatsApp.\n\n👉 Téléchargez et installez l'application immédiatement depuis Google Play Store :\nhttps://play.google.com/store/apps/details?id=com.aistudio.scolapay.gnf"
+                                            "Découvrez ScolaPay, l'application moderne de gestion financière scolaire ! Elle permet de gérer facilement la scolarité et les inscriptions, d'envoyer des reçus PDF professionnels avec logo, de faire des appels directs aux parents et d'envoyer des relances automatiques par WhatsApp.\n\n👉 Téléchargez et installez l'application immédiatement ici :\nhttps://zalytechno.com/scolapay"
                                         )
                                     }
                                     context.startActivity(android.content.Intent.createChooser(shareIntent, "Partager ScolaPay via"))
@@ -3637,7 +3637,7 @@ fun DashboardScreen(
                                         putExtra(android.content.Intent.EXTRA_SUBJECT, "ScolaPay")
                                         putExtra(
                                             android.content.Intent.EXTRA_TEXT,
-                                            "Découvrez ScolaPay, l'application moderne de gestion financière scolaire ! Elle permet de gérer facilement la scolarité et les inscriptions, d'envoyer des reçus PDF professionnels avec logo, de faire des appels directs aux parents et d'envoyer des relances automatiques par WhatsApp.\n\n👉 Téléchargez et installez l'application immédiatement depuis Google Play Store :\nhttps://play.google.com/store/apps/details?id=com.aistudio.scolapay.gnf"
+                                            "Découvrez ScolaPay, l'application moderne de gestion financière scolaire ! Elle permet de gérer facilement la scolarité et les inscriptions, d'envoyer des reçus PDF professionnels avec logo, de faire des appels directs aux parents et d'envoyer des relances automatiques par WhatsApp.\n\n👉 Téléchargez et installez l'application immédiatement ici :\nhttps://zalytechno.com/scolapay"
                                         )
                                     }
                                     context.startActivity(android.content.Intent.createChooser(shareIntent, "Recommander ScolaPay via"))

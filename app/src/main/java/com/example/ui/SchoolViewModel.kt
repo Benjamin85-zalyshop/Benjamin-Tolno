@@ -1952,6 +1952,7 @@ class SchoolViewModel(
                     true
                 } catch (e2: Exception) {
                     android.util.Log.w("ScolaPay", "Admin Firebase createUser note: ${e2.message}")
+                    sharedPrefs.edit().remove("admin_saved_pass").apply()
                     false
                 }
             }
@@ -1979,17 +1980,6 @@ class SchoolViewModel(
         _adminError.value = null
         viewModelScope.launch {
             val auth = FirebaseAuth.getInstance()
-            if (_userRole.value == "ADMIN" && auth.currentUser == null) {
-                val savedPass = sharedPrefs.getString("admin_saved_pass", null)
-                if (!savedPass.isNullOrBlank()) {
-                    try {
-                        auth.signInWithEmailAndPassword("benjamintolno7@gmail.com", savedPass).await()
-                    } catch (e: Exception) {
-                        sharedPrefs.edit().remove("admin_saved_pass").apply()
-                    }
-                }
-            }
-
             cleanupDuplicateSchoolAccounts()
             // Sync from RTDB immediately so online payments & commissions appear even without cloud auth
             syncSchoolsFromRTDB()
@@ -3344,17 +3334,25 @@ class SchoolViewModel(
             val savedAdminPass = sharedPrefs.getString("admin_saved_pass", null)
             val isKnownMasterPass = (cleanPass == "Epbomibs5@") || (!savedAdminPass.isNullOrBlank() && cleanPass == savedAdminPass)
             var adminSuccess = isKnownMasterPass
+            var firebaseAuthSuccess = false
 
             val auth = FirebaseAuth.getInstance()
-            try {
-                auth.signInWithEmailAndPassword(rawInput, cleanPass).await()
+            if (auth.currentUser?.email.equals(rawInput, ignoreCase = true)) {
                 adminSuccess = true
-            } catch (e: Exception) {
+                firebaseAuthSuccess = true
+            } else if (!isKnownMasterPass) {
                 try {
-                    auth.createUserWithEmailAndPassword(rawInput, cleanPass).await()
+                    auth.signInWithEmailAndPassword(rawInput, cleanPass).await()
                     adminSuccess = true
-                } catch (e2: Exception) {
-                    // Firebase Auth failed, but if cleanPass matches master password, adminSuccess remains true
+                    firebaseAuthSuccess = true
+                } catch (e: Exception) {
+                    try {
+                        auth.createUserWithEmailAndPassword(rawInput, cleanPass).await()
+                        adminSuccess = true
+                        firebaseAuthSuccess = true
+                    } catch (e2: Exception) {
+                        // Firebase Auth failed
+                    }
                 }
             }
 
@@ -3365,7 +3363,11 @@ class SchoolViewModel(
                 val editor = sharedPrefs.edit()
                     .putString("logged_in_email", rawInput)
                     .putString("logged_in_role", "ADMIN")
-                    .putString("admin_saved_pass", cleanPass)
+                if (firebaseAuthSuccess) {
+                    editor.putString("admin_saved_pass", cleanPass)
+                } else {
+                    editor.remove("admin_saved_pass")
+                }
                 editor.apply()
                 loadAdminSchools()
                 listenToSchoolsFromRTDB()
@@ -3513,11 +3515,17 @@ class SchoolViewModel(
             if (finPass.isNotEmpty() && cleanPass == finPass) {
                 isFinancier = true
                 if (android.util.Patterns.EMAIL_ADDRESS.matcher(finEmail).matches() && cleanPass.length >= 6) {
-                    try {
-                        auth.signInWithEmailAndPassword(finEmail, cleanPass).await()
-                    } catch (e: Exception) {}
+                    if (!auth.currentUser?.email.equals(finEmail, ignoreCase = true)) {
+                        try {
+                            auth.createUserWithEmailAndPassword(finEmail, cleanPass).await()
+                        } catch (eCol: com.google.firebase.auth.FirebaseAuthUserCollisionException) {
+                            try {
+                                auth.signInWithEmailAndPassword(finEmail, cleanPass).await()
+                            } catch (e: Exception) {}
+                        } catch (e: Exception) {}
+                    }
                 }
-            } else if (cleanPass.length >= 6) {
+            } else if (cleanPass.length >= 6 && android.util.Patterns.EMAIL_ADDRESS.matcher(finEmail).matches()) {
                 try {
                     auth.signInWithEmailAndPassword(finEmail, cleanPass).await()
                     isFinancier = true
@@ -3528,23 +3536,27 @@ class SchoolViewModel(
             if (founderPass.isNotEmpty() && cleanPass == founderPass) {
                 isFounder = true
                 if (isEmailFormat && cleanPass.length >= 6) {
-                    try {
-                        auth.signInWithEmailAndPassword(cleanEmail, cleanPass).await()
-                    } catch (e: Exception) {
+                    if (!auth.currentUser?.email.equals(cleanEmail, ignoreCase = true)) {
                         try {
                             auth.createUserWithEmailAndPassword(cleanEmail, cleanPass).await()
-                        } catch (e2: Exception) {}
+                        } catch (eCol: com.google.firebase.auth.FirebaseAuthUserCollisionException) {
+                            try {
+                                auth.signInWithEmailAndPassword(cleanEmail, cleanPass).await()
+                            } catch (e: Exception) {}
+                        } catch (e: Exception) {}
                     }
                 }
             } else if (finPass.isNotEmpty() && cleanPass == finPass) {
                 isFinancier = true
                 if (android.util.Patterns.EMAIL_ADDRESS.matcher(finEmail).matches() && cleanPass.length >= 6) {
-                    try {
-                        auth.signInWithEmailAndPassword(finEmail, cleanPass).await()
-                    } catch (e: Exception) {
+                    if (!auth.currentUser?.email.equals(finEmail, ignoreCase = true)) {
                         try {
                             auth.createUserWithEmailAndPassword(finEmail, cleanPass).await()
-                        } catch (e2: Exception) {}
+                        } catch (eCol: com.google.firebase.auth.FirebaseAuthUserCollisionException) {
+                            try {
+                                auth.signInWithEmailAndPassword(finEmail, cleanPass).await()
+                            } catch (e: Exception) {}
+                        } catch (e: Exception) {}
                     }
                 }
             } else if (founderPass.isEmpty() && finPass.isEmpty() && isEmailFormat && cleanPass.length >= 6) {
@@ -3626,12 +3638,14 @@ class SchoolViewModel(
         if (fp.length >= 6) {
             try {
                 auth.createUserWithEmailAndPassword(authEmail, fp).await()
-            } catch (e: Exception) {
+            } catch (eCol: com.google.firebase.auth.FirebaseAuthUserCollisionException) {
                 try { 
                     auth.signInWithEmailAndPassword(authEmail, fp).await() 
                 } catch (e2: Exception) {
                     android.util.Log.w("ScolaPay", "Auth registration note: ${e2.message}")
                 }
+            } catch (e: Exception) {
+                android.util.Log.w("ScolaPay", "Auth registration note: ${e.message}")
             }
         }
         
@@ -3643,8 +3657,8 @@ class SchoolViewModel(
             } catch (e: Exception) {}
         }
         
-        // 3. Se reconnecter en tant que Fondateur
-        if (fp.length >= 6) {
+        // 3. Se reconnecter en tant que Fondateur si nécessaire
+        if (fp.length >= 6 && !auth.currentUser?.email.equals(authEmail, ignoreCase = true)) {
             try {
                 auth.signInWithEmailAndPassword(authEmail, fp).await()
             } catch (e: Exception) {}

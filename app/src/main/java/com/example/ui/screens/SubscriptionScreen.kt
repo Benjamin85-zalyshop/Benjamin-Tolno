@@ -67,7 +67,7 @@ fun SubscriptionScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(Unit) {
-        viewModel.forceSyncSchools()
+        viewModel.syncSchoolsFromRTDB()
         val pId = viewModel.getPendingOrderId()
         if (!pId.isNullOrBlank()) {
             viewModel.checkPendingPaymentStatus { res ->
@@ -232,7 +232,7 @@ fun SubscriptionScreen(
                             onClick = {
                                 isSyncing = true
                                 coroutineScope.launch {
-                                    viewModel.forceSyncSchools()
+                                    viewModel.syncSchoolsFromRTDB()
                                     delay(1200L)
                                     isSyncing = false
                                     Toast.makeText(localContext, "Statut vérifié auprès du serveur.", Toast.LENGTH_SHORT).show()

@@ -76,7 +76,7 @@ fun AdminDashboardScreen(
     val rejectionSuggestions = listOf(
         "Identifiant de transaction incorrect",
         "Paiement non reçu",
-        "Montant insuffisant (requis: 500 000 GNF)",
+        "Montant insuffisant (requis: 300 000 GNF)",
         "Numéro de téléphone invalide",
         "Transaction déjà validée"
     )
